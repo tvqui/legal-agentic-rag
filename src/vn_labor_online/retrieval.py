@@ -1,9 +1,11 @@
 from __future__ import annotations
 import re,threading
+from pathlib import Path
 from collections import defaultdict
 from datetime import date
 from .artifact_store import ArtifactStore
 from .config import OnlineConfig
+from .errors import IndexUnavailable
 from .models import Evidence,ExplicitReference
 
 def _norm(value): return re.sub(r'[^0-9A-Z]','',str(value or '').upper().replace('Đ','D'))
@@ -85,20 +87,26 @@ class Retriever:
             if uid in self.store.units_by_id: out.append(as_evidence(self.store.units_by_id[uid],float(score),'bm25',i,{'bm25':float(score)}))
         return out
     def dense(self,query:str,k:int|None=None)->list[Evidence]:
-        import numpy as np,faiss
-        if self._faiss is None: self._faiss=self.store.load_faiss()
-        if self._model is None:
-            with self._lock:
-                if self._model is None:
-                    from FlagEmbedding import BGEM3FlagModel
-                    model=self.cfg.embedding_model_path or self.cfg.embedding_model
-                    import torch
-                    device=self.cfg.embedding_device
-                    if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
-                    self._model=BGEM3FlagModel(model,use_fp16=self.cfg.embedding_use_fp16 and device!='cpu',devices=device)
-        vector=np.asarray(self._model.encode([query],batch_size=1,max_length=1024,return_dense=True,return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
-        faiss.normalize_L2(vector); scores,positions=self._faiss.search(vector,min(k or self.cfg.retrieval.dense_top_k,len(self.store.units)))
-        return [as_evidence(self.store.units[int(pos)],float(score),'dense',i,{'dense':float(score)}) for i,(pos,score) in enumerate(zip(positions[0],scores[0]),1) if pos>=0]
+        try:
+            import numpy as np,faiss
+            if self._faiss is None: self._faiss=self.store.load_faiss()
+            if self._model is None:
+                with self._lock:
+                    if self._model is None:
+                        from FlagEmbedding import BGEM3FlagModel
+                        configured_path=self.cfg.embedding_model_path
+                        model=str(Path(configured_path).expanduser()) if configured_path and Path(configured_path).expanduser().exists() else self.cfg.embedding_model
+                        import torch
+                        device=self.cfg.embedding_device
+                        if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
+                        self._model=BGEM3FlagModel(model,use_fp16=self.cfg.embedding_use_fp16 and device!='cpu',devices=device)
+            vector=np.asarray(self._model.encode([query],batch_size=1,max_length=1024,return_dense=True,return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
+            faiss.normalize_L2(vector); scores,positions=self._faiss.search(vector,min(k or self.cfg.retrieval.dense_top_k,len(self.store.units)))
+            return [as_evidence(self.store.units[int(pos)],float(score),'dense',i,{'dense':float(score)}) for i,(pos,score) in enumerate(zip(positions[0],scores[0]),1) if pos>=0]
+        except IndexUnavailable:
+            raise
+        except Exception as exc:
+            raise IndexUnavailable(f'Dense retrieval unavailable: {type(exc).__name__}') from exc
     def issue_anchor(self,issues:list[str],k:int|None=None)->list[Evidence]:
         issue_keys={'TERMINATION':'Termination','CONTRACT':'LaborContract','WAGE':'Wage','LEAVE':'WorkingTime',
           'SOCIAL_INSURANCE':'SocialInsurance','SAFETY':'OccupationalSafety','DISPUTE':'DisputeResolution',

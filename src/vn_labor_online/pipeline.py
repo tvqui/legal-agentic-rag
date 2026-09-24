@@ -8,6 +8,7 @@ from .audit import deterministic_audit,citations,reference_audit
 from .config import OnlineConfig
 from .evidence import state_for,build_verified_pack,detect_authoritative_conflicts,select_for_plan
 from .generation import LegalAdjudicator
+from .errors import IndexUnavailable
 from .graph import GraphExplorer
 from .models import QueryRequest,AnswerResponse,Trace,Stop,Route,SlotStatus,AdjudicationDraft
 from .retrieval import Retriever,authority_filter,temporal_filter,rerank
@@ -88,7 +89,13 @@ class OnlinePipeline:
             policy=self.retriever.policy_anchor(analysis.legal_issues,analysis.facts)
             if policy: lists.append(policy)
             if self.cfg.retrieval.bm25_enabled: lists.append(self.retriever.bm25(env.normalized_query))
-            if self.cfg.retrieval.dense_enabled: lists.append(self.retriever.dense(env.normalized_query))
+            if self.cfg.retrieval.dense_enabled:
+                try:
+                    lists.append(self.retriever.dense(env.normalized_query))
+                except IndexUnavailable as exc:
+                    warnings.append('DENSE_RETRIEVAL_UNAVAILABLE')
+                    trace.events.append({'event':'dense_retrieval','status':'DEGRADED',
+                      'error':type(exc.__cause__ or exc).__name__})
             if self.cfg.retrieval.issue_anchor_enabled: lists.append(self.retriever.issue_anchor(analysis.legal_issues))
             if self.cfg.retrieval.case_law_enabled and (analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues): lists.append(self.retriever.case_law(env.normalized_query))
         nonempty=[x for x in lists if x]; items=nonempty[0] if len(nonempty)==1 else self.retriever.fusion(nonempty) if nonempty else []

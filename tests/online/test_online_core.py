@@ -9,7 +9,7 @@ from vn_labor_online.artifact_store import ArtifactStore,_fingerprint
 from vn_labor_online.audit import deterministic_audit,reference_audit,citations,applicability
 from vn_labor_online.config import OnlineConfig,RetrievalConfig,GraphConfig,ApplicabilityConfig,AdjudicationConfig
 from vn_labor_online.evidence import state_for,select_for_plan,build_verified_pack,detect_authoritative_conflicts
-from vn_labor_online.errors import OfflineArtifactMismatch
+from vn_labor_online.errors import IndexUnavailable,OfflineArtifactMismatch
 from vn_labor_online.graph import GraphExplorer
 from vn_labor_online.models import EvidencePlan,EvidenceState,QueryRequest,Route,SlotStatus,Stop,VerifiedEvidenceItem,VerifiedEvidencePack
 from vn_labor_online.pipeline import OnlinePipeline
@@ -157,6 +157,13 @@ class OnlineTests(unittest.TestCase):
     def test_bm25_retrieval(self): self.assertEqual(Retriever(self.store,self.cfg).bm25('Bộ luật quy định',1)[0].unit_id,'prov_1')
     def test_dense_retrieval(self):
         r=Retriever(self.store,self.cfg); r._model=FakeModel(); self.assertEqual(r.dense('x',1)[0].unit_id,'prov_1')
+    def test_pipeline_degrades_to_bm25_when_dense_is_unavailable(self):
+        cfg=self.cfg.model_copy(update={'retrieval':RetrievalConfig(dense_enabled=True)})
+        pipeline=OnlinePipeline(cfg)
+        with patch.object(pipeline.retriever,'dense',side_effect=IndexUnavailable('model unavailable')):
+            out=pipeline.ask(QueryRequest(question='Người lao động được nghỉ phép bao nhiêu ngày?'))
+        self.assertIn('DENSE_RETRIEVAL_UNAVAILABLE',out.warnings)
+        self.assertNotEqual(out.status,'ERROR')
     def test_legal_issue_anchor(self):
         got=Retriever(self.store,self.cfg).issue_anchor(['TERMINATION']); self.assertIn('prov_1',{x.unit_id for x in got})
     def test_dedicated_case_law_retrieval(self):
