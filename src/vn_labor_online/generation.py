@@ -41,7 +41,7 @@ def _employee_termination_answer(pack:VerifiedEvidencePack,partial:bool,assumpti
     for claim in claims:
         markers=' '.join(f'[{evidence_id}]' for evidence_id in claim.evidence_ids)
         lines.append(f'- {claim.text} {markers}')
-    lines.append('Cần kiểm tra thêm công việc có thuộc ngành, nghề, công việc đặc thù hay không; điều này không làm cho thời hạn 20 ngày trở thành đủ.')
+    lines.append('Cần thêm thông tin về ngành, nghề hoặc công việc để xác định liệu quy tắc báo trước đặc thù có áp dụng.')
     source=notice.official_url or classification.official_url
     if source: lines.append(f'Nguồn chính thức: {source}')
     if partial: lines.append('Kết quả còn giới hạn vì metadata nguồn hoặc hiệu lực ở cấp điều khoản đang chờ người có chuyên môn duyệt.')
@@ -135,10 +135,10 @@ class LegalAdjudicator:
     """Generate only from a VerifiedEvidencePack, with deterministic fallback."""
     def __init__(self,cfg:AdjudicationConfig):
         self.cfg=cfg; self.provider=None
-        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds)
+        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url)
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP adjudication mode requires url and model')
-            self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds)
+            self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
 
     def generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
         safe_fallback=lambda:adjudicate(pack,partial,assumptions)

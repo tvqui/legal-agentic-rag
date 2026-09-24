@@ -154,10 +154,22 @@ try {
     }
     'test' {
       $python = Get-ProjectPython
-      & $python -m compileall -q src scripts tests
-      Assert-ExitCode 'Python compile check'
-      & $python -m unittest discover -s tests -p 'test_*.py'
-      Assert-ExitCode 'test suite'
+      $env:VN_LABOR_APPLICABILITY_MODE = 'deterministic'
+      $env:VN_LABOR_ADJUDICATION_MODE = 'deterministic'
+      Remove-Item Env:VN_LABOR_API_KEY -ErrorAction SilentlyContinue
+      Remove-Item Env:VN_LABOR_ARTIFACT_SOURCE -ErrorAction SilentlyContinue
+      Remove-Item Env:VN_LABOR_ONLINE_CACHE -ErrorAction SilentlyContinue
+      $testPycache = Join-Path ([System.IO.Path]::GetTempPath()) "vn_labor_pycache_$PID"
+      $env:PYTHONPYCACHEPREFIX = $testPycache
+      try {
+        & $python -m compileall -q src scripts tests
+        Assert-ExitCode 'Python compile check'
+        & $python -m unittest discover -s tests -p 'test_*.py'
+        Assert-ExitCode 'test suite'
+      } finally {
+        Remove-Item Env:PYTHONPYCACHEPREFIX -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $testPycache -Recurse -Force -ErrorAction SilentlyContinue
+      }
     }
     'validate' {
       $python = Get-ProjectPython

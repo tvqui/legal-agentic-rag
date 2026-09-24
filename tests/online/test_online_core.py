@@ -55,11 +55,21 @@ class FakeModel:
 
 class OnlineTests(unittest.TestCase):
     def setUp(self):
+        self.env_patcher=patch.dict('os.environ',{
+          'VN_LABOR_ARTIFACT_SOURCE':'',
+          'VN_LABOR_ONLINE_CACHE':'',
+          'VN_LABOR_APPLICABILITY_MODE':'deterministic',
+          'VN_LABOR_ADJUDICATION_MODE':'deterministic',
+          'VN_LABOR_API_KEY':'',
+        },clear=False)
+        self.env_patcher.start()
         self.tmp=tempfile.TemporaryDirectory(); self.root=Path(self.tmp.name); self.build=fixture(self.root)
         self.cfg=OnlineConfig(artifact_source=str(self.root),expected_build_id=self.build,cache_dir=str(self.root/'cache'),trace_dir=str(self.root/'traces'),
           retrieval=RetrievalConfig(dense_enabled=False),graph=GraphConfig(max_nodes=3,max_edges=3,max_hops=2,max_rounds=2))
         self.store=ArtifactStore(self.cfg)
-    def tearDown(self): self.tmp.cleanup()
+    def tearDown(self):
+        self.tmp.cleanup()
+        self.env_patcher.stop()
     def test_offline_compatibility(self):
         self.assertTrue(self.store.report.compatible); self.assertEqual(self.store.report.build_id,self.build)
         self.assertIn('GOLD_NOT_APPROVED',self.store.report.provisional_reasons)
@@ -414,6 +424,29 @@ class OnlineTests(unittest.TestCase):
         cfg=self.cfg.model_copy(update={'corpus_snapshot_as_of':snapshot})
         out=OnlinePipeline(cfg).ask(QueryRequest(question='Điều 1 của 145/2020/ND-CP quy định gì?',query_date=requested))
         self.assertIn('CORPUS_MAY_BE_STALE',out.warnings)
+    def test_current_turn_facts_override_persisted_case_state(self):
+        env=intake('Tôi ký hợp đồng không xác định thời hạn.',[])
+        result=analyze(env,supplied_facts={'contract_type':'FIXED_TERM','actor':'EMPLOYEE'})
+        self.assertEqual(result.facts['contract_type'],'INDEFINITE')
+        self.assertEqual(result.facts['actor'],'EMPLOYEE')
+    def test_pipeline_returns_confirmed_fact_state(self):
+        out=OnlinePipeline(self.cfg).ask(QueryRequest(
+          question='Công ty chấm dứt hợp đồng có đúng luật không?',facts={'contract_type':'FIXED_TERM'}))
+        self.assertEqual(out.facts['contract_type'],'FIXED_TERM')
+    def test_api_optional_bearer_auth(self):
+        from fastapi.testclient import TestClient
+        config=self.root/'protected.json'; config.write_text(json.dumps({'online':self.cfg.model_dump()}),encoding='utf-8')
+        with patch.dict('os.environ',{'VN_LABOR_API_KEY':'test-secret','VN_LABOR_ADJUDICATION_MODE':'deterministic'},clear=False):
+            with TestClient(create_app(config)) as client:
+                self.assertEqual(client.get('/health').status_code,200)
+                self.assertEqual(client.get('/ready').status_code,401)
+                headers={'Authorization':'Bearer test-secret'}
+                ready=client.get('/ready',headers=headers)
+                self.assertEqual(ready.status_code,200); self.assertTrue(ready.json()['ready'])
+                self.assertIn('components',ready.json())
+                response=client.post('/v1/answer',headers=headers,
+                  json={'question':'Điều 1 của 145/2020/ND-CP quy định gì?'})
+                self.assertEqual(response.status_code,200)
     def test_api_health_ready_and_answer(self):
         from fastapi.testclient import TestClient
         config=self.root/'online.json'; config.write_text(json.dumps({'online':self.cfg.model_dump()}),encoding='utf-8')

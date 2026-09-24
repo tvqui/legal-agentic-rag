@@ -99,10 +99,11 @@ export const chatService = {
     return parseResponse(response)
   },
 
-  async sendMessage({ conversationId, question, conversationContext = [], queryDate, signal }) {
+  async sendMessage({ conversationId, question, conversationContext = [], facts = {}, queryDate, signal }) {
     const request = {
       question,
       conversation_context: conversationContext.slice(-8),
+      facts,
     }
     if (queryDate) request.query_date = queryDate
 
@@ -127,6 +128,7 @@ export const chatService = {
       warnings: humanizeNotices(payload.warnings),
       limitations: humanizeNotices(payload.limitations),
       questions: payload.questions || [],
+      facts: payload.facts || {},
       buildId: payload.build_id,
       traceId: payload.trace_id,
     }

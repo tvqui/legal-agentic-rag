@@ -58,8 +58,9 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     elif precision=='YEAR': query_date_end=f'{years[0]}-12-31'
     else: query_date_end=query_date
     imprecise_date=month_dates[0] if month_dates else years[0] if years else None
-    facts=_extract_facts(lower,query_date,imprecise_date)
-    facts.update(supplied_facts or {})
+    facts=dict(supplied_facts or {})
+    # Facts explicitly stated in the current turn override older confirmed state.
+    facts.update(_extract_facts(lower,query_date,imprecise_date))
     # For a planned termination, the applicable-date check belongs to the
     # termination date rather than the earlier notification date.
     if not explicit_date and facts.get('termination_date'):

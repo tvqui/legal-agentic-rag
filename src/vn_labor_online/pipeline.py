@@ -76,7 +76,7 @@ class OnlinePipeline:
             trace.events.append({'event':'fact_gate','status':'NEED_MORE_FACTS','missing':analysis.missing_facts}); persist(trace,self.cfg.trace_dir)
             return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,answer='Cần bổ sung dữ kiện trước khi tra cứu chuyên sâu.',questions=analysis.missing_facts,
               evidence_status='NOT_RETRIEVED',applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
-              warnings=warnings,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+              warnings=warnings,facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
@@ -240,4 +240,4 @@ class OnlinePipeline:
         return AnswerResponse(query_id=env.query_id,status=status,answer=answer,citations=refs,evidence_status=evidence_status,
           applicable_date=analysis.query_date,query_date=analysis.query_date,applicable_law_versions=draft.applicable_law_versions,
           claims=draft.claims,assumptions=draft.assumptions,limitations=state.gaps,questions=followup_questions,warnings=list(dict.fromkeys(warnings)),
-          build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+          facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)

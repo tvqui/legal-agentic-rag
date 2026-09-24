@@ -11,6 +11,7 @@ export function ChatPage({ activeConversation, onMenu }) {
   const [messages, setMessages] = useState([])
   const [source, setSource] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [caseFacts, setCaseFacts] = useState({})
   const scrollRef = useRef(null)
   const abortRef = useRef(null)
   const conversationMessages = useMemo(
@@ -54,9 +55,11 @@ export function ChatPage({ activeConversation, onMenu }) {
         conversationId: activeConversation.id,
         question: content,
         conversationContext: context,
+        facts: caseFacts[activeConversation.id] || {},
         signal: controller.signal,
       })
       setMessages((current) => current.map((item) => item.id === assistantId ? { ...answer, id: assistantId } : item))
+      setCaseFacts((current) => ({ ...current, [activeConversation.id]: answer.facts || current[activeConversation.id] || {} }))
     } catch (error) {
       const stopped = error?.name === 'AbortError'
       setMessages((current) => current.map((item) => item.id === assistantId ? {

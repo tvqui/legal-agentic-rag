@@ -15,10 +15,10 @@ class LegalApplicabilityAuditor:
     """Structured applicability boundary; evidence is always supplied as quoted data."""
     def __init__(self,cfg:ApplicabilityConfig):
         self.cfg=cfg; self.provider=None
-        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds)
+        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url)
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP applicability mode requires url and model')
-            self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds)
+            self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
     def audit(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str='EXPLAIN')->tuple[list[Evidence],list[ApplicabilityDecision],list[str]]:
         if not self.provider: return self._deterministic(items,query,issues,facts,requested_outcome)
         accepted=[]; decisions=[]; warnings=[]

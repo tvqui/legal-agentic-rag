@@ -113,6 +113,7 @@ class AnswerResponse(BaseModel):
     applicable_law_versions:list[ApplicableLawVersion]=Field(default_factory=list)
     claims:list[Claim]=Field(default_factory=list); assumptions:list[str]=Field(default_factory=list)
     limitations:list[str]=Field(default_factory=list); questions:list[str]=Field(default_factory=list); warnings:list[str]=Field(default_factory=list)
+    facts:dict[str,Any]=Field(default_factory=dict)
     build_id:str; trace_id:str; trace:Trace
 class CompatibilityReport(BaseModel):
     compatible:bool; build_id:str|None=None; graph_fingerprint:str|None=None

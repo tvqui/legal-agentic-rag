@@ -27,10 +27,10 @@ class GraphConfig(StrictModel):
         return value
 class ApplicabilityConfig(StrictModel):
     mode:Literal['deterministic','ollama','http']='deterministic'; fail_closed:bool=True
-    url:str|None=None; model:str|None=None; api_key:str|None=None; timeout_seconds:float=60
+    url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None; timeout_seconds:float=60
 class AdjudicationConfig(StrictModel):
     mode:Literal['deterministic','ollama','http']='deterministic'; fail_closed:bool=True
-    url:str|None=None; model:str|None=None; api_key:str|None=None; timeout_seconds:float=120
+    url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None; timeout_seconds:float=120
 class OnlineConfig(StrictModel):
     artifact_source:str=Field(min_length=1); cache_dir:str=".cache/online"; expected_build_id:str|None=None
     expected_archive_sha256:str|None=None; expected_retrieval_unit_fingerprint:str|None=None
@@ -59,7 +59,7 @@ def load_config(path:Path)->OnlineConfig:
     if os.getenv('VN_LABOR_ONLINE_CACHE'): values['cache_dir']=os.environ['VN_LABOR_ONLINE_CACHE']
     for section,prefix in (('applicability','VN_LABOR_APPLICABILITY'),('adjudication','VN_LABOR_ADJUDICATION')):
         configured=dict(values.get(section) or {})
-        for key in ('mode','url','model','api_key'):
+        for key in ('mode','url','model','api_key','health_url'):
             env_key=f'{prefix}_{key.upper()}'
             if os.getenv(env_key): configured[key]=os.environ[env_key]
         if os.getenv(f'{prefix}_TIMEOUT_SECONDS'):
