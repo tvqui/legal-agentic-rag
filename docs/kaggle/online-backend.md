@@ -23,8 +23,9 @@ dùng cấu hình này như server production 24/7.
 
 1. Tạo Notebook Private, bật Internet và GPU. T4 x2 là lựa chọn tốt nhất; P100
    vẫn chạy được nhưng Dense và Qwen dùng chung GPU.
-2. Add Input một Dataset Private chứa đúng
-   `vn_labor_results_v8.1(aura).zip`.
+2. Add Input một Dataset Private chứa đúng `vn_labor_results_v8.1(aura).zip`.
+   Kaggle có thể tự giải nén ZIP và hiển thị trực tiếp thư mục `artifacts/`; launcher
+   hỗ trợ cả file ZIP lẫn Dataset đã giải nén.
 3. Trong **Add-ons → Secrets**, tạo `NGROK_AUTHTOKEN` và
    `VN_LABOR_API_KEY`. Có thể tạo key local bằng:
 

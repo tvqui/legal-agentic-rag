@@ -52,19 +52,47 @@ def wait_json(url: str, token: str | None, process: subprocess.Popen, timeout: i
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
 
 
+def _artifact_directory_roots(input_root: Path) -> list[Path]:
+    """Find Kaggle datasets after Kaggle has automatically unpacked the ZIP."""
+    roots = set()
+    for marker in input_root.rglob("reports/final_outputs_validation.json"):
+        artifact_dir = marker.parent.parent
+        required = (
+            artifact_dir / "06_indexes/retrieval_units.jsonl",
+            artifact_dir / "05_graph/nodes.jsonl",
+            artifact_dir / "reports/dense_validation.json",
+            artifact_dir / "reports/neo4j_validation.json",
+        )
+        if all(item.is_file() for item in required):
+            roots.add(artifact_dir.parent if artifact_dir.name == "artifacts" else artifact_dir)
+    return sorted(roots)
+
+
 def detect_artifact(explicit: str | None) -> Path:
     if explicit:
         result = Path(explicit)
-    else:
-        matches = list(Path("/kaggle/input").rglob("vn_labor_results_v8.1(aura).zip"))
-        if len(matches) != 1:
-            matches = list(Path("/kaggle/input").rglob("vn_labor_results_v8_1_aura.zip"))
-        if len(matches) != 1:
-            raise RuntimeError(f"Add exactly one V8.1 Aura result ZIP as Kaggle Input; found {len(matches)}")
-        result = matches[0]
-    if not result.is_file():
-        raise FileNotFoundError(result)
-    return result.resolve()
+        if not result.exists():
+            raise FileNotFoundError(result)
+        return result.resolve()
+
+    input_root = Path("/kaggle/input")
+    zip_matches = sorted(set(
+        input_root.rglob("vn_labor_results_v8.1(aura).zip")
+    ) | set(
+        input_root.rglob("vn_labor_results_v8_1_aura.zip")
+    ))
+    if len(zip_matches) == 1:
+        return zip_matches[0].resolve()
+    if len(zip_matches) > 1:
+        raise RuntimeError(f"Add exactly one V8.1 Aura ZIP; found {len(zip_matches)}")
+
+    directory_matches = _artifact_directory_roots(input_root)
+    if len(directory_matches) != 1:
+        raise RuntimeError(
+            "Add exactly one V8.1 Aura Dataset containing either the ZIP or an "
+            f"unpacked artifacts/ directory; found {len(directory_matches)} valid directories"
+        )
+    return directory_matches[0].resolve()
 
 
 def gpu_count() -> int:
