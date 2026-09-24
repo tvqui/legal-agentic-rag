@@ -1,0 +1,12 @@
+# A reviewer may approve the complete instrument history through coverage_as_of.
+# This approves document-inherited intervals only for fully effective/expired
+# instruments. Partially expired instruments still need provision-specific review.
+# instruments:
+#   instrument_ID:
+#     review_status: APPROVED
+#     reviewer: reviewer_name
+#     reviewed_at: '2026-09-15'
+#     evidence: official_amendment_history_url_and_review_notes
+#     coverage_as_of: '2026-09-15'
+#     source_shas: [exact_sha_of_every_document_version_in_this_instrument]
+instruments: {}

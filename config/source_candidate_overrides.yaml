@@ -1,0 +1,23 @@
+version: 1
+overrides:
+  - canonical_identifier: "06/2020/TT-BLĐTBXH"
+    url: "https://congbao.chinhphu.vn/van-ban/thong-tu-so-06-2020-tt-bldtbxh-32743.htm"
+    role: IDENTITY
+    provider: congbao
+    required: false
+    alternative_group: "official-identity"
+    provenance: "P2.1 official Công báo fallback"
+  - canonical_identifier: "10/2020/TT-BLĐTBXH"
+    url: "https://vbpl.vn/TW/Pages/vbpq-lichsu.aspx?ItemID=146696"
+    role: STATUS_HISTORY
+    provider: vbpl
+    required: false
+    alternative_group: "official-identity"
+    provenance: "P2.1 indexed official VBPL history route"
+  - canonical_identifier: "24/2022/TT-BLĐTBXH"
+    url: "https://congbao.chinhphu.vn/van-ban/thong-tu-so-24-2022-tt-bldtbxh-38574.htm"
+    role: IDENTITY
+    provider: congbao
+    required: false
+    alternative_group: "official-identity"
+    provenance: "P2.1 official Công báo fallback"

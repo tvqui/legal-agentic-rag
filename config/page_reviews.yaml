@@ -1,0 +1,37 @@
+# Visually reviewed source PDF pages, 2026-09-14. Page numbers are 1-based.
+# NO_BODY_TEXT means no legal body/form text; the source PDF remains preserved.
+documents:
+  legal_corpus/circulars/06-2020-TT-BLDTBXH_Cong-viec-nghiem-ngat-ATVSLD.pdf:
+    sha256: 66a2ad19e6b8cdaa8ee6bf3e4cc32765a206d2f007ac8c89af65f4cab51de5fe
+    pages:
+      7: {action: NO_BODY_TEXT, reason: 'Visually reviewed: only printed page number 5.'}
+  legal_corpus/decrees/112-2021-ND-CP_Huong-dan-Luat-69-2020.pdf:
+    sha256: 64f90db071566152494a173c5ddcff719af7b81a3585c82ca7b896f03aaf380b
+    pages:
+      28: {action: NO_BODY_TEXT, reason: 'Visually reviewed: reverse side with stamp, no body or form text.'}
+  legal_corpus/decrees/145-2020-ND-CP_Huong-dan-BLLD.pdf:
+    # SHA of the bound two-part Công báo attachment, not the original scan.
+    sha256: b69c83d5797d651ca16753cacdec81295e40287b38a26b5dc3aa86966c3d6817
+    pages:
+      95: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank separator page with no body or form text.'}
+      111: {action: ROTATE, degrees: 90, reason: 'Visually reviewed: sideways Mẫu số 01/PLI employment report form.'}
+      112: {action: ROTATE, degrees: 90, reason: 'Visually reviewed: sideways Mẫu số 02/PLI employment report form.'}
+  legal_corpus/decrees/44-2016-ND-CP_Kiem-dinh-huan-luyen-ATVSLD.pdf:
+    sha256: 533e22a7d88811de684c9e33ca9129c2253e35e7298725ae1ff2a7319945e7d8
+    pages:
+      71: {action: ROTATE, degrees: 270, reason: 'Visually reviewed: sideways safety training card form, contains text.'}
+  legal_corpus/historical/140-2018-ND-CP_Sua-ND44-va-ND11.pdf:
+    sha256: f53ea03405c28b95c8782a16bf65bd9aa3c4ce4c4d979e56b568654fbb13586c
+    pages:
+      34: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      36: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      42: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      46: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      48: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      50: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      56: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+      72: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank scan reverse side.'}
+  legal_corpus/laws/124-2025-QH15_Luat-Giao-duc-nghe-nghiep.pdf:
+    sha256: 4d5837340a71715a8b9c474632a4ea060cb4ddca69b9919b875db652762f1127
+    pages:
+      26: {action: NO_BODY_TEXT, reason: 'Visually reviewed: blank final scan page.'}

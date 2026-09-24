@@ -1,0 +1,15 @@
+# Only explicitly reviewed changes become temporal facts. Keys are stable
+# change_id values from 04_knowledge/legal_changes.jsonl.
+# changes:
+#   change_ID:
+#     review_status: APPROVED
+#     reviewer: reviewer_name
+#     reviewed_at: '2026-09-15'
+#     source_sha256: exact_source_file_sha256
+#     evidence: official_source_url_and_operative_clause
+#     effective_from: '2026-01-01'
+#     target_provision_identity_id: provision_identity_ID
+# To exclude an out-of-corpus/irrelevant candidate after review, use
+# review_status: EXCLUDED, reviewer/reviewed_at/source_sha256/evidence, and
+# exclusion_reason. An exclusion never creates a temporal edge.
+changes: {}

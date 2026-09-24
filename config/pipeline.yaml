@@ -1,0 +1,41 @@
+data_dir: data
+output_dir: artifacts
+
+extraction:
+  min_text_chars_before_ocr: 1200
+  use_docling: auto        # auto | always | never
+  ocr_languages: ["vi", "en"]
+  ocr_use_gpu: false      # CPU OCR is safer/stabler on 4GB GPUs
+  document_timeout_seconds: 600
+  # A timed-out worker leaves completed page caches. Retry resumes from them.
+  document_timeout_attempts: 3
+
+cleaning:
+  unicode_form: NFC
+  repeated_line_page_ratio: 0.55
+  repeated_line_max_chars: 120
+
+parsing:
+  keep_unparsed_preamble: true
+  minimum_provision_chars: 10
+
+knowledge:
+  checklist_mode: heuristic   # heuristic | ollama
+  ollama_model: qwen3:4b
+  issue_min_score: 1
+  relation_confidence_threshold: 0.55
+
+retrieval:
+  embedding_model: BAAI/bge-m3
+  embedding_model_path: .cache/models/bge-m3
+  embedding_device: auto
+  embedding_batch_size: 4
+  embedding_chunk_size: 128
+  embedding_max_length: 1024
+  embedding_use_fp16: true
+  bm25_method: lucene
+  case_knn_k: 3
+  community_algorithm: leiden
+
+neo4j:
+  load_batch_size: 500

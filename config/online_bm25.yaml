@@ -1,0 +1,42 @@
+online:
+  artifact_source: "build/releases/vn_labor_results_v8_1_aura.zip"
+  cache_dir: ".cache/online"
+  expected_archive_sha256: "afb456c552f6122101e4c92dd9c7d8240cf3f093483266b14aa0d111417ddf5a"
+  expected_build_id: "7b33c8206124e32d423ddfc02adbf58ad26cce68e8ac0154329d51b5dd667d38"
+  expected_retrieval_unit_fingerprint: "20c9d1c76bd250eda9067322c58b46e8210df0637f59f6f5a5a45911afcdd3f7"
+  expected_dense_fingerprint: "05ae8fe99f3e430125be53f85db65f5796ceb9584ef9975f13ade452dc0574d6"
+  corpus_snapshot_as_of: "2026-09-15"
+  provisional_mode: true
+  retrieval:
+    exact_lookup: true
+    bm25_enabled: true
+    bm25_top_k: 30
+    dense_enabled: false
+    issue_anchor_enabled: true
+    issue_anchor_top_k: 20
+    case_law_enabled: true
+    case_law_top_k: 10
+    fusion_top_k: 30
+    rrf_k: 60
+  graph:
+    enabled: true
+    mode: adaptive
+    max_rounds: 4
+    max_nodes: 50
+    max_edges: 100
+    max_hops: 3
+    wall_clock_ms: 1500
+    hub_penalty: 0.15
+    novelty_weight: 0.10
+    redundancy_weight: 0.10
+  max_verified_units: 12
+  minimum_coverage: 0.5
+  allow_partial: true
+  allow_document_temporal_fallback: true
+  applicability:
+    mode: deterministic
+    fail_closed: true
+  adjudication:
+    mode: deterministic
+    fail_closed: true
+  trace_dir: "artifacts/online_traces"

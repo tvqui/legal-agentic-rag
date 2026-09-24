@@ -1,0 +1,16 @@
+# Versions already installed in the local project. Torch is supplied by Kaggle.
+docling==2.126.0
+docling-core==2.96.0
+docling-ibm-models==4.0.2
+easyocr==1.7.2
+FlagEmbedding==1.4.2
+transformers==5.17.0
+huggingface-hub==1.31.0
+sentence-transformers==6.0.1
+peft==0.20.0
+accelerate==1.15.0
+numpy==2.5.3
+faiss-cpu==1.15.0
+bm25s==0.3.11
+neo4j==6.3.0
+setuptools==81.0.0

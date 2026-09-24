@@ -1,0 +1,13 @@
+{
+  "query_id": "REPLACE_WITH_REVIEWER_ID",
+  "question": "REPLACE_WITH_RESEARCHER_AUTHORED_QUESTION",
+  "query_type": "DIRECT_PROVISION",
+  "query_date": null,
+  "gold_unit_ids": [],
+  "gold_source": null,
+  "build_id": null,
+  "expected_no_answer": false,
+  "review_status": "DRAFT",
+  "reviewer": null,
+  "reviewed_at": null
+}

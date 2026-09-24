@@ -1,0 +1,27 @@
+attachments:
+  legal_corpus/consolidated/90-VBHN-VPQH_Luat-Cong-doan_OFFICIAL_HTML.html:
+    html_sha256: c8dbf2b7f9f18efc7f88faa51bc8f5d8ba019745ff8abecaec5ffcbb098d5327
+    path: review/attachments/90-VBHN-VPQH_Luat-Cong-doan.pdf
+    sha256: 95349436112a28676c84322b92954c6b820db75be08cb5dea35b8ce8646765a6
+    source_url: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-90-vbhn-vpqh-45984.htm
+    download_url: https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2025/8/45984/58552-1-20251247-124890-vbhn-vpqh.pdf
+  legal_corpus/historical/128-2025-ND-CP_Phan-quyen-noi-vu_OFFICIAL_HTML.html:
+    html_sha256: fda0f8c441e97758c073ed620577d88ef4d5772455c246f4912591fbe062ac76
+    path: review/attachments/128-2025-ND-CP_Phan-quyen-noi-vu.pdf
+    sha256: 011851d005cf33fa0f47cf4602e08be98e0c7abd3d068105934752007e5a8f84
+    source_url: http://vanban.chinhphu.vn/?docid=213921&pageid=27160
+    download_url: https://datafiles.chinhphu.vn/cpp/files/vbpq/2025/6/128nd.signed.pdf
+  legal_corpus/laws/97-2025-QH15_Sua-Luat-Cong-doan_OFFICIAL_HTML.html:
+    html_sha256: 99d8e8afa401c104edff5ad0047ac97dfd034e778cfe11e4ba7a2f12a5e0235f
+    path: review/attachments/97-2025-QH15_Sua-Luat-Cong-doan.pdf
+    sha256: 53d8067effa9b6dfb906c3ba201a70339e632082bad3893a1dc8500d6db9df3c
+    source_url: https://congbao.chinhphu.vn/van-ban/luat-so-97-2025-qh15-45535.htm
+    download_url: https://congbaocdn.chinhphu.vn/CongBaoCP/VanBan/2025/6/45535/57625-1-2025957-95897-2025-qh15.pdf
+  legal_corpus/decrees/145-2020-ND-CP_Huong-dan-BLLD.pdf:
+    source_sha256: a72a1ff295cc06fbddd335d57257688f5118826968cd8b62d58f50fc1554b230
+    path: review/attachments/145-2020-ND-CP_official_full.pdf
+    sha256: b69c83d5797d651ca16753cacdec81295e40287b38a26b5dc3aa86966c3d6817
+    source_url: https://congbao.chinhphu.vn/van-ban-dang-cong-bao/nghi-dinh-l1/trang-123.htm
+    download_urls:
+      - https://congbao.chinhphu.vn/tai-ve-van-ban-so-145-2020-nd-cp-32732-33806
+      - https://congbao.chinhphu.vn/tai-ve-van-ban-so-145-2020-nd-cp-32732-33809

@@ -1,0 +1,110 @@
+version: 1
+providers:
+  - id: vbpl
+    name: Cơ sở dữ liệu quốc gia về pháp luật
+    allowed_domains: [vbpl.vn]
+    allowed_routes: ["/TW/Pages/*.aspx", "/*/Pages/*.aspx", "/FileData/*/Attachments/*.pdf", "/FileData/*/Attachments/*.doc", "/FileData/*/Attachments/*.docx"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    role_routes:
+      IDENTITY: ["/TW/Pages/*.aspx", "/*/Pages/*.aspx"]
+      STATUS_HISTORY: ["/TW/Pages/vbpq-lichsu.aspx", "/*/Pages/vbpq-lichsu.aspx"]
+      BINARY: ["/FileData/*/Attachments/*.pdf", "/FileData/*/Attachments/*.doc", "/FileData/*/Attachments/*.docx"]
+    document_groups: [LEGAL_DOCUMENT, CONSOLIDATED, SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: congbao
+    name: Công báo Chính phủ
+    allowed_domains: [congbao.chinhphu.vn, g7.cdnchinhphu.vn]
+    allowed_routes: ["/van-ban/*.htm", "/van-ban/*.html", "/van-ban/*", "/tai-ve-van-ban-*"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    role_routes:
+      IDENTITY: ["/van-ban/*.htm", "/van-ban/*.html", "/van-ban/*"]
+      STATUS_HISTORY: ["/van-ban/*.htm", "/van-ban/*.html", "/van-ban/*"]
+      BINARY: ["/tai-ve-van-ban-*", "/download/*", "/api/download/stream"]
+    document_groups: [LEGAL_DOCUMENT, CONSOLIDATED, SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: vanban_chinhphu
+    name: Cổng thông tin điện tử Chính phủ
+    allowed_domains: [vanban.chinhphu.vn]
+    allowed_routes: ["/?docid=*", "/*"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    role_routes:
+      IDENTITY: ["/", "/?docid=*", "/*.htm", "/*.html", "/*/van-ban/*"]
+      STATUS_HISTORY: ["/*/lich-su/*"]
+      BINARY: ["/*.pdf", "/*.doc", "/*.docx", "/files/*", "/download/*"]
+    document_groups: [LEGAL_DOCUMENT, CONSOLIDATED, SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: chinhphu_files
+    name: Tệp đính kèm Cổng thông tin Chính phủ
+    allowed_domains: [datafiles.chinhphu.vn]
+    allowed_routes: ["/*.pdf", "/*.doc", "/*.docx", "/*.zip", "/*/*.pdf", "/*/*.doc", "/*/*.docx"]
+    roles: [BINARY]
+    document_groups: [LEGAL_DOCUMENT, CONSOLIDATED, SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: social_insurance
+    name: Bảo hiểm xã hội Việt Nam
+    allowed_domains: [baohiemxahoi.gov.vn]
+    allowed_routes: ["/*.pdf", "/*/*.pdf", "/tin-tuc/*"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    role_routes:
+      IDENTITY: ["/tin-tuc/*", "/van-ban/*"]
+      STATUS_HISTORY: ["/tin-tuc/*", "/van-ban/*"]
+      BINARY: ["/*.pdf", "/*/*.pdf", "/*.doc", "/*/*.doc"]
+    document_groups: [LEGAL_DOCUMENT, SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: moha_labor
+    name: Cổng hợp đồng lao động Bộ Nội vụ
+    allowed_domains: [hopdonglaodong.moha.gov.vn]
+    allowed_routes: ["/"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    document_groups: [LEGAL_DOCUMENT, SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: isos
+    name: Viện Khoa học tổ chức nhà nước
+    allowed_domains: [isos.gov.vn]
+    allowed_routes: ["/*.pdf", "/*/*.pdf", "/*"]
+    roles: [IDENTITY, BINARY]
+    role_routes:
+      IDENTITY: ["/", "/*.htm", "/*.html", "/tin-tuc/*"]
+      BINARY: ["/*.pdf", "/*/*.pdf", "/*.doc", "/*/*.docx"]
+    document_groups: [SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: toaan
+    name: Tòa án nhân dân tối cao
+    allowed_domains: [toaan.gov.vn, congbobanan.toaan.gov.vn]
+    allowed_routes: ["/5ta*", "/3ta*", "/2ta*", "/webcenter/*", "/*.pdf", "/*.PDF", "/*/*.pdf", "/*/*.PDF"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    role_routes:
+      IDENTITY: ["/5ta*", "/3ta*", "/2ta*", "/webcenter/*"]
+      STATUS_HISTORY: ["/webcenter/*"]
+      BINARY: ["/*.pdf", "/*.PDF", "/*/*.pdf", "/*/*.PDF"]
+    document_groups: [JUDICIAL]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL
+  - id: ilo
+    name: International Labour Organization
+    allowed_domains: [ilo.org, natlex.ilo.org]
+    allowed_routes: ["/dyn/natlex2/natlex2/files/download/*", "/dyn/*"]
+    roles: [IDENTITY, BINARY, STATUS_HISTORY]
+    role_routes:
+      IDENTITY: ["/dyn/*"]
+      STATUS_HISTORY: ["/dyn/*"]
+      BINARY: ["/dyn/natlex2/natlex2/files/download/*"]
+    document_groups: [SUPPLEMENTARY]
+    redirect_policy: same_provider
+    retries: 2
+    classification: OFFICIAL

@@ -1,0 +1,21 @@
+.response-notice {
+  display: flex;
+  gap: 9px;
+  max-width: 740px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.response-notice svg { flex: 0 0 auto; margin-top: 2px; }
+.response-notice p { margin: 0 0 4px; }
+.response-notice p:last-child { margin-bottom: 0; }
+.source-unavailable { color: var(--muted); font-size: 12px; }
+.spin { animation: integration-spin 1s linear infinite; }
+@keyframes integration-spin { to { transform: rotate(360deg); } }

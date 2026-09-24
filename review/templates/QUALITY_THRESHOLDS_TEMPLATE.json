@@ -1,0 +1,14 @@
+{
+  "review_status": "DRAFT",
+  "reviewer": null,
+  "reviewed_at": null,
+  "build_id": null,
+  "k": 10,
+  "minimum_union_recall_at_k": 0.9,
+  "minimum_approved_queries": 30,
+  "minimum_retrieval_queries": 25,
+  "required_query_types": [
+    "DIRECT_PROVISION", "SCENARIO", "CROSS_REFERENCE", "MULTI_HOP",
+    "TEMPORAL", "AMENDMENT_REPEAL", "CASE_LAW", "ANNEX_TABLE", "INSUFFICIENT_FACTS"
+  ]
+}

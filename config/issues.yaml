@@ -1,0 +1,52 @@
+issues:
+  LaborContract:
+    label_vi: Hợp đồng lao động
+    keywords: ["hợp đồng lao động", "hđlđ", "giao kết hợp đồng", "thử việc", "loại hợp đồng"]
+  Termination:
+    label_vi: Chấm dứt hợp đồng lao động
+    keywords: ["chấm dứt hợp đồng", "đơn phương chấm dứt", "nghỉ việc", "cho thôi việc", "báo trước"]
+  Discipline:
+    label_vi: Kỷ luật lao động
+    keywords: ["kỷ luật lao động", "sa thải", "khiển trách", "kéo dài thời hạn nâng lương", "xử lý kỷ luật"]
+  Wage:
+    label_vi: Tiền lương và quyền lợi
+    keywords: ["tiền lương", "trả lương", "nợ lương", "thưởng", "phụ cấp", "lương tối thiểu"]
+  WorkingTime:
+    label_vi: Thời giờ làm việc và nghỉ ngơi
+    keywords: ["thời giờ làm việc", "giờ làm việc", "làm thêm giờ", "nghỉ hằng tuần", "nghỉ lễ", "nghỉ phép"]
+  SocialInsurance:
+    label_vi: Bảo hiểm xã hội
+    keywords: ["bảo hiểm xã hội", "bhxh", "ốm đau", "thai sản", "hưu trí", "tử tuất"]
+  UnemploymentInsurance:
+    label_vi: Bảo hiểm thất nghiệp
+    keywords: ["bảo hiểm thất nghiệp", "bhtn", "trợ cấp thất nghiệp"]
+  OccupationalSafety:
+    label_vi: An toàn vệ sinh lao động
+    keywords: ["an toàn vệ sinh lao động", "atvsld", "tai nạn lao động", "bệnh nghề nghiệp", "nguy hiểm", "độc hại"]
+  ForeignWorker:
+    label_vi: Lao động nước ngoài tại Việt Nam
+    keywords: ["người lao động nước ngoài", "giấy phép lao động", "lao động nước ngoài"]
+  OverseasWorker:
+    label_vi: Lao động Việt Nam đi làm việc ở nước ngoài
+    keywords: ["đi làm việc ở nước ngoài", "lao động việt nam ở nước ngoài", "doanh nghiệp dịch vụ"]
+  TradeUnion:
+    label_vi: Công đoàn và đại diện người lao động
+    keywords: ["công đoàn", "tổ chức đại diện người lao động", "cán bộ công đoàn"]
+  CollectiveRelations:
+    label_vi: Quan hệ lao động tập thể
+    keywords: ["thương lượng tập thể", "thỏa ước lao động tập thể", "đình công", "đối thoại tại nơi làm việc"]
+  DisputeResolution:
+    label_vi: Giải quyết tranh chấp lao động
+    keywords: ["tranh chấp lao động", "hòa giải viên lao động", "hội đồng trọng tài lao động", "khởi kiện", "tòa án"]
+  TrainingCost:
+    label_vi: Đào tạo và chi phí đào tạo
+    keywords: ["chi phí đào tạo", "đào tạo nghề", "cam kết đào tạo", "hoàn trả chi phí đào tạo"]
+  MinorWorker:
+    label_vi: Lao động chưa thành niên
+    keywords: ["lao động chưa thành niên", "người chưa đủ 18 tuổi", "trẻ em"]
+  FemaleWorker:
+    label_vi: Lao động nữ và bảo vệ thai sản
+    keywords: ["lao động nữ", "mang thai", "thai sản", "nuôi con nhỏ"]
+  Retirement:
+    label_vi: Tuổi nghỉ hưu
+    keywords: ["tuổi nghỉ hưu", "nghỉ hưu", "lộ trình tuổi nghỉ hưu"]

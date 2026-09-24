@@ -1,0 +1,9 @@
+class OnlineError(RuntimeError): pass
+class OfflineArtifactMismatch(OnlineError): pass
+class IndexUnavailable(OnlineError): pass
+class GraphUnavailable(OnlineError): pass
+class LLMProviderError(OnlineError): pass
+class StructuredOutputError(OnlineError): pass
+class TemporalResolutionError(OnlineError): pass
+class InsufficientEvidenceError(OnlineError): pass
+class ReferenceAuditError(OnlineError): pass

@@ -1,0 +1,15 @@
+# Add only versions independently reviewed against the source file/changes.
+# Example (replace every placeholder with evidence; DRAFT is never accepted):
+# versions:
+#   prov_ID:
+#     review_status: APPROVED
+#     reviewer: reviewer_name
+#     reviewed_at: '2026-09-15'
+#     source_sha256: exact_file_sha256
+#     evidence: official_source_url_and_clause
+#     valid_from: '2026-01-01'
+#     valid_to: null
+#     introduced_by_change_id: null
+#     ended_by_change_id: null
+#     provision_identity_id: null
+versions: {}
