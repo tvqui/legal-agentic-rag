@@ -193,7 +193,7 @@ def build():
                 files[p.relative_to(ROOT).as_posix()] = p
     for name in ['pyproject.toml', 'scripts/prepare_dense_model.py', 'scripts/validate_outputs.py', 'scripts/package_kaggle.py',
                  'scripts/prepare_source_attachments.py', 'scripts/review_kaggle_extraction.py',
-                 'scripts/evaluate_gold.py', 'scripts/prepare_review_inputs.py']:
+                 'scripts/evaluate_gold.py', 'scripts/prepare_review_inputs.py', 'scripts/pin_online_artifact.py']:
         files[name] = ROOT / name
     converted = []
     stems = set()

@@ -47,7 +47,18 @@ python kaggle/offline_ai_remote.py --mode hybrid_ai
 python kaggle/offline_ai_remote.py --mode ai
 ```
 
-Sau khi enrichment PASS, nạp đúng build mới vào Aura rồi export lại kết quả. Không dùng Aura cũ với graph build mới. Tải ZIP kết quả về và cập nhật `VN_LABOR_ARTIFACT_SOURCE` hoặc Dataset đầu vào ONLINE.
+Sau khi enrichment PASS, nạp đúng build mới vào Aura rồi export lại kết quả. Không dùng Aura cũ với graph build mới. Tải ZIP kết quả về. Trước lần ONLINE đầu tiên, xác minh toàn bộ cấu trúc và tạo config pin theo chính build mới:
+
+```bash
+python scripts/pin_online_artifact.py \
+  --artifact /kaggle/input/TEN_DATASET_MOI/vn_labor_results.zip \
+  --output /kaggle/working/online_pinned.yaml
+python kaggle/online_remote.py \
+  --artifact /kaggle/input/TEN_DATASET_MOI/vn_labor_results.zip \
+  --config /kaggle/working/online_pinned.yaml
+```
+
+Kaggle thường tự giải nén ZIP thành thư mục `artifacts/`; khi đó truyền đường dẫn thư mục Dataset thay cho đường dẫn ZIP. Script chỉ tạo config sau khi archive vượt qua kiểm tra stage, graph/Aura build ID, node/edge, retrieval units, Dense và BM25. Nó không ghi đè config đã có nếu thiếu `--force`.
 
 ## Việc người vận hành phải tự làm
 
