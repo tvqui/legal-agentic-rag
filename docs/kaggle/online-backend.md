@@ -86,8 +86,10 @@ $headers = @{ Authorization = "Bearer YOUR_VN_LABOR_API_KEY"; "ngrok-skip-browse
 Invoke-RestMethod -Uri "https://YOUR-URL/ready" -Headers $headers
 ```
 
-Kết quả phải có `ready=true`, `offline_artifacts=READY` và adjudicator
-`READY`. Dense ở trạng thái `LAZY` cho đến truy vấn semantic đầu tiên.
+Kết quả phải có `ready=true`, `offline_artifacts=READY` và cả `researcher`,
+`auditor`, `adjudicator` đều `READY`. Dense và reranker ở trạng thái `LAZY` cho đến
+truy vấn semantic đầu tiên. Launcher tải sẵn BGE-M3 và BGE reranker trước khi mở tunnel,
+nên truy vấn đầu không còn phụ thuộc vào một lượt tải model chưa hoàn tất.
 
 Sau mỗi lần Kaggle restart, chạy lại cell server và cập nhật duy nhất
 `VITE_BACKEND_TARGET` nếu URL ngrok thay đổi. Không commit hai file `.env`.

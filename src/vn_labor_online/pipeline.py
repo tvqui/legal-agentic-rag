@@ -12,6 +12,7 @@ from .errors import IndexUnavailable
 from .graph import GraphExplorer
 from .models import QueryRequest,AnswerResponse,Trace,Stop,Route,SlotStatus,AdjudicationDraft
 from .retrieval import Retriever,authority_filter,temporal_filter,rerank
+from .researcher import LegalResearcher
 from .trace import persist
 
 def _actionable_gaps(gaps,items,provisional):
@@ -38,7 +39,8 @@ def _repair_references(selected,claims):
 class OnlinePipeline:
     def __init__(self,cfg:OnlineConfig):
         self.cfg=cfg; self.store=ArtifactStore(cfg); self.retriever=Retriever(self.store,cfg)
-        self.graph=GraphExplorer(self.store,cfg.graph); self.applicability=LegalApplicabilityAuditor(cfg.applicability)
+        self.graph=GraphExplorer(self.store,cfg.graph); self.researcher=LegalResearcher(cfg.researcher)
+        self.applicability=LegalApplicabilityAuditor(cfg.applicability,self.store)
         self.adjudicator=LegalAdjudicator(cfg.adjudication)
     def ask(self,request:QueryRequest)->AnswerResponse:
         start=time.perf_counter(); stage=time.perf_counter()
@@ -78,6 +80,13 @@ class OnlinePipeline:
             return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,answer='Cần bổ sung dữ kiện trước khi tra cứu chuyên sâu.',questions=analysis.missing_facts,
               evidence_status='NOT_RETRIEVED',applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               warnings=warnings,facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+        stage=time.perf_counter()
+        analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
+        warnings+=research_warnings; plan=plan_evidence(analysis)
+        trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'issues':analysis.legal_issues,
+          'retrieval_queries':analysis.retrieval_queries,'ontology':analysis.ontology_features.model_dump(mode='json'),
+          'fallback':bool(research_warnings)})
+        trace.timings_ms['researcher']=round((time.perf_counter()-stage)*1000,2)
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
@@ -88,20 +97,29 @@ class OnlinePipeline:
         if not exact_only:
             policy=self.retriever.policy_anchor(analysis.legal_issues,analysis.facts)
             if policy: lists.append(policy)
-            if self.cfg.retrieval.bm25_enabled: lists.append(self.retriever.bm25(env.normalized_query))
+            retrieval_queries=[env.normalized_query]+analysis.retrieval_queries
+            if self.cfg.retrieval.bm25_enabled:
+                for retrieval_query in retrieval_queries: lists.append(self.retriever.bm25(retrieval_query))
             if self.cfg.retrieval.dense_enabled:
-                try:
-                    lists.append(self.retriever.dense(env.normalized_query))
-                except IndexUnavailable as exc:
-                    warnings.append('DENSE_RETRIEVAL_UNAVAILABLE')
-                    trace.events.append({'event':'dense_retrieval','status':'DEGRADED',
-                      'error':type(exc.__cause__ or exc).__name__})
+                for retrieval_query in retrieval_queries:
+                    try:
+                        lists.append(self.retriever.dense(retrieval_query))
+                    except IndexUnavailable as exc:
+                        warnings.append('DENSE_RETRIEVAL_UNAVAILABLE')
+                        trace.events.append({'event':'dense_retrieval','status':'DEGRADED',
+                          'error':type(exc.__cause__ or exc).__name__})
+                        break
             if self.cfg.retrieval.issue_anchor_enabled: lists.append(self.retriever.issue_anchor(analysis.legal_issues))
             if self.cfg.retrieval.case_law_enabled and (analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues): lists.append(self.retriever.case_law(env.normalized_query))
         nonempty=[x for x in lists if x]; items=nonempty[0] if len(nonempty)==1 else self.retriever.fusion(nonempty) if nonempty else []
         trace.seed_results=sum(len(x) for x in lists)
         items,removed=temporal_filter(items,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
         items,authority_removed=authority_filter(items,strict=not self.cfg.provisional_mode)
+        if self.cfg.reranker.enabled and not exact_only:
+            try: items=self.retriever.neural_rerank(items,env.normalized_query)
+            except IndexUnavailable as exc:
+                warnings.append('NEURAL_RERANKER_UNAVAILABLE')
+                trace.events.append({'event':'neural_reranker','status':'DEGRADED','error':type(exc.__cause__ or exc).__name__})
         items=rerank(items,self.cfg); audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
         verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
         warnings+=app_warnings; state=state_for(verified,plan,analysis.query_date,allow_fallback)

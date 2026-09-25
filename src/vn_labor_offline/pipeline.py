@@ -5,7 +5,7 @@ from .scanner import scan, resolve_source_catalog
 from .extract import extract_all
 from .metadata import build_registry
 from .legal_structure import parse_all
-from .cases import build_cases
+from .cases import build_cases,enrich_case_ontology
 from .checklists import build_checklists
 from .issues import build_issue_assignments
 from .relations import build_relation_edges
@@ -49,6 +49,7 @@ def construct_from_extracted(cfg,extracted,checklist_mode=None,build_indexes=Tru
     build_hierarchy_headings(registry,extracted,segments,out)
     identities, provision_versions=materialize_provision_versions(registry,provisions,out,cfg['project_root'])
     cases=build_cases(registry,extracted,out)
+    if cfg['knowledge'].get('case_ontology_mode')=='ai': cases=enrich_case_ontology(cases,cfg,out)
     checklists=build_checklists(provisions,cfg,out,mode=checklist_mode)
     issues,issue_edges=build_issue_assignments(provisions,cases,cfg,out)
     relation_candidates=build_relation_edges(registry,provisions,cases,out,extracted,cfg)
@@ -92,6 +93,7 @@ def rerun_enrichment(cfg,mode='ollama'):
     segments=load_stage(out,'03_structure/segments.jsonl')
     build_hierarchy_headings(registry,extracted,segments,out)
     identities, _=materialize_provision_versions(registry,provisions,out,cfg['project_root'])
+    if mode in {'ai','hybrid_ai'}: cases=enrich_case_ontology(cases,cfg,out)
     checklists=build_checklists(provisions,cfg,out,mode=mode)
     issues,issue_edges=build_issue_assignments(provisions,cases,cfg,out)
     relation_candidates=build_relation_edges(registry,provisions,cases,out,extracted,cfg)

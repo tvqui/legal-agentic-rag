@@ -473,4 +473,69 @@ class OnlineTests(unittest.TestCase):
             self.assertEqual(preflight.status_code,200)
             self.assertEqual(preflight.headers.get('access-control-allow-origin'),'http://localhost:5173')
 
+
+class AgentBoundaryTests(unittest.TestCase):
+    def test_researcher_can_expand_retrieval_but_not_confirm_facts(self):
+        from vn_labor_online.config import ResearcherConfig
+        from vn_labor_online.models import QueryAnalysis,Route
+        from vn_labor_online.researcher import LegalResearcher
+        class Provider:
+            def structured(self,*args):
+                return {'legal_issues':['TERMINATION','NOT_ALLOWED'],'retrieval_queries':['nghĩa vụ báo trước của người lao động'],
+                  'ontology':{'parties':['EMPLOYEE'],'employment_relationship':['INDEFINITE'],
+                    'events':['NOTICE'],'protected_statuses':[],'procedures':['NOTICE_PERIOD'],'remedies':['COMPENSATION']}}
+        analysis=QueryAnalysis(legal_issues=['CONTRACT'],facts={'actor':'EMPLOYEE'},explicit_references=[],event_dates=[],
+          query_date=None,requested_outcome='ASSESS_LEGALITY',temporal_intent='NONE',missing_facts=[],route=Route.STANDARD,route_reason='test')
+        researcher=LegalResearcher(ResearcherConfig()); researcher.provider=Provider()
+        updated,warnings=researcher.enrich(analysis,'Tôi muốn nghỉ việc',[])
+        self.assertFalse(warnings); self.assertIn('TERMINATION',updated.legal_issues)
+        self.assertNotIn('NOT_ALLOWED',updated.legal_issues); self.assertEqual(updated.facts,{'actor':'EMPLOYEE'})
+        self.assertEqual(updated.retrieval_queries,['nghĩa vụ báo trước của người lao động'])
+
+    def test_hybrid_auditor_cannot_override_deterministic_hard_fail(self):
+        from vn_labor_online.config import ApplicabilityConfig
+        from vn_labor_online.models import Evidence
+        from vn_labor_online.applicability import LegalApplicabilityAuditor
+        class Store:
+            def diagnostic_items(self,_): return [{'id':'d1','question':'Chủ thể có phải người sử dụng lao động?'}]
+        class Provider:
+            def structured(self,*args): raise AssertionError('hard-failed candidate must not reach the model')
+        item=Evidence(unit_id='wrong_actor',retrieval_method='bm25',document_id='doc',document_number='45/2019/QH14',
+          article_number='36',text='Người sử dụng lao động đơn phương chấm dứt hợp đồng.',source_text='Người sử dụng lao động đơn phương chấm dứt hợp đồng.')
+        auditor=LegalApplicabilityAuditor(ApplicabilityConfig(mode='hybrid'),Store()); auditor.provider=Provider()
+        accepted,decisions,warnings=auditor.audit([item],'Người lao động nghỉ việc',['TERMINATION'],
+          {'actor':'EMPLOYEE','contract_type':'INDEFINITE','notice_days':20,'notice_exception':False},'ASSESS_LEGALITY')
+        self.assertFalse(accepted); self.assertEqual(decisions[0].audit_status,'FAIL')
+        self.assertIn('WRONG_ACTOR_EMPLOYER_TERMINATION_RULE',decisions[0].reasons); self.assertFalse(warnings)
+
+    def test_neural_reranker_uses_cross_encoder_scores(self):
+        from vn_labor_online.config import OnlineConfig,RerankerConfig
+        from vn_labor_online.models import Evidence
+        from vn_labor_online.retrieval import Retriever
+        class Model:
+            def compute_score(self,pairs,normalize=True): return [0.1,0.9]
+        retriever=object.__new__(Retriever)
+        retriever.cfg=OnlineConfig(artifact_source='unused',reranker=RerankerConfig(enabled=True,top_n=2))
+        retriever._reranker=Model(); import threading; retriever._lock=threading.Lock()
+        items=[Evidence(unit_id='a',retrieval_method='bm25',text='A'),Evidence(unit_id='b',retrieval_method='bm25',text='B')]
+        ranked=retriever.neural_rerank(items,'query')
+        self.assertEqual([x.unit_id for x in ranked],['b','a'])
+        self.assertEqual(ranked[0].component_scores['cross_encoder'],0.9)
+
+    def test_hybrid_auditor_requires_exact_batch_ids(self):
+        from vn_labor_online.config import ApplicabilityConfig
+        from vn_labor_online.models import Evidence
+        from vn_labor_online.applicability import LegalApplicabilityAuditor
+        class Store:
+            def diagnostic_items(self,_): return []
+        class Provider:
+            def structured(self,*args): return {'decisions':[{'evidence_id':'invented','relevant':True,'supports_claim':True,
+              'conditions_status':'SATISFIED','exception_status':'NOT_TRIGGERED','audit_status':'PASS','reasons':[]}]}
+        item=Evidence(unit_id='real',retrieval_method='policy',document_id='doc',document_number='45/2019/QH14',
+          article_number='35',text='Quy định trực tiếp.',source_text='Quy định trực tiếp.')
+        auditor=LegalApplicabilityAuditor(ApplicabilityConfig(mode='hybrid'),Store()); auditor.provider=Provider()
+        accepted,decisions,warnings=auditor.audit([item],'Có đúng luật không?',['TERMINATION'],{'actor':'EMPLOYER'},'ASSESS_LEGALITY')
+        self.assertTrue(accepted); self.assertEqual(decisions[0].evidence_id,'real')
+        self.assertTrue(any(x.startswith('APPLICABILITY_PROVIDER_ERROR:') for x in warnings))
+
 if __name__=='__main__': unittest.main()

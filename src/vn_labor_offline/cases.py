@@ -1,5 +1,7 @@
 from __future__ import annotations
 import re
+from .ai_enrichment import cache_dir,cached_structured,provider_from_config
+from .evidence import locate_document_evidence
 from pathlib import Path
 from .util import stable_id, write_jsonl
 
@@ -89,3 +91,33 @@ def build_cases(registry: list[dict], extracted: list[dict], output_dir: Path) -
         rows.append(parse_case(doc,text))
     write_jsonl(output_dir / "03_structure" / "cases.jsonl", rows)
     return rows
+
+CASE_FEATURE_SCHEMA={"type":"object","additionalProperties":False,"properties":{"features":{"type":"array","items":{"type":"object","additionalProperties":False,"properties":{
+  "type":{"type":"string","enum":["PARTY_PROFILE","EMPLOYMENT_RELATIONSHIP","EMPLOYMENT_EVENT","PROTECTED_STATUS","PROCEDURE","CLAIM_OR_REMEDY","OUTCOME"]},
+  "value":{"type":"string"},"source_quote":{"type":"string"}
+},"required":["type","value","source_quote"]}}},"required":["features"]}
+
+def enrich_case_ontology(cases,cfg,output_dir):
+    provider=provider_from_config(cfg); cache=cache_dir(cfg); enriched=[]
+    system="""Extract normalized Vietnamese labour-case ontology features from the quoted case only.
+Every feature must have a short exact source_quote. Do not infer unstated facts, guilt, intent, or criminal-law attributes.
+Return only JSON matching the schema."""
+    for case in cases:
+        source='\n'.join(str(case.get(field) or '') for field in ('dispute','facts','reasoning','decision'))
+        payload={'case_id':case['case_id'],'source':source[:30000]}
+        try: data=cached_structured(provider,system,payload,CASE_FEATURE_SCHEMA,cache,case['case_id'])
+        except Exception: enriched.append(case); continue
+        features=list(case.get('features',[]))
+        allowed={'PARTY_PROFILE','EMPLOYMENT_RELATIONSHIP','EMPLOYMENT_EVENT','PROTECTED_STATUS','PROCEDURE','CLAIM_OR_REMEDY','OUTCOME'}
+        for item in data.get('features',[])[:40] if isinstance(data,dict) else []:
+            typ=item.get('type'); value=' '.join(str(item.get('value','')).split())
+            quote=' '.join(str(item.get('source_quote','')).split())
+            if typ not in allowed or not value or not quote: continue
+            evidence_text,evidence_span,status=locate_document_evidence(quote,source)
+            if status!='RESOLVED': continue
+            features.append({'type':typ,'value':value,'source_quote':evidence_text,'evidence_span':evidence_span,
+              'provenance_status':'VERIFIED','generator':'structured-ai:'+str(getattr(provider,'model','unknown'))})
+        unique={(x.get('type'),x.get('value'),x.get('source_quote')):x for x in features}
+        enriched.append({**case,'features':list(unique.values())})
+    write_jsonl(output_dir/'03_structure'/'cases.jsonl',enriched)
+    return enriched

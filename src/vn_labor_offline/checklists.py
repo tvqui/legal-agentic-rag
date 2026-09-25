@@ -3,6 +3,7 @@ import json, re, os
 from pathlib import Path
 from .util import stable_id, write_jsonl, read_jsonl
 from .evidence import locate_evidence
+from .ai_enrichment import cache_dir, cached_structured, provider_from_config
 
 SENTENCE_SPLIT = re.compile(r"(?<=[\.;:!?])\s+|\n+")
 TRIGGERS = [
@@ -85,6 +86,30 @@ Nguồn:
     return out
 
 
+AI_CHECKLIST_SCHEMA={"type":"object","additionalProperties":False,"properties":{"items":{"type":"array","items":{"type":"object","additionalProperties":False,"properties":{
+  "type":{"type":"string","enum":["REQUIRED","CONDITION","EXCEPTION","PROHIBITION","PERMISSION","DEADLINE"]},
+  "question":{"type":"string"},"source_text":{"type":"string"},"fact_slots":{"type":"array","items":{"type":"string"}}
+},"required":["type","question","source_text","fact_slots"]}}},"required":["items"]}
+
+def ai_checklist(provision,provider,cache,segment_text='',document_text='',pages=None):
+    payload={'provision_id':provision['provision_id'],'level':provision.get('level'),'source':provision.get('text','')[:12000]}
+    system="""Create atomic Diagnostic Checklist questions for Vietnamese labour law.
+Use only the quoted source. Every source_text must be a short exact quote from the source. Do not add a legal condition or exception.
+Return at most 20 items and only JSON matching the schema."""
+    data=cached_structured(provider,system,payload,AI_CHECKLIST_SCHEMA,cache,provision['provision_id'])
+    normalized_source=' '.join(provision.get('text','').split()); out=[]
+    for index,item in enumerate(data.get('items',[])[:20],1):
+        quote=' '.join(str(item.get('source_text','')).split())
+        if not quote or quote not in normalized_source: continue
+        evidence_text,evidence_span,status=locate_evidence(provision,quote,segment_text,document_text,pages)
+        if status!='RESOLVED': continue
+        out.append({'checklist_id':stable_id(provision['provision_id'],str(index),quote,prefix='diag'),
+          'provision_id':provision['provision_id'],'source_provision_id':provision['provision_id'],
+          'provenance_status':'VERIFIED','evidence_span':evidence_span,'type':item.get('type','CONDITION'),
+          'question':item.get('question',''),'source_text':quote,'evidence_text':evidence_text,
+          'fact_slots':item.get('fact_slots',[]),'generator':'structured-ai:'+str(getattr(provider,'model','unknown')),'confidence':.85})
+    return out
+
 def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: str | None=None) -> list[dict]:
     mode = mode or cfg["knowledge"].get("checklist_mode", "heuristic")
     model = cfg["knowledge"].get("ollama_model", "qwen3:4b")
@@ -94,17 +119,22 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
                       read_jsonl(output_dir / "01_extracted" / "documents.jsonl")}
     registry = {row["document_id"]: row for row in
                 read_jsonl(output_dir / "02_registry" / "documents.jsonl")}
-    rows=[]
+    rows=[]; provider=None
+    if mode in {'ai','hybrid_ai'}: provider=provider_from_config(cfg)
     for p in provisions:
         # Parser stores each level's own text; ancestor introductions can contain rules too.
         if len(p.get("text", "")) < 40: continue
         source = source_by_file.get(registry.get(p["document_id"], {}).get("file_id"), {})
         evidence_args = (segments.get(p.get("segment_id"), ""), source.get("text", ""),
                          source.get("page_provenance", []))
+        heuristic=heuristic_checklist(p,*evidence_args)
         if mode == "ollama":
             try: rows.extend(ollama_checklist(p, model, *evidence_args))
-            except Exception: rows.extend(heuristic_checklist(p, *evidence_args))
-        else: rows.extend(heuristic_checklist(p, *evidence_args))
+            except Exception: rows.extend(heuristic)
+        elif mode=='ai' or mode=='hybrid_ai' and not heuristic:
+            try: rows.extend(ai_checklist(p,provider,cache_dir(cfg),*evidence_args))
+            except Exception: rows.extend(heuristic)
+        else: rows.extend(heuristic)
     accepted=[r for r in rows if r.get('provenance_status')=='VERIFIED']
     write_jsonl(output_dir / "04_knowledge" / "diagnostic_review_queue.jsonl",
                 [r for r in rows if r.get('provenance_status')!='VERIFIED'])

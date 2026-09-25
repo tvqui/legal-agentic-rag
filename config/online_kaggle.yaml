@@ -23,6 +23,13 @@ online:
     case_law_top_k: 10
     fusion_top_k: 30
     rrf_k: 60
+  reranker:
+    enabled: true
+    model: "BAAI/bge-reranker-v2-m3"
+    model_path: null
+    device: "cuda:0"
+    use_fp16: true
+    top_n: 30
   graph:
     enabled: true
     mode: adaptive
@@ -38,8 +45,21 @@ online:
   minimum_coverage: 0.5
   allow_partial: true
   allow_document_temporal_fallback: true
+  researcher:
+    mode: ollama
+    url: "http://127.0.0.1:11434/api/chat"
+    health_url: "http://127.0.0.1:11434/api/tags"
+    model: "qwen3:8b"
+    timeout_seconds: 300
+    max_queries: 2
   applicability:
-    mode: deterministic
+    mode: hybrid
+    provider: ollama
+    url: "http://127.0.0.1:11434/api/chat"
+    health_url: "http://127.0.0.1:11434/api/tags"
+    model: "qwen3:8b"
+    timeout_seconds: 300
+    max_items: 10
     fail_closed: true
   adjudication:
     mode: ollama

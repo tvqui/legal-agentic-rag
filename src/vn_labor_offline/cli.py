@@ -9,8 +9,8 @@ from .neo4j_loader import load_neo4j
 def main():
     p=argparse.ArgumentParser(description='Vietnamese Labor Law offline data & knowledge construction')
     sub=p.add_subparsers(dest='cmd',required=True)
-    pa=sub.add_parser('all'); pa.add_argument('--config',default='config/pipeline.yaml'); pa.add_argument('--mode',choices=['heuristic','ollama'],default=None)
-    pe=sub.add_parser('enrich'); pe.add_argument('--config',default='config/pipeline.yaml'); pe.add_argument('--mode',choices=['heuristic','ollama'],default='ollama')
+    pa=sub.add_parser('all'); pa.add_argument('--config',default='config/pipeline.yaml'); pa.add_argument('--mode',choices=['heuristic','ollama','ai','hybrid_ai'],default=None)
+    pe=sub.add_parser('enrich'); pe.add_argument('--config',default='config/pipeline.yaml'); pe.add_argument('--mode',choices=['heuristic','ollama','ai','hybrid_ai'],default='ollama')
     pn=sub.add_parser('load-neo4j'); pn.add_argument('--config',default='config/pipeline.yaml')
     pn.add_argument('--replace-legacy',action='store_true',help='Explicit migration: remove unowned Entity nodes in this dedicated database')
     pd=sub.add_parser('dense'); pd.add_argument('--config',default='config/pipeline.yaml')

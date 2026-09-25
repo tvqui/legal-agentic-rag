@@ -158,6 +158,8 @@ def main() -> int:
         wait_json("http://127.0.0.1:11434/api/tags", None, ollama, 60)
         if not args.skip_pull:
             subprocess.run(["ollama", "pull", args.model], env=ollama_env, check=True)
+        subprocess.run([sys.executable, "scripts/prepare_online_models.py", "--config", args.config],
+                       cwd=ROOT, env=backend_env, check=True)
         backend = subprocess.Popen(
             [sys.executable, "scripts/serve_online.py", "--config", args.config,
              "--host", "127.0.0.1", "--port", str(args.port)],
@@ -166,8 +168,9 @@ def main() -> int:
         )
         wait_json(f"http://127.0.0.1:{args.port}/health", None, backend, 300)
         readiness = wait_json(f"http://127.0.0.1:{args.port}/ready", api_key, backend, 120)
-        adjudicator = readiness.get("components", {}).get("adjudicator", {})
-        if not readiness.get("ready") or adjudicator.get("status") != "READY":
+        model_components = [readiness.get("components", {}).get(name, {})
+                            for name in ("researcher", "auditor", "adjudicator")]
+        if not readiness.get("ready") or any(item.get("status") != "READY" for item in model_components):
             raise RuntimeError(f"ONLINE backend is not fully ready: {readiness}")
         import ngrok
         listener = ngrok.forward(f"localhost:{args.port}", authtoken_from_env=True, compression=True)

@@ -20,7 +20,7 @@ def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evid
 
 class Retriever:
     def __init__(self,store:ArtifactStore,cfg:OnlineConfig):
-        self.store=store; self.cfg=cfg; self._bm25=None; self._faiss=None; self._model=None; self._lock=threading.Lock()
+        self.store=store; self.cfg=cfg; self._bm25=None; self._faiss=None; self._model=None; self._reranker=None; self._lock=threading.Lock()
     def exact(self,refs:list[ExplicitReference])->list[Evidence]:
         result=[]
         for ref in refs:
@@ -107,6 +107,31 @@ class Retriever:
             raise
         except Exception as exc:
             raise IndexUnavailable(f'Dense retrieval unavailable: {type(exc).__name__}') from exc
+    def neural_rerank(self,items:list[Evidence],query:str)->list[Evidence]:
+        settings=self.cfg.reranker
+        if not settings.enabled or not items: return items
+        candidates=items[:settings.top_n]
+        try:
+            if self._reranker is None:
+                with self._lock:
+                    if self._reranker is None:
+                        from FlagEmbedding import FlagReranker
+                        import torch
+                        configured=settings.model_path
+                        model=str(Path(configured).expanduser()) if configured and Path(configured).expanduser().exists() else settings.model
+                        device=settings.device
+                        if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
+                        self._reranker=FlagReranker(model,use_fp16=settings.use_fp16 and device!='cpu',devices=device)
+            pairs=[[query,item.source_text or item.text] for item in candidates]
+            raw=self._reranker.compute_score(pairs,normalize=True)
+            scores=[float(raw)] if len(candidates)==1 and isinstance(raw,(int,float)) else [float(x) for x in raw]
+            if len(scores)!=len(candidates): raise ValueError('reranker score count mismatch')
+            rescored=[item.model_copy(update={'score':score,'component_scores':{**item.component_scores,'cross_encoder':score}})
+              for item,score in zip(candidates,scores)]
+            return sorted(rescored,key=lambda x:(-x.score,x.unit_id))+items[len(candidates):]
+        except Exception as exc:
+            raise IndexUnavailable(f'Neural reranker unavailable: {type(exc).__name__}') from exc
+
     def issue_anchor(self,issues:list[str],k:int|None=None)->list[Evidence]:
         issue_keys={'TERMINATION':'Termination','CONTRACT':'LaborContract','WAGE':'Wage','LEAVE':'WorkingTime',
           'SOCIAL_INSURANCE':'SocialInsurance','SAFETY':'OccupationalSafety','DISPUTE':'DisputeResolution',

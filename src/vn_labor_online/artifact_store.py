@@ -64,6 +64,7 @@ class ArtifactStore:
         self.units=_jsonl(self.path('06_indexes/retrieval_units.jsonl'))
         self.nodes=_jsonl(self.path('05_graph/nodes.jsonl')); self.edges=_jsonl(self.path('05_graph/edges.jsonl'))
         self.units_by_id={x['unit_id']:x for x in self.units}; self.nodes_by_id={x['id']:x for x in self.nodes}
+        self._diagnostics_by_provision=self._build_diagnostic_index()
         catalog_path=self.path('00_manifest/source_catalog_resolved.jsonl')
         self.source_catalog=_jsonl(catalog_path) if catalog_path.exists() else []
         self.catalog_by_file_id={x.get('file_id'):x for x in self.source_catalog if x.get('file_id')}
@@ -73,6 +74,20 @@ class ArtifactStore:
         self.report=self._validate()
         if not self.report.compatible: raise OfflineArtifactMismatch('; '.join(self.report.issues))
     def path(self,relative:str)->Path: return self.artifacts/relative
+    def _build_diagnostic_index(self)->dict[str,list[dict]]:
+        result={}
+        for edge in self.edges:
+            if edge.get('type')!='HAS_DIAGNOSTIC_ITEM': continue
+            item=self.nodes_by_id.get(edge.get('target'))
+            if not item or item.get('label')!='DiagnosticItem': continue
+            properties=item.get('properties') or {}
+            result.setdefault(edge.get('source'),[]).append({
+              'id':item.get('id'),'type':properties.get('type'),'question':properties.get('question'),
+              'source_text':properties.get('source_text'),'fact_slots':properties.get('fact_slots') or [],
+              'provenance_status':properties.get('provenance_status')})
+        return result
+    def diagnostic_items(self,provision_id:str)->list[dict]:
+        return list(self._diagnostics_by_provision.get(provision_id,[]))
     def _validate(self)->CompatibilityReport:
         issues=[]; graph=_fingerprint([self.nodes,self.edges]); units=_fingerprint(self.units)
         stages=self.final.get('stages',{})

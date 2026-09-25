@@ -41,12 +41,29 @@ class QueryRequest(BaseModel):
 class QueryEnvelope(BaseModel):
     query_id:str; raw_query:str; normalized_query:str; conversation_context:list[str]=Field(default_factory=list)
     received_at:datetime=Field(default_factory=lambda:datetime.now(timezone.utc))
+class LaborOntologyFeatures(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    parties:list[str]=Field(default_factory=list,max_length=8)
+    employment_relationship:list[str]=Field(default_factory=list,max_length=8)
+    events:list[str]=Field(default_factory=list,max_length=12)
+    protected_statuses:list[str]=Field(default_factory=list,max_length=8)
+    procedures:list[str]=Field(default_factory=list,max_length=12)
+    remedies:list[str]=Field(default_factory=list,max_length=8)
+
+class ResearcherResult(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    legal_issues:list[str]=Field(default_factory=list,max_length=8)
+    retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
+    ontology:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
+
 class QueryAnalysis(BaseModel):
     legal_issues:list[str]; facts:dict[str,Any]; explicit_references:list[ExplicitReference]
     event_dates:list[str]; query_date:str|None; query_date_end:str|None=None
     requested_outcome:Literal["LOOKUP","EXPLAIN","ASSESS_LEGALITY","COMPARE","FIND_CASE","OTHER"]
     temporal_intent:Literal["CURRENT","HISTORICAL","EXPLICIT_DATE","NONE"]; missing_facts:list[str]
     route:Route; route_reason:str; query_date_precision:Literal["DAY","MONTH","YEAR","NONE"]="NONE"
+    retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
+    ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
 class EvidencePlan(BaseModel):
     mandatory_slots:list[str]; conditional_slots:list[str]=Field(default_factory=list)
 class Evidence(BaseModel):
@@ -83,6 +100,10 @@ class ApplicabilityDecision(BaseModel):
     conditions_status:Literal["SATISFIED","NOT_SATISFIED","UNKNOWN","NOT_APPLICABLE"]="UNKNOWN"
     exception_status:Literal["TRIGGERED","NOT_TRIGGERED","UNKNOWN","NOT_APPLICABLE"]="UNKNOWN"
     audit_status:Literal["PASS","FAIL","UNRESOLVED"]; reasons:list[str]=Field(default_factory=list)
+class ApplicabilityBatch(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    decisions:list[ApplicabilityDecision]
+
 class VerifiedEvidenceItem(BaseModel):
     evidence_id:str; instrument_number:str|None=None; article:str|None=None; clause:str|None=None
     point:str|None=None; text:str; valid_from:str|None=None; valid_to:str|None=None
