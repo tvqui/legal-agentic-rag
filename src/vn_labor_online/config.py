@@ -12,6 +12,8 @@ class RetrievalConfig(StrictModel):
     exact_lookup:bool=True; bm25_enabled:bool=True; bm25_top_k:int=Field(30,ge=1); dense_enabled:bool=True
     dense_top_k:int=Field(30,ge=1); issue_anchor_enabled:bool=True; issue_anchor_top_k:int=Field(20,ge=1)
     case_law_enabled:bool=True; case_law_top_k:int=Field(10,ge=1)
+    community_enabled:bool=True; community_top_k:int=Field(3,ge=1,le=20)
+    community_case_top_k:int=Field(10,ge=1,le=50)
     fusion_top_k:int=Field(30,ge=1); rrf_k:int=Field(60,ge=1)
     relevance_weight:float=Field(.75,ge=0); authority_weight:float=Field(.2,ge=0); temporal_weight:float=Field(.05,ge=0)
 

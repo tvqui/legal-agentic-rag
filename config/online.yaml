@@ -21,6 +21,9 @@ online:
     issue_anchor_top_k: 20
     case_law_enabled: true
     case_law_top_k: 10
+    community_enabled: true
+    community_top_k: 3
+    community_case_top_k: 10
     fusion_top_k: 30
     rrf_k: 60
   graph:

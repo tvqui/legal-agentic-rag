@@ -1,5 +1,14 @@
 # Chạy OFFLINE AI enrichment trên Kaggle
 
+Chế độ mặc định `hybrid_ai` chỉ gọi model cho provision mà heuristic không tạo được checklist; đây là chế độ khả thi với quota Kaggle. Chế độ `ai` gọi model cho mọi provision đủ dài, tốn nhiều thời gian hơn nhưng bám sát thí nghiệm LegalGraphRAG hơn. Mọi item vẫn phải có exact source quote và provenance mới được chấp nhận.
+
+Khuyến nghị chạy `hybrid_ai` trước. Chỉ chạy `ai` sau khi bản hybrid đã PASS và còn đủ quota:
+
+```python
+subprocess.run([str(PYTHON),'kaggle/offline_ai_remote.py','--mode','ai'],cwd=ROOT,check=True)
+```
+
+
 Không cần OCR hay dựng Dense lại từ đầu. Dùng package code mới và checkpoint `vn_labor_results_v8.1(aura).zip`.
 
 1. Build/upload `build/kaggle/vn_labor_kaggle_v8.zip` thành Dataset Private và gắn checkpoint V8.1 làm Input thứ hai.

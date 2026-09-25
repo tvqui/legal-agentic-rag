@@ -115,6 +115,14 @@ class OnlineTests(unittest.TestCase):
         a=analyze(intake('Người lao động làm việc 12 tháng thì được nghỉ phép năm bao nhiêu ngày?',context))
         self.assertEqual(a.route,Route.STANDARD); self.assertEqual(a.legal_issues,['LEAVE'])
         self.assertEqual(a.facts['worked_months'],12)
+    def test_deterministic_facts_keep_exact_question_spans(self):
+        question='Tôi báo trước 20 ngày theo hợp đồng không xác định thời hạn.'
+        result=analyze(intake(question,[]))
+        by_field={item.field:item for item in result.fact_candidates}
+        self.assertEqual(by_field['notice_days'].value,20)
+        self.assertEqual(question[by_field['notice_days'].char_start:by_field['notice_days'].char_end],by_field['notice_days'].source_quote)
+        self.assertTrue(by_field['notice_days'].verified)
+
     def test_employee_resignation_analysis_extracts_actor_dates_and_required_slots(self):
         question=('Tôi ký hợp đồng lao động không xác định thời hạn từ năm 2022. Ngày 10/9/2026 tôi gửi thông báo nghỉ việc '
           'và muốn nghỉ chính thức vào ngày 30/9/2026. Tôi không thuộc trường hợp được nghỉ không cần báo trước. '
@@ -491,6 +499,55 @@ class AgentBoundaryTests(unittest.TestCase):
         self.assertFalse(warnings); self.assertIn('TERMINATION',updated.legal_issues)
         self.assertNotIn('NOT_ALLOWED',updated.legal_issues); self.assertEqual(updated.facts,{'actor':'EMPLOYEE'})
         self.assertEqual(updated.retrieval_queries,['nghĩa vụ báo trước của người lao động'])
+
+    def test_researcher_promotes_only_exact_span_entailed_fact(self):
+        from vn_labor_online.config import ResearcherConfig
+        from vn_labor_online.models import QueryAnalysis,Route
+        from vn_labor_online.researcher import LegalResearcher
+        query='Tôi ký hợp đồng không xác định thời hạn.'
+        quote='không xác định thời hạn'; start=query.index(quote)
+        class Provider:
+            def structured(self,*args):
+                return {'legal_issues':['CONTRACT'],'retrieval_queries':[],'ontology':{},'fact_candidates':[
+                  {'field':'contract_type','value':'INDEFINITE','source_quote':quote,'char_start':start,'char_end':start+len(quote)}]}
+        analysis=QueryAnalysis(legal_issues=['CONTRACT'],facts={},explicit_references=[],event_dates=[],query_date=None,
+          requested_outcome='EXPLAIN',temporal_intent='NONE',missing_facts=[],route=Route.STANDARD,route_reason='test')
+        researcher=LegalResearcher(ResearcherConfig()); researcher.provider=Provider()
+        updated,warnings=researcher.enrich(analysis,query,[])
+        self.assertFalse(warnings); self.assertEqual(updated.facts['contract_type'],'INDEFINITE')
+        self.assertTrue(updated.fact_candidates[0].verified)
+
+    def test_researcher_rejects_hallucinated_fact_without_query_span(self):
+        from vn_labor_online.config import ResearcherConfig
+        from vn_labor_online.models import QueryAnalysis,Route
+        from vn_labor_online.researcher import LegalResearcher
+        query='Tôi muốn biết quy định nghỉ việc.'
+        class Provider:
+            def structured(self,*args):
+                return {'legal_issues':['TERMINATION'],'retrieval_queries':[],'ontology':{},
+                  'fact_candidates':[{'field':'contract_type','value':'INDEFINITE',
+                    'source_quote':'hợp đồng không xác định thời hạn','char_start':0,'char_end':35}]}
+        analysis=QueryAnalysis(legal_issues=['TERMINATION'],facts={'actor':'EMPLOYEE'},explicit_references=[],event_dates=[],
+          query_date=None,requested_outcome='ASSESS_LEGALITY',temporal_intent='NONE',missing_facts=[],
+          route=Route.COMPLEX,route_reason='test')
+        researcher=LegalResearcher(ResearcherConfig()); researcher.provider=Provider()
+        updated,warnings=researcher.enrich(analysis,query,[])
+        self.assertFalse(warnings); self.assertNotIn('contract_type',updated.facts)
+        self.assertEqual(updated.fact_candidates,[])
+
+    def test_community_retrieval_returns_original_case_with_path(self):
+        from vn_labor_online.config import OnlineConfig,RetrievalConfig
+        from vn_labor_online.retrieval import Retriever
+        unit={'unit_id':'case_1','kind':'CASE','text':'Tranh chấp bồi thường do chấm dứt hợp đồng lao động.',
+          'document_title':'Bản án lao động','document_id':'doc_case'}
+        class Store:
+            units=[unit]; units_by_id={'case_1':unit}
+            nodes=[{'id':'community_1','label':'Community','properties':{'summary':'Tranh chấp chấm dứt hợp đồng'}}]
+            edges=[{'id':'belongs_1','source':'case_1','target':'community_1','type':'BELONGS_TO'}]
+        cfg=OnlineConfig(artifact_source='unused',retrieval=RetrievalConfig(dense_enabled=False,community_enabled=True))
+        result=Retriever(Store(),cfg).community_cases('bản án tranh chấp chấm dứt hợp đồng')
+        self.assertEqual(result[0].unit_id,'case_1'); self.assertEqual(result[0].graph_relations,['BELONGS_TO'])
+        self.assertEqual(result[0].graph_path,['belongs_1'])
 
     def test_hybrid_auditor_cannot_override_deterministic_hard_fail(self):
         from vn_labor_online.config import ApplicabilityConfig

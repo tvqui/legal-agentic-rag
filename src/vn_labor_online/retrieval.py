@@ -1,5 +1,5 @@
 from __future__ import annotations
-import re,threading
+import re,threading,unicodedata
 from pathlib import Path
 from collections import defaultdict
 from datetime import date
@@ -9,13 +9,18 @@ from .errors import IndexUnavailable
 from .models import Evidence,ExplicitReference
 
 def _norm(value): return re.sub(r'[^0-9A-Z]','',str(value or '').upper().replace('Đ','D'))
+def _terms(value):
+    normalized=unicodedata.normalize('NFD',str(value).lower()).replace('đ','d')
+    folded=''.join(char for char in normalized if unicodedata.category(char)!='Mn')
+    return {term for term in re.findall(r'\w+',folded) if len(term)>2}
 def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evidence:
     keys={'unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status'}
     data={k:unit.get(k) for k in keys}; data.update(score=float(score),retrieval_method=method,rank=rank,component_scores=components or {})
     data['authority_rank']=int(data.get('authority_rank') or 0)
-    for key in ('binding','temporal_verified','provision_temporal_verified'): data[key]=bool(data.get(key))
+    for key in ('binding','temporal_verified','provision_temporal_verified','official_source'): data[key]=bool(data.get(key))
     for key in ('source_url','valid_from','valid_to'): data[key]=data.get(key) or None
     data['provenance']=data.get('provenance') or {}
+    data['provenance_span']=data.get('provenance_span') or {}
     return Evidence.model_validate(data)
 
 class Retriever:
@@ -195,6 +200,38 @@ class Retriever:
         limit=k or self.cfg.retrieval.case_law_top_k
         return [as_evidence(unit,score,'case_law',rank,{'case_law':score})
           for rank,(score,_,unit) in enumerate(scored[:limit],1) if score>0]
+    def community_cases(self,query:str)->list[Evidence]:
+        """Rank OFFLINE communities, then return their original CASE units."""
+        query_terms=_terms(query)
+        if not query_terms: return []
+        communities={node['id']:node for node in self.store.nodes if node.get('label')=='Community'}
+        memberships=defaultdict(list)
+        for edge in self.store.edges:
+            if edge.get('type')!='BELONGS_TO' or edge.get('target') not in communities: continue
+            unit=self.store.units_by_id.get(edge.get('source'))
+            if unit and unit.get('kind')=='CASE': memberships[edge['target']].append((edge,edge['source']))
+        ranked=[]
+        for community_id,node in communities.items():
+            properties=node.get('properties') or {}; members=memberships.get(community_id,[])
+            member_text=' '.join(' '.join(str(self.store.units_by_id[uid].get(field) or '') for field in ('document_title','breadcrumb','text','source_text')) for _,uid in members)
+            community_text=' '.join(str(properties.get(field) or '') for field in ('summary','keywords'))+' '+member_text
+            overlap=len(query_terms&_terms(community_text))/max(1,len(query_terms))
+            if overlap>0: ranked.append((overlap,community_id,members))
+        ranked.sort(key=lambda row:(-row[0],row[1])); ranked=ranked[:self.cfg.retrieval.community_top_k]
+        cases=[]
+        for community_score,community_id,members in ranked:
+            for edge,uid in members:
+                unit=self.store.units_by_id[uid]
+                case_terms=_terms(' '.join(str(unit.get(field) or '') for field in ('document_number','document_title','breadcrumb','text','source_text')))
+                direct=len(query_terms&case_terms)/max(1,len(query_terms)); score=.65*community_score+.35*direct
+                evidence=as_evidence(unit,score,'community_case',0,{'community':community_score,'community_case':direct})
+                cases.append(evidence.model_copy(update={'graph_path':[edge.get('id') or ''],
+                  'graph_relations':['BELONGS_TO'],'graph_directions':['IN']}))
+        best={}
+        for item in cases:
+            if item.unit_id not in best or item.score>best[item.unit_id].score: best[item.unit_id]=item
+        ordered=sorted(best.values(),key=lambda item:(-item.score,item.unit_id))[:self.cfg.retrieval.community_case_top_k]
+        return [item.model_copy(update={'rank':rank}) for rank,item in enumerate(ordered,1)]
     def fusion(self,lists:list[list[Evidence]])->list[Evidence]:
         scores=defaultdict(float); by_id={}; components=defaultdict(dict); rrf=self.cfg.retrieval.rrf_k
         for values in lists:

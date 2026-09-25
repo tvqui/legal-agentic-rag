@@ -17,14 +17,16 @@ def configure(config:Path):
 
 def main():
     parser=argparse.ArgumentParser(); parser.add_argument('--config',default='config/kaggle.yaml')
-    parser.add_argument('--load-aura',action='store_true'); args=parser.parse_args(); config=ROOT/args.config
+    parser.add_argument('--load-aura',action='store_true')
+    parser.add_argument('--mode',choices=['hybrid_ai','ai'],default=os.getenv('VN_LABOR_OFFLINE_AI_MODE','hybrid_ai'))
+    args=parser.parse_args(); config=ROOT/args.config
     if not (ROOT/'artifacts/03_structure/provisions.jsonl').exists():
         raise RuntimeError('Restore the V8.1 checkpoint before enrichment')
     configure(config)
-    subprocess.run([sys.executable,'-m','vn_labor_offline.cli','enrich','--config',str(config),'--mode','hybrid_ai'],cwd=ROOT,check=True)
+    subprocess.run([sys.executable,'-m','vn_labor_offline.cli','enrich','--config',str(config),'--mode',args.mode],cwd=ROOT,check=True)
     if args.load_aura: subprocess.run([sys.executable,'kaggle/remote.py','aura'],cwd=ROOT,check=True)
     else: subprocess.run([sys.executable,'kaggle/remote.py','audit'],cwd=ROOT,check=False)
-    report={'mode':'hybrid_ai','case_ontology':'ai','aura_loaded':args.load_aura}
+    report={'mode':args.mode,'case_ontology':'ai','aura_loaded':args.load_aura}
     (ROOT/'artifacts/reports/offline_ai_enrichment.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     subprocess.run([sys.executable,'kaggle/remote.py','export'],cwd=ROOT,check=True)
 if __name__=='__main__': main()

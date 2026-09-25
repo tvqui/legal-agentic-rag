@@ -50,11 +50,21 @@ class LaborOntologyFeatures(BaseModel):
     procedures:list[str]=Field(default_factory=list,max_length=12)
     remedies:list[str]=Field(default_factory=list,max_length=8)
 
+class FactCandidate(BaseModel):
+    """A fact grounded in an exact span of the current user question."""
+    model_config=ConfigDict(extra='forbid')
+    field:str=Field(min_length=1,max_length=64); value:str|int|float|bool
+    source_quote:str=Field(min_length=1,max_length=1000)
+    char_start:int=Field(ge=0); char_end:int=Field(gt=0)
+    span_source:Literal['NORMALIZED_QUERY']='NORMALIZED_QUERY'
+    origin:Literal['DETERMINISTIC','RESEARCHER']='DETERMINISTIC'; verified:bool=False
+
 class ResearcherResult(BaseModel):
     model_config=ConfigDict(extra='forbid')
     legal_issues:list[str]=Field(default_factory=list,max_length=8)
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
+    fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=20)
 
 class QueryAnalysis(BaseModel):
     legal_issues:list[str]; facts:dict[str,Any]; explicit_references:list[ExplicitReference]
@@ -64,6 +74,7 @@ class QueryAnalysis(BaseModel):
     route:Route; route_reason:str; query_date_precision:Literal["DAY","MONTH","YEAR","NONE"]="NONE"
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
+    fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)
 class EvidencePlan(BaseModel):
     mandatory_slots:list[str]; conditional_slots:list[str]=Field(default_factory=list)
 class Evidence(BaseModel):

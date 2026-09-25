@@ -1,7 +1,7 @@
 from __future__ import annotations
 import calendar,hashlib,json,re,unicodedata
 from datetime import date
-from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan
+from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan,FactCandidate
 
 ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương"],"WAGE":["tiền lương","lương","làm thêm"],
  "SOCIAL_INSURANCE":["bảo hiểm xã hội","bhxh"],"SAFETY":["an toàn lao động","tai nạn lao động"],
@@ -60,7 +60,9 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     imprecise_date=month_dates[0] if month_dates else years[0] if years else None
     facts=dict(supplied_facts or {})
     # Facts explicitly stated in the current turn override older confirmed state.
-    facts.update(_extract_facts(lower,query_date,imprecise_date))
+    extracted_facts=_extract_facts(lower,query_date,imprecise_date)
+    facts.update(extracted_facts)
+    fact_candidates=_deterministic_fact_candidates(q,extracted_facts)
     # For a planned termination, the applicable-date check belongs to the
     # termination date rather than the earlier notification date.
     if not explicit_date and facts.get('termination_date'):
@@ -75,21 +77,53 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     complex_query=len(complexity_issues)>1 or historical and outcome=='ASSESS_LEGALITY' or any(w in lower for w in ('sửa đổi','bãi bỏ','thay thế','so sánh','qua các thời kỳ'))
     exact_ref=any(ref.article for ref in refs)
     route=Route.DIRECT if exact_ref and outcome=='LOOKUP' else Route.COMPLEX if complex_query else Route.STANDARD
-    missing=[]
-    if outcome=='ASSESS_LEGALITY':
-        for issue in issues:
-            required=FACTS.get(issue,{})
-            if issue=='TERMINATION' and facts.get('actor')=='EMPLOYEE':
-                required={'termination_date':'Ngày dự kiến nghỉ chính thức là ngày nào?',
-                  'contract_type':'Loại hợp đồng là gì?','notice_days':'Người lao động báo trước bao nhiêu ngày?',
-                  'notice_exception':'Người lao động có thuộc trường hợp được nghỉ không cần báo trước không?'}
-            for field,prompt in required.items():
-                if not _fact_present(field,lower,query_date,facts): missing.append(prompt)
+    missing=missing_fact_questions(issues,outcome,facts,lower,query_date)
     if route==Route.DIRECT and refs and all(not ref.instrument_number for ref in refs):
         missing.append('Bạn đang hỏi Điều/Khoản/Điểm của văn bản pháp luật nào?')
     return QueryAnalysis(legal_issues=issues,facts=facts,explicit_references=refs,event_dates=dates+month_dates+years,query_date=query_date,query_date_end=query_date_end,
       requested_outcome=outcome,temporal_intent=temporal,missing_facts=sorted(set(missing)),route=route,
-      route_reason='explicit legal citation' if route==Route.DIRECT else 'multi-issue/temporal/change query' if route==Route.COMPLEX else 'single-issue query',query_date_precision=precision)
+      route_reason='explicit legal citation' if route==Route.DIRECT else 'multi-issue/temporal/change query' if route==Route.COMPLEX else 'single-issue query',query_date_precision=precision,fact_candidates=fact_candidates)
+
+def _fact_candidate(field,value,query,match):
+    start,end=match.span()
+    return FactCandidate(field=field,value=value,source_quote=query[start:end],char_start=start,char_end=end,
+      origin='DETERMINISTIC',verified=True)
+
+def _needle_match(query,needles):
+    for needle in needles:
+        found=re.search(re.escape(needle),query,re.I)
+        if found: return found
+    return None
+
+def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
+    """Attach exact current-turn spans to facts produced by deterministic parsing."""
+    patterns={'notice_days':NOTICE_DAYS,'worked_months':WORKED_MONTHS,'notice_date':NOTICE_DATE_DMY,
+      'termination_date':TERMINATION_DATE_DMY}
+    needles={
+      'contract_type':('không xác định thời hạn','xác định thời hạn','thử việc'),
+      'protected_status':('mang thai','thai sản','nuôi con dưới 12 tháng'),
+      'actor':('tôi gửi thông báo nghỉ','người lao động chấm dứt','công ty cho tôi nghỉ','người sử dụng lao động chấm dứt'),
+      'notice_exception':('không thuộc trường hợp được nghỉ không cần báo trước','được nghỉ không cần báo trước'),
+      'special_occupation':('không thuộc ngành nghề đặc thù','ngành, nghề, công việc đặc thù','ngành nghề đặc thù')}
+    result=[]
+    for field,value in facts.items():
+        match=patterns[field].search(query) if field in patterns else _needle_match(query,needles.get(field,()))
+        if match: result.append(_fact_candidate(field,value,query,match))
+    return result
+
+def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,query_date:str|None)->list[str]:
+    missing=[]
+    if outcome!='ASSESS_LEGALITY': return missing
+    for issue in issues:
+        required=FACTS.get(issue,{})
+        if issue=='TERMINATION' and facts.get('actor')=='EMPLOYEE':
+            required={'termination_date':'Ngày dự kiến nghỉ chính thức là ngày nào?',
+              'contract_type':'Loại hợp đồng là gì?','notice_days':'Người lao động báo trước bao nhiêu ngày?',
+              'notice_exception':'Người lao động có thuộc trường hợp được nghỉ không cần báo trước không?'}
+        for field,prompt in required.items():
+            if not _fact_present(field,query,query_date,facts): missing.append(prompt)
+    return sorted(set(missing))
+
 def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     facts={}
     # query_date is the date on which the user wants the law evaluated.  It is

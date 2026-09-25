@@ -65,6 +65,10 @@ def evaluate_variant(pipe: OnlinePipeline, gold: list[dict]) -> dict:
     status_counts: Counter[str] = Counter()
     stop_reasons: Counter[str] = Counter()
     critical_edges: Counter[str] = Counter()
+    fact_correct = fact_total = 0
+    issue_tp = issue_fp = issue_fn = 0
+    applicability_correct = applicability_total = 0
+    status_correct = status_total = 0
 
     for row in gold:
         started = time.perf_counter()
@@ -87,6 +91,27 @@ def evaluate_variant(pipe: OnlinePipeline, gold: list[dict]) -> dict:
         pack_event = next((event for event in reversed(answer.trace.events) if event.get("event") == "verified_evidence_pack"), None)
         if pack_event is not None:
             evidence_chars.append(float(pack_event.get("characters") or 0))
+
+        for field, expected in (row.get("expected_facts") or {}).items():
+            fact_total += 1
+            fact_correct += int(answer.facts.get(field) == expected)
+        expected_issues = set(row.get("expected_issues") or [])
+        if expected_issues:
+            analysis_event = next((event for event in answer.trace.events if event.get("event") == "analysis"), {})
+            actual_issues = set(analysis_event.get("issues") or [])
+            issue_tp += len(expected_issues & actual_issues)
+            issue_fp += len(actual_issues - expected_issues)
+            issue_fn += len(expected_issues - actual_issues)
+        expected_applicability = row.get("expected_applicability") or {}
+        if expected_applicability:
+            audit_event = next((event for event in answer.trace.events if event.get("event") == "applicability_audit"), {})
+            actual = {item.get("evidence_id"): item.get("audit_status") for item in audit_event.get("decisions") or []}
+            for evidence_id, expected in expected_applicability.items():
+                applicability_total += 1
+                applicability_correct += int(actual.get(evidence_id) == expected)
+        if row.get("expected_status"):
+            status_total += 1
+            status_correct += int(answer.status.value == row["expected_status"])
 
         expected_no_answer = bool(row.get("expected_no_answer")) or row.get("query_type") == "INSUFFICIENT_FACTS"
         if expected_no_answer:
@@ -124,6 +149,12 @@ def evaluate_variant(pipe: OnlinePipeline, gold: list[dict]) -> dict:
         "status_counts": dict(status_counts),
         "stop_reason_counts": dict(stop_reasons),
         "critical_edges_followed": dict(critical_edges),
+        "fact_exact_accuracy": fact_correct / fact_total if fact_total else None,
+        "fact_fields_evaluated": fact_total,
+        "issue_precision": issue_tp / (issue_tp + issue_fp) if issue_tp + issue_fp else None,
+        "issue_recall": issue_tp / (issue_tp + issue_fn) if issue_tp + issue_fn else None,
+        "applicability_accuracy": applicability_correct / applicability_total if applicability_total else None,
+        "answer_status_accuracy": status_correct / status_total if status_total else None,
         "average_evidence_characters": mean(evidence_chars),
         "estimated_average_evidence_tokens": mean([value / 4 for value in evidence_chars]),
         "average_latency_ms": mean(latencies),
@@ -160,6 +191,7 @@ def main() -> None:
         config.retrieval.dense_enabled = options["dense"]
         config.retrieval.issue_anchor_enabled = options["issue"]
         config.retrieval.case_law_enabled = options["case"]
+        config.retrieval.community_enabled = options.get("community", options["case"])
         config.graph.enabled = options["graph"]
         config.graph.mode = options["mode"]
         config.graph.max_hops = options["hops"]

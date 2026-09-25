@@ -2,6 +2,20 @@ from __future__ import annotations
 import numpy as np
 from .util import stable_id
 
+def _community_description(members:list[dict])->tuple[str,list[str]]:
+    """Build a deterministic community description from case evidence."""
+    descriptions=[]; keywords=[]
+    for case in sorted(members,key=lambda item:item['case_id']):
+        heading=' - '.join(str(value).strip() for value in (case.get('case_number'),case.get('dispute'),case.get('court')) if value)
+        if heading: descriptions.append(heading[:300])
+        for feature in case.get('features') or []:
+            value=' '.join(str(feature.get('value') or '').split())
+            if value and value not in keywords: keywords.append(value[:120])
+    summary='; '.join(descriptions[:8])
+    if keywords: summary=(summary+' | Dấu hiệu: '+', '.join(keywords[:20])).strip(' |')
+    return summary,keywords[:40]
+
+
 
 def build_case_communities(cases: list[dict], embeddings: dict[str,np.ndarray], cfg: dict) -> dict:
     requested=cfg['retrieval'].get('community_algorithm','leiden')
@@ -45,7 +59,9 @@ def build_case_communities(cases: list[dict], embeddings: dict[str,np.ndarray], 
     for ci in sorted(set(labels.values())):
         members=[c for c in usable if labels.get(c["case_id"])==ci]
         cid=stable_id(str(ci),"|".join(sorted(c["case_id"] for c in members)),prefix="community")
-        community_nodes.append({"id":cid,"community_index":ci,"size":len(members),"summary":"; ".join((c.get("dispute") or c.get("case_number") or c["case_id"])[:120] for c in members[:8])})
+        summary,keywords=_community_description(members)
+        community_nodes.append({"id":cid,"community_index":ci,"size":len(members),"summary":summary,
+          "keywords":keywords,"member_case_ids":sorted(c["case_id"] for c in members)})
         for c in members: edges.append({"source":c["case_id"],"target":cid,"type":"BELONGS_TO","properties":{}})
     for a,b,w in knn: edges.append({"source":a,"target":b,"type":"SIMILAR_TO","properties":{"cosine":w}})
     return {"community_nodes":community_nodes,"edges":edges,"algorithm":algo}

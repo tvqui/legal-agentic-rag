@@ -53,12 +53,16 @@ class OnlinePipeline:
             analysis=analysis.model_copy(update={'query_date':default_date,'query_date_end':default_date,
               'query_date_precision':'DAY','temporal_intent':'CURRENT'})
             defaulted_query_date=True
+        analysis_ms=round((time.perf_counter()-stage)*1000,2)
+        researcher_started=time.perf_counter()
+        analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
         plan=plan_evidence(analysis)
         trace=Trace(trace_id='trace_'+hashlib.sha256((env.query_id+str(time.time_ns())).encode()).hexdigest()[:16],query_id=env.query_id,
           build_id=self.store.report.build_id or '',route=analysis.route,route_reason=analysis.route_reason,
           config_fingerprint=hashlib.sha256(json.dumps(self.cfg.model_dump(mode='json'),sort_keys=True).encode()).hexdigest())
-        trace.timings_ms['analysis']=round((time.perf_counter()-stage)*1000,2)
-        warnings=[]; assumptions=[]
+        trace.timings_ms['analysis']=analysis_ms
+        trace.timings_ms['researcher']=round((time.perf_counter()-researcher_started)*1000,2)
+        warnings=list(research_warnings); assumptions=[]
         if self.cfg.provisional_mode: warnings+=['Dữ liệu chưa hoàn tất human legal review.']+self.store.report.provisional_reasons
         if defaulted_query_date:
             warnings.append('QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT')
@@ -71,7 +75,11 @@ class OnlinePipeline:
             assumptions.append(f'Mốc thời gian chỉ chính xác theo {"tháng" if analysis.query_date_precision=="MONTH" else "năm"}; kiểm tra các phiên bản giao với khoảng {analysis.query_date} đến {analysis.query_date_end}.')
         trace.events.append({'event':'query_intake','raw_preserved':env.raw_query==request.question,'conversation_turns':len(env.conversation_context),'evidence_treated_as_data':True})
         trace.events.append({'event':'analysis','issues':analysis.legal_issues,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
-          'query_date_precision':analysis.query_date_precision,'query_date':analysis.query_date,'query_date_end':analysis.query_date_end})
+          'query_date_precision':analysis.query_date_precision,'query_date':analysis.query_date,'query_date_end':analysis.query_date_end,
+          'fact_candidates':[candidate.model_dump(mode='json') for candidate in analysis.fact_candidates]})
+        trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'issues':analysis.legal_issues,
+          'retrieval_queries':analysis.retrieval_queries,'ontology':analysis.ontology_features.model_dump(mode='json'),
+          'verified_fact_candidates':sum(candidate.verified for candidate in analysis.fact_candidates),'fallback':bool(research_warnings)})
         trace.events.append({'event':'freshness','corpus_snapshot_as_of':snapshot,'warning':freshness_relevant and 'CORPUS_MAY_BE_STALE' in warnings})
         trace.events.append({'event':'evidence_plan','mandatory_slots':plan.mandatory_slots,'conditional_slots':plan.conditional_slots})
         if analysis.missing_facts:
@@ -80,13 +88,6 @@ class OnlinePipeline:
             return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,answer='Cần bổ sung dữ kiện trước khi tra cứu chuyên sâu.',questions=analysis.missing_facts,
               evidence_status='NOT_RETRIEVED',applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               warnings=warnings,facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
-        stage=time.perf_counter()
-        analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
-        warnings+=research_warnings; plan=plan_evidence(analysis)
-        trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'issues':analysis.legal_issues,
-          'retrieval_queries':analysis.retrieval_queries,'ontology':analysis.ontology_features.model_dump(mode='json'),
-          'fallback':bool(research_warnings)})
-        trace.timings_ms['researcher']=round((time.perf_counter()-stage)*1000,2)
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
@@ -110,7 +111,9 @@ class OnlinePipeline:
                           'error':type(exc.__cause__ or exc).__name__})
                         break
             if self.cfg.retrieval.issue_anchor_enabled: lists.append(self.retriever.issue_anchor(analysis.legal_issues))
-            if self.cfg.retrieval.case_law_enabled and (analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues): lists.append(self.retriever.case_law(env.normalized_query))
+            case_query=analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues
+            if self.cfg.retrieval.case_law_enabled and case_query: lists.append(self.retriever.case_law(env.normalized_query))
+            if self.cfg.retrieval.community_enabled and case_query: lists.append(self.retriever.community_cases(env.normalized_query))
         nonempty=[x for x in lists if x]; items=nonempty[0] if len(nonempty)==1 else self.retriever.fusion(nonempty) if nonempty else []
         trace.seed_results=sum(len(x) for x in lists)
         items,removed=temporal_filter(items,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
@@ -253,7 +256,9 @@ class OnlinePipeline:
         trace.reference_audit='PASS' if ok else 'FAIL'; trace.stop_reason=status; trace.budget_stop_reason=budget_reason
         trace.events+=[{'event':'retrieval','candidates':trace.seed_results,'temporal_removed':len(set(removed)),
           'authority_removed':len(set(authority_removed)),'temporal_fallback':len(temporal_fallback_ids)},
-          {'event':'applicability_audit','mode':self.cfg.applicability.mode,'passed':sum(x.audit_status=='PASS' for x in decisions),'total':len(decisions)},
+          {'event':'applicability_audit','mode':self.cfg.applicability.mode,'passed':sum(x.audit_status=='PASS' for x in decisions),'total':len(decisions),
+           'decisions':[{'evidence_id':x.evidence_id,'audit_status':x.audit_status,'relevant':x.relevant,
+             'supports_claim':x.supports_claim,'reasons':x.reasons} for x in decisions]},
           {'event':'selection','selected':len(selected),'deduplicated':max(0,len(verified)-len(selected))},
           {'event':'evidence_state','coverage':state.coverage,'gaps':state.gaps},
           {'event':'verified_evidence_pack','count':len(pack.evidence),'characters':sum(len(x.text) for x in pack.evidence),

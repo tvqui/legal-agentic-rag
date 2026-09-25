@@ -15,7 +15,7 @@ GAP_RELATIONS={
   'conditions':{'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'NEXT':{'IN','OUT'}},
   'termination_conditions':{'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'NEXT':{'IN','OUT'},'RELATES_TO_ISSUE':{'IN','OUT'}},
   'notice_requirement':{'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'NEXT':{'IN','OUT'},'RELATES_TO_ISSUE':{'IN','OUT'}},
-  'case_law':{'CITES':{'IN','OUT'},'HAS_ISSUE':{'IN','OUT'},'RELATES_TO_ISSUE':{'IN','OUT'},'SIMILAR_TO':{'IN','OUT'}},
+  'case_law':{'CITES':{'IN','OUT'},'HAS_ISSUE':{'IN','OUT'},'RELATES_TO_ISSUE':{'IN','OUT'},'SIMILAR_TO':{'IN','OUT'},'BELONGS_TO':{'IN','OUT'}},
   'governing_rule':{'CITES':{'OUT'},'RELATES_TO_ISSUE':{'IN','OUT'},'IMPLEMENTS':{'OUT'},'REFERENCES':{'IN','OUT'},'PART_OF':{'IN','OUT'}},
   'official_source':{'VERSION_OF':{'IN','OUT'},'PART_OF':{'IN','OUT'}},
 }
