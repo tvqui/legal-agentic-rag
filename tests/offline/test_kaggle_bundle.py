@@ -106,6 +106,10 @@ class KaggleTests(unittest.TestCase):
         self.assertNotIn('RUN_PIPELINE = True', source_text)
         self.assertIn('UserSecretsClient', source_text)
         self.assertIn('AI_ENV.clear()', source_text)
+        self.assertIn('PULL_STALL_SECONDS = 15 * 60', source_text)
+        self.assertIn('PULL_TOTAL_SECONDS = 90 * 60', source_text)
+        self.assertIn("print('Ollama pull:'", source_text)
+        self.assertNotIn("subprocess.run(['ollama', 'pull'", source_text)
         self.assertNotIn('change_me', serialized)
 
     def test_restore_rejects_traversal_and_other_directories(self):

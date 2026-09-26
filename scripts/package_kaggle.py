@@ -189,9 +189,52 @@ except Exception:
     else:
         raise RuntimeError('Ollama không khởi động; xem /kaggle/working/ollama-offline.log')
 
-with open('/kaggle/working/ollama-pull.log', 'w', encoding='utf-8') as pull_log:
-    subprocess.run(['ollama', 'pull', OFFLINE_AI_MODEL], env=OLLAMA_ENV,
-                   stdout=pull_log, stderr=subprocess.STDOUT, check=True)
+PULL_LOG_PATH = Path('/kaggle/working/ollama-pull.log')
+PULL_STALL_SECONDS = 15 * 60
+PULL_TOTAL_SECONDS = 90 * 60
+with PULL_LOG_PATH.open('w', encoding='utf-8') as pull_log:
+    pull_process = subprocess.Popen(
+        ['ollama', 'pull', OFFLINE_AI_MODEL], env=OLLAMA_ENV,
+        stdout=pull_log, stderr=subprocess.STDOUT, start_new_session=True,
+    )
+    pull_started = pull_activity = last_printed = time.monotonic()
+    previous_size = -1
+    try:
+        while pull_process.poll() is None:
+            time.sleep(10)
+            size = PULL_LOG_PATH.stat().st_size
+            now = time.monotonic()
+            if size != previous_size:
+                previous_size = size
+                pull_activity = now
+            if now - last_printed >= 20:
+                with PULL_LOG_PATH.open('rb') as tail:
+                    tail.seek(max(0, size - 2000))
+                    lines = tail.read().decode('utf-8', errors='replace').replace('\\r', '\\n').strip().splitlines()
+                print('Ollama pull:', (lines[-1] if lines else 'đang kết nối...')[:500], flush=True)
+                last_printed = now
+            if now - pull_activity > PULL_STALL_SECONDS:
+                raise TimeoutError('ollama pull không tạo thêm log trong 15 phút')
+            if now - pull_started > PULL_TOTAL_SECONDS:
+                raise TimeoutError('ollama pull vượt quá 90 phút')
+    except BaseException:
+        if pull_process.poll() is None:
+            pull_process.terminate()
+            try:
+                pull_process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                pull_process.kill()
+        raise
+
+if pull_process.returncode != 0:
+    print(PULL_LOG_PATH.read_text(encoding='utf-8', errors='replace')[-12000:])
+    raise RuntimeError('ollama pull thất bại với exit code ' + str(pull_process.returncode))
+
+with urllib.request.urlopen('http://127.0.0.1:11434/api/tags', timeout=10) as response:
+    installed = json.loads(response.read()).get('models', [])
+installed_names = {str(item.get('name') or '') for item in installed}
+if not any(name == OFFLINE_AI_MODEL or name.startswith(OFFLINE_AI_MODEL + '-') for name in installed_names):
+    raise RuntimeError('Ollama API không xác nhận model đã tải: ' + OFFLINE_AI_MODEL)
 print(OFFLINE_AI_MODEL, 'sẵn sàng trên GPU', ollama_gpu)
 ''')
 
