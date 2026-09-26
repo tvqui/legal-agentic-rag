@@ -106,6 +106,8 @@ class KaggleTests(unittest.TestCase):
         self.assertNotIn('RUN_PIPELINE = True', source_text)
         self.assertIn('UserSecretsClient', source_text)
         self.assertIn('AI_ENV.clear()', source_text)
+        self.assertIn('INSTALL_TIMEOUT_SECONDS = 10 * 60', source_text)
+        self.assertIn('installer_process.wait(timeout=INSTALL_TIMEOUT_SECONDS)', source_text)
         self.assertIn('PULL_STALL_SECONDS = 15 * 60', source_text)
         self.assertIn('PULL_TOTAL_SECONDS = 90 * 60', source_text)
         self.assertIn("print('Ollama pull:'", source_text)

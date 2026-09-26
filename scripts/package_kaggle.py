@@ -158,7 +158,36 @@ Cảnh báo `systemd is not running` của installer là bình thường trên K
     code('''if not shutil.which('ollama'):
     installer = Path('/tmp/install_ollama.sh')
     urllib.request.urlretrieve('https://ollama.com/install.sh', installer)
-    subprocess.run(['bash', str(installer)], check=True)
+    INSTALL_LOG_PATH = Path('/kaggle/working/ollama-install.log')
+    INSTALL_TIMEOUT_SECONDS = 10 * 60
+    with INSTALL_LOG_PATH.open('w', encoding='utf-8') as install_log:
+        installer_process = subprocess.Popen(
+            ['bash', str(installer)], stdout=install_log, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        try:
+            installer_process.wait(timeout=INSTALL_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            import signal
+            try:
+                os.killpg(installer_process.pid, signal.SIGTERM)
+                installer_process.wait(timeout=15)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                try:
+                    os.killpg(installer_process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if not shutil.which('ollama'):
+                print(INSTALL_LOG_PATH.read_text(encoding='utf-8', errors='replace')[-12000:])
+                raise RuntimeError('Ollama installer treo quá 10 phút và chưa cài được binary.')
+            print('Installer không tự thoát nhưng binary Ollama đã có; tiếp tục kiểm API.', flush=True)
+    if installer_process.returncode not in (0, None) and not shutil.which('ollama'):
+        print(INSTALL_LOG_PATH.read_text(encoding='utf-8', errors='replace')[-12000:])
+        raise RuntimeError('Ollama installer thất bại với exit code ' + str(installer_process.returncode))
+
+if not shutil.which('ollama'):
+    raise RuntimeError('Không tìm thấy lệnh ollama sau bước cài đặt.')
+print('Ollama binary:', shutil.which('ollama'), flush=True)
 
 ollama_gpu = '1' if len(gpu_lines) > 1 else '0'
 OLLAMA_ENV = dict(

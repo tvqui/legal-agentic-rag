@@ -142,7 +142,7 @@ subprocess.run(['ollama', 'pull', 'qwen3:8b'], env=ollama_env, check=True)
 print('Qwen3-8B sẵn sàng trên GPU', ollama_gpu)
 ```
 
-Cảnh báo `systemd is not running` khi cài Ollama trên Kaggle là bình thường vì server được khởi động trực tiếp bằng `ollama serve`. Notebook one-click in tiến độ `Ollama pull` khoảng 20 giây một lần, dừng nếu log không thay đổi 15 phút hoặc tổng thời gian tải vượt 90 phút.
+Cảnh báo `systemd is not running` khi cài Ollama trên Kaggle là bình thường vì server được khởi động trực tiếp bằng `ollama serve`. Notebook one-click giới hạn installer ở 10 phút; nếu binary đã được cài nhưng installer không tự thoát, notebook đóng installer và tiếp tục kiểm API. Sau đó notebook in tiến độ `Ollama pull` khoảng 20 giây một lần, dừng nếu log không thay đổi 15 phút hoặc tổng thời gian tải vượt 90 phút.
 
 ## 6. Chạy `hybrid_ai`
 
