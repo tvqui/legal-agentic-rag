@@ -29,21 +29,49 @@ class KaggleTests(unittest.TestCase):
                 remote.main()
         self.assertEqual(stopped.exception.code, 1)
 
-    def test_aura_cell_forwards_database_from_secret(self):
+    def test_one_click_notebook_reads_and_strips_aura_secrets(self):
         cell = next(c for c in packager.make_notebook()['cells'] if c['cell_type'] == 'code' and 'UserSecretsClient' in ''.join(c['source']))
         secrets = {'NEO4J_URI': 'neo4j+s://example.invalid', 'NEO4J_USER': 'neo4j',
                    'NEO4J_PASSWORD': 'test-only', 'NEO4J_DATABASE': ' labor_project '}
         client = types.SimpleNamespace(get_secret=secrets.__getitem__)
-        received = []
-        def logged(arguments, name, environment):
-            received.append(dict(environment))
-            return 0
-        namespace = {'LOAD_AURA': True, 'run_logged': logged, 'subprocess': bootstrap.subprocess,
-                     'PYTHON': Path('python'), 'ROOT': ROOT}
-        with patch.dict('sys.modules', {'kaggle_secrets': types.SimpleNamespace(UserSecretsClient=lambda: client)}), patch.object(bootstrap.subprocess, 'run'):
+        artifacts = [ROOT / name for name in (
+          'artifacts/03_structure/provisions.jsonl', 'artifacts/03_structure/cases.jsonl',
+          'artifacts/05_graph/nodes.jsonl', 'artifacts/06_indexes/retrieval_units.jsonl',
+          'artifacts/reports/dense_validation.json')]
+        namespace = {'LOAD_AURA': True, 'subprocess': bootstrap.subprocess, 'ROOT': ROOT}
+        with patch.dict('sys.modules', {'kaggle_secrets': types.SimpleNamespace(UserSecretsClient=lambda: client)}), \
+             patch.object(Path, 'is_file', return_value=True), \
+             patch.object(bootstrap.subprocess, 'check_output', return_value='0, Tesla T4\n1, Tesla T4\n'):
             exec(''.join(cell['source']), namespace)
-        self.assertEqual(received[0]['NEO4J_DATABASE'], 'labor_project')
-        self.assertEqual(namespace['credentials'], {})
+        self.assertEqual(namespace['NEO4J_ENV']['NEO4J_DATABASE'], 'labor_project')
+        self.assertEqual(set(namespace['NEO4J_ENV']), set(secrets))
+
+    def test_one_click_build_requests_aura_and_clears_secret_copies(self):
+        cell = next(c for c in packager.make_notebook()['cells']
+                    if c['cell_type'] == 'code' and 'offline_ai_build.log' in ''.join(c['source']))
+        with tempfile.TemporaryDirectory() as temp:
+            reports = Path(temp)
+            (reports / 'final_outputs_validation.json').write_text(
+                json.dumps({'ready_for_offline_v1': True}), encoding='utf-8')
+            (reports / 'neo4j_validation.json').write_text(
+                json.dumps({'passed': True, 'build_id': 'build-test'}), encoding='utf-8')
+            received = []
+            def logged(arguments, name, environment):
+                received.append((list(arguments), name, dict(environment)))
+                return 0
+            namespace = {
+                'OFFLINE_AI_MODEL': 'qwen3:8b', 'OFFLINE_AI_MODE': 'hybrid_ai',
+                'LOAD_AURA': True, 'NEO4J_ENV': {
+                    'NEO4J_URI': 'neo4j+s://example.invalid', 'NEO4J_USER': 'neo4j',
+                    'NEO4J_PASSWORD': 'test-only', 'NEO4J_DATABASE': 'database'},
+                'run_logged': logged, 'REPORTS': reports, 'OLLAMA_PROCESS': None,
+                'OLLAMA_LOG_HANDLE': None, 'subprocess': bootstrap.subprocess, 'json': json,
+            }
+            exec(''.join(cell['source']), namespace)
+        self.assertIn('--load-aura', received[0][0])
+        self.assertEqual(received[0][1], 'offline_ai_build.log')
+        self.assertEqual(namespace['AI_ENV'], {})
+        self.assertTrue(all(not value for value in namespace['NEO4J_ENV'].values()))
 
     def test_install_skips_ensurepip_and_repairs_existing_environment(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -70,10 +98,15 @@ class KaggleTests(unittest.TestCase):
             if cell['cell_type'] == 'code':
                 self.assertEqual(cell['outputs'], [])
                 compile(''.join(cell['source']), f'cell{i}', 'exec')
-        text = json.dumps(notebook)
-        self.assertIn('LOAD_AURA = False', text)
-        self.assertIn('UserSecretsClient', text)
-        self.assertNotIn('change_me', text)
+        source_text = '\n'.join(''.join(cell['source']) for cell in notebook['cells'])
+        serialized = json.dumps(notebook)
+        self.assertIn('LOAD_AURA = True', source_text)
+        self.assertIn('OFFLINE_AI_MODE = "hybrid_ai"', source_text)
+        self.assertIn("arguments.append('--load-aura')", source_text)
+        self.assertNotIn('RUN_PIPELINE = True', source_text)
+        self.assertIn('UserSecretsClient', source_text)
+        self.assertIn('AI_ENV.clear()', source_text)
+        self.assertNotIn('change_me', serialized)
 
     def test_restore_rejects_traversal_and_other_directories(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -2,6 +2,10 @@
 
 Quy trình này bắt đầu từ checkpoint `vn_labor_results_v8.1(aura).zip`. Nó không OCR lại 95 tài liệu và không dựng lại Dense/BM25 nếu retrieval units không đổi. Nó chạy lại phần tri thức bằng Qwen3-8B, dựng lại graph, audit, nạp đúng graph mới vào Aura và xuất một ZIP kết quả mới.
 
+## Cách one-click khuyến nghị
+
+Nếu hai Dataset đã được **Add Input** và bốn Neo4j Secrets đã được cấp quyền, hãy import bản mới của `build/kaggle/VN_Labor_Kaggle_V8.ipynb`, bật **GPU T4 x2** và **Internet**, rồi chọn **Save Version → Save & Run All** đúng một lần. Notebook đã khóa `hybrid_ai`, `LOAD_AURA=True`, tự dừng khi lỗi và chỉ xuất ZIP sau khi technical build cùng Aura validation PASS. Các mục bên dưới giải thích chi tiết từng bước để kiểm tra hoặc xử lý lỗi; không cần tự tạo lại các cell.
+
 ## 1. Chọn chế độ
 
 - `hybrid_ai` — **khuyến nghị chạy trước**: giữ checklist heuristic khi đã tạo được; chỉ gọi AI cho provision chưa có checklist heuristic. Case ontology vẫn được enrichment bằng AI.
