@@ -3,7 +3,7 @@ import json, re, os
 from pathlib import Path
 from .util import stable_id, write_jsonl, read_jsonl
 from .evidence import locate_evidence
-from .ai_enrichment import cache_dir, cached_structured, provider_from_config
+from .ai_enrichment import cache_dir, cached_structured, provider_from_config, report_ai_progress
 
 SENTENCE_SPLIT = re.compile(r"(?<=[\.;:!?])\s+|\n+")
 TRIGGERS = [
@@ -14,6 +14,8 @@ TRIGGERS = [
     ("PERMISSION", ["được ", "có quyền"]),
     ("DEADLINE", ["trong thời hạn", "chậm nhất", "trước ít nhất", "ngày làm việc"]),
 ]
+
+LEVEL_PRIORITY = {"POINT": 0, "CLAUSE": 1, "ARTICLE": 2}
 
 
 def heuristic_checklist(provision: dict, segment_text: str = "", document_text: str = "",
@@ -110,6 +112,20 @@ Return at most 20 items and only JSON matching the schema."""
           'fact_slots':item.get('fact_slots',[]),'generator':'structured-ai:'+str(getattr(provider,'model','unknown')),'confidence':.85})
     return out
 
+def select_hybrid_ai_ids(prepared,max_records):
+    """Select a deterministic, bounded set of provisions that already show legal-rule signals.
+
+    AI refines provisions for which the deterministic parser found at least one grounded
+    rule. Sending every no-signal fragment to an 8B model created more than 15,000
+    sequential requests and did not improve coverage reliably.
+    """
+    limit=max(0,int(max_records))
+    candidates=[(provision,heuristic) for provision,heuristic,_ in prepared if heuristic]
+    candidates.sort(key=lambda row:(
+      -len(row[1]),LEVEL_PRIORITY.get(str(row[0].get('level','')).upper(),9),
+      -min(len(row[0].get('text','')),12000),row[0]['provision_id']))
+    return {provision['provision_id'] for provision,_ in candidates[:limit]}
+
 def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: str | None=None) -> list[dict]:
     mode = mode or cfg["knowledge"].get("checklist_mode", "heuristic")
     model = cfg["knowledge"].get("ollama_model", "qwen3:4b")
@@ -121,6 +137,7 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
                 read_jsonl(output_dir / "02_registry" / "documents.jsonl")}
     rows=[]; provider=None
     if mode in {'ai','hybrid_ai'}: provider=provider_from_config(cfg)
+    prepared=[]
     for p in provisions:
         # Parser stores each level's own text; ancestor introductions can contain rules too.
         if len(p.get("text", "")) < 40: continue
@@ -128,13 +145,43 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
         evidence_args = (segments.get(p.get("segment_id"), ""), source.get("text", ""),
                          source.get("page_provenance", []))
         heuristic=heuristic_checklist(p,*evidence_args)
+        prepared.append((p,heuristic,evidence_args))
+    ai_limit=int(cfg['knowledge'].get('ai_max_provisions',2000))
+    hybrid_ids=select_hybrid_ai_ids(prepared,ai_limit) if mode=='hybrid_ai' else set()
+    planned=len(prepared) if mode=='ai' else len(hybrid_ids) if mode=='hybrid_ai' else 0
+    report_ai_progress(output_dir,'checklists',0,len(prepared),mode=mode,ai_planned=planned,
+                       ai_attempted=0,ai_succeeded=0,ai_fallback=0)
+    ai_attempted=ai_succeeded=ai_fallback=0
+    for index,(p,heuristic,evidence_args) in enumerate(prepared,1):
         if mode == "ollama":
             try: rows.extend(ollama_checklist(p, model, *evidence_args))
             except Exception: rows.extend(heuristic)
-        elif mode=='ai' or mode=='hybrid_ai' and not heuristic:
-            try: rows.extend(ai_checklist(p,provider,cache_dir(cfg),*evidence_args))
-            except Exception: rows.extend(heuristic)
+        elif mode=='ai' or p['provision_id'] in hybrid_ids:
+            ai_attempted+=1
+            try:
+                generated=ai_checklist(p,provider,cache_dir(cfg),*evidence_args)
+                if generated:
+                    if mode=='hybrid_ai': rows.extend(heuristic)
+                    rows.extend(generated); ai_succeeded+=1
+                else:
+                    rows.extend(heuristic); ai_fallback+=1
+            except Exception:
+                rows.extend(heuristic); ai_fallback+=1
         else: rows.extend(heuristic)
+        if mode in {'ai','hybrid_ai'} and (index==len(prepared) or index%250==0 or
+                                            (mode=='ai' or p['provision_id'] in hybrid_ids)):
+            report_ai_progress(output_dir,'checklists',index,len(prepared),mode=mode,
+              ai_planned=planned,ai_attempted=ai_attempted,ai_succeeded=ai_succeeded,
+              ai_fallback=ai_fallback)
+    # Prefer the structured-AI form when both generators ground the same atomic rule.
+    unique={}
+    for row in rows:
+        key=(row.get('provision_id'),row.get('type'),' '.join(str(row.get('source_text','')).split()))
+        current=unique.get(key)
+        if current is None or (str(row.get('generator','')).startswith('structured-ai:') and
+                               not str(current.get('generator','')).startswith('structured-ai:')):
+            unique[key]=row
+    rows=list(unique.values())
     accepted=[r for r in rows if r.get('provenance_status')=='VERIFIED']
     write_jsonl(output_dir / "04_knowledge" / "diagnostic_review_queue.jsonl",
                 [r for r in rows if r.get('provenance_status')!='VERIFIED'])

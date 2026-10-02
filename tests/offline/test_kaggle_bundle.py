@@ -1,4 +1,4 @@
-﻿import importlib.util
+import importlib.util
 import json
 from pathlib import Path
 import tempfile
@@ -56,11 +56,13 @@ class KaggleTests(unittest.TestCase):
             (reports / 'neo4j_validation.json').write_text(
                 json.dumps({'passed': True, 'build_id': 'build-test'}), encoding='utf-8')
             received = []
-            def logged(arguments, name, environment):
-                received.append((list(arguments), name, dict(environment)))
+            def logged(arguments, name, environment, **options):
+                received.append((list(arguments), name, dict(environment), dict(options)))
                 return 0
             namespace = {
                 'OFFLINE_AI_MODEL': 'qwen3:8b', 'OFFLINE_AI_MODE': 'hybrid_ai',
+                'OFFLINE_AI_MAX_PROVISIONS': 2000, 'AI_HEARTBEAT_SECONDS': 60,
+                'AI_STALL_SECONDS': 1200, 'AI_TOTAL_SECONDS': 39600,
                 'LOAD_AURA': True, 'NEO4J_ENV': {
                     'NEO4J_URI': 'neo4j+s://example.invalid', 'NEO4J_USER': 'neo4j',
                     'NEO4J_PASSWORD': 'test-only', 'NEO4J_DATABASE': 'database'},
@@ -69,7 +71,9 @@ class KaggleTests(unittest.TestCase):
             }
             exec(''.join(cell['source']), namespace)
         self.assertIn('--load-aura', received[0][0])
+        self.assertIn('--max-provisions', received[0][0])
         self.assertEqual(received[0][1], 'offline_ai_build.log')
+        self.assertEqual(received[0][3]['stall_seconds'],1200)
         self.assertEqual(namespace['AI_ENV'], {})
         self.assertTrue(all(not value for value in namespace['NEO4J_ENV'].values()))
 
@@ -102,6 +106,10 @@ class KaggleTests(unittest.TestCase):
         serialized = json.dumps(notebook)
         self.assertIn('LOAD_AURA = True', source_text)
         self.assertIn('OFFLINE_AI_MODE = "hybrid_ai"', source_text)
+        self.assertIn('OFFLINE_AI_MAX_PROVISIONS = 2000', source_text)
+        self.assertIn("f'HEARTBEAT elapsed=", source_text)
+        self.assertIn("stage={stage}", source_text)
+        self.assertIn("artifacts/04_knowledge/ai_cache", source_text)
         self.assertIn("arguments.append('--load-aura')", source_text)
         self.assertNotIn('RUN_PIPELINE = True', source_text)
         self.assertIn('UserSecretsClient', source_text)
@@ -188,4 +196,3 @@ class KaggleTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

@@ -32,6 +32,10 @@ Không nhập secret trực tiếp vào cell.
 RESTORE_ARCHIVE = "AUTO"
 OFFLINE_AI_MODE = "hybrid_ai"
 OFFLINE_AI_MODEL = "qwen3:8b"
+OFFLINE_AI_MAX_PROVISIONS = 2000
+AI_HEARTBEAT_SECONDS = 60
+AI_STALL_SECONDS = 20 * 60
+AI_TOTAL_SECONDS = 11 * 60 * 60
 LOAD_AURA = True
 ''')
 
@@ -74,8 +78,9 @@ PYTHON = bootstrap.install(ROOT)
 REPORTS = ROOT / 'artifacts/reports'
 REPORTS.mkdir(parents=True, exist_ok=True)
 
-def run_logged(arguments, name, extra_env=None):
+def run_logged(arguments, name, extra_env=None, heartbeat_seconds=60, stall_seconds=None, total_seconds=None):
     environment = dict(os.environ)
+    environment.setdefault('PYTHONUNBUFFERED', '1')
     if extra_env:
         environment.update(extra_env)
     logfile = REPORTS / name
@@ -86,15 +91,64 @@ def run_logged(arguments, name, extra_env=None):
         )
         try:
             last = ''
+            started = last_heartbeat = last_activity = time.monotonic()
+            previous_size = -1
+            progress_path = REPORTS / 'offline_ai_progress.json'
+            progress_mtime = None
             while process.poll() is None:
                 time.sleep(5)
+                now = time.monotonic()
+                size = logfile.stat().st_size
+                if size != previous_size:
+                    previous_size = size
+                    last_activity = now
                 with logfile.open('rb') as tail:
-                    tail.seek(max(0, logfile.stat().st_size - 2400))
+                    tail.seek(max(0, size - 2400))
                     lines = tail.read().decode('utf-8', errors='replace').replace('\\r', '\\n').strip().splitlines()
                 latest = lines[-1] if lines else 'Đang xử lý...'
                 if latest != last:
                     print(latest[:500], flush=True)
                     last = latest
+                progress = {}
+                if progress_path.is_file():
+                    current_mtime = progress_path.stat().st_mtime_ns
+                    if current_mtime != progress_mtime:
+                        progress_mtime = current_mtime
+                        last_activity = now
+                    try:
+                        progress = json.loads(progress_path.read_text(encoding='utf-8'))
+                    except (OSError, json.JSONDecodeError):
+                        progress = {}
+                if now - last_heartbeat >= heartbeat_seconds:
+                    try:
+                        gpu = subprocess.check_output(
+                            ['nvidia-smi', '--query-gpu=index,utilization.gpu,memory.used,memory.total',
+                             '--format=csv,noheader,nounits'], text=True, timeout=10,
+                        ).strip().replace('\\n', ' | ')
+                    except Exception as exc:
+                        gpu = 'unavailable:' + type(exc).__name__
+                    cache_root = ROOT / 'artifacts/04_knowledge/ai_cache'
+                    cache_entries = sum(1 for _ in cache_root.glob('*.json')) if cache_root.is_dir() else 0
+                    stage = progress.get('stage', 'starting')
+                    completed = progress.get('completed', 0)
+                    progress_total = progress.get('total', '?')
+                    ai_attempted = progress.get('ai_attempted', 0)
+                    ai_planned = progress.get('ai_planned', '?')
+                    print(
+                        f'HEARTBEAT elapsed={int(now-started)}s stage={stage} '
+                        f'progress={completed}/{progress_total} ai={ai_attempted}/{ai_planned} '
+                        f'cache={cache_entries} log_bytes={size} '
+                        f'idle={int(now-last_activity)}s gpu=[{gpu}]', flush=True,
+                    )
+                    last_heartbeat = now
+                active_ai_stage = progress.get('stage') in {'case_ontology', 'checklists'}
+                if stall_seconds and active_ai_stage and now - last_activity > stall_seconds:
+                    raise TimeoutError(
+                        f'AI enrichment không tăng tiến độ trong {int(now-last_activity)} giây; '
+                        'dừng để tránh giữ GPU vô hạn.'
+                    )
+                if total_seconds and now - started > total_seconds:
+                    raise TimeoutError(f'OFFLINE AI build vượt giới hạn {int(total_seconds)} giây.')
             print(name, 'exit code:', process.returncode, flush=True)
             return process.returncode
         except BaseException:
@@ -270,7 +324,9 @@ print(OFFLINE_AI_MODEL, 'sẵn sàng trên GPU', ollama_gpu)
     md('''## 4. Enrichment → graph → Aura → audit → export
 
 Đây là bước dài nhất. Log được ghi vào file thay vì đẩy toàn bộ ra Notebook để tránh tăng RAM.
-Nếu lỗi, cell in phần cuối của log rồi dừng; không báo PASS giả.
+Notebook in heartbeat mỗi 60 giây với tiến độ, số cache và mức dùng hai GPU. `hybrid_ai`
+chỉ tinh chỉnh tối đa 2.000 provision có tín hiệu quy phạm; cache được giữ trong artifacts.
+Nếu tiến độ AI đứng 20 phút hoặc toàn bước vượt 11 giờ, cell dừng và in log; không báo PASS giả.
 ''')
     code('''AI_ENV = {
     'VN_LABOR_OFFLINE_AI_PROVIDER': 'ollama',
@@ -279,12 +335,18 @@ Nếu lỗi, cell in phần cuối của log rồi dừng; không báo PASS gi�
     'VN_LABOR_OFFLINE_AI_TIMEOUT_SECONDS': '300',
     **NEO4J_ENV,
 }
-arguments = ['kaggle/offline_ai_remote.py', '--mode', OFFLINE_AI_MODE]
+arguments = ['kaggle/offline_ai_remote.py', '--mode', OFFLINE_AI_MODE,
+             '--max-provisions', str(OFFLINE_AI_MAX_PROVISIONS)]
 if LOAD_AURA:
     arguments.append('--load-aura')
 
 try:
-    result = run_logged(arguments, 'offline_ai_build.log', AI_ENV)
+    result = run_logged(
+        arguments, 'offline_ai_build.log', AI_ENV,
+        heartbeat_seconds=AI_HEARTBEAT_SECONDS,
+        stall_seconds=AI_STALL_SECONDS,
+        total_seconds=AI_TOTAL_SECONDS,
+    )
     if result != 0:
         log = REPORTS / 'offline_ai_build.log'
         print(log.read_text(encoding='utf-8', errors='replace')[-16000:])

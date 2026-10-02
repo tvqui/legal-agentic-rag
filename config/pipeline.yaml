@@ -27,7 +27,10 @@ knowledge:
   ai_url: http://127.0.0.1:11434/api/chat
   ai_model: qwen3:8b
   ai_timeout_seconds: 300
-  ai_cache_dir: .cache/offline_ai
+  # Keep verified structured responses in exported artifacts so a later build can resume.
+  ai_cache_dir: artifacts/04_knowledge/ai_cache
+  # hybrid_ai refines only the strongest deterministic rule candidates and is hard-bounded.
+  ai_max_provisions: 2000
   issue_min_score: 1
   relation_confidence_threshold: 0.55
 

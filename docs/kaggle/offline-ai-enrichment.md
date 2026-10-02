@@ -4,11 +4,11 @@ Quy trình này bắt đầu từ checkpoint `vn_labor_results_v8.1(aura).zip`. 
 
 ## Cách one-click khuyến nghị
 
-Nếu hai Dataset đã được **Add Input** và bốn Neo4j Secrets đã được cấp quyền, hãy import bản mới của `build/kaggle/VN_Labor_Kaggle_V8.ipynb`, bật **GPU T4 x2** và **Internet**, rồi chọn **Save Version → Save & Run All** đúng một lần. Notebook đã khóa `hybrid_ai`, `LOAD_AURA=True`, tự dừng khi lỗi và chỉ xuất ZIP sau khi technical build cùng Aura validation PASS. Các mục bên dưới giải thích chi tiết từng bước để kiểm tra hoặc xử lý lỗi; không cần tự tạo lại các cell.
+Nếu hai Dataset đã được **Add Input** và bốn Neo4j Secrets đã được cấp quyền, hãy import bản mới của `build/kaggle/VN_Labor_Kaggle_V8.ipynb`, bật **GPU T4 x2** và **Internet**, rồi chọn **Save Version → Save & Run All** đúng một lần. Notebook đã khóa `hybrid_ai`, `LOAD_AURA=True`, giới hạn 2.000 provision AI, in heartbeat mỗi 60 giây, tự dừng khi tiến độ đứng 20 phút hoặc toàn bước vượt 11 giờ, và chỉ xuất ZIP sau khi technical build cùng Aura validation PASS.
 
 ## 1. Chọn chế độ
 
-- `hybrid_ai` — **khuyến nghị chạy trước**: giữ checklist heuristic khi đã tạo được; chỉ gọi AI cho provision chưa có checklist heuristic. Case ontology vẫn được enrichment bằng AI.
+- `hybrid_ai` — **khuyến nghị**: xếp hạng deterministic các provision đã có tín hiệu quy phạm và dùng AI để tinh chỉnh tối đa 2.000 provision. Checklist heuristic vẫn được giữ làm fallback và được hợp nhất theo exact source quote. Cách này tránh thiết kế cũ gọi tuần tự khoảng 15.286 fragment không có tín hiệu quy phạm. Case ontology vẫn được enrichment bằng AI.
 - `ai` — vòng thử nghiệm sau: gọi AI cho mọi provision đủ dài; nếu một lời gọi lỗi hoặc không có exact quote hợp lệ thì fallback về heuristic.
 
 Mọi checklist/feature do AI tạo chỉ được nhận khi có `source_quote` xuất hiện trong nguồn và provenance được resolve. AI không được tự phê duyệt metadata, temporal hoặc nguồn pháp lý.
@@ -23,7 +23,7 @@ Cần hai file:
 SHA-256 của package code hiện tại:
 
 ```text
-ba8028ecde4c2df9804c59f5c5fb16e117562e5773460add1e06de53c1b649c1
+d3996b4f987bc9d8b77004ebdf5e6695eeb83ad8eb8db7137876acede8253910
 ```
 
 Không upload `.env`, API key, Neo4j password, cache model hoặc `.venv`.
@@ -59,12 +59,14 @@ Trong Input phải nhìn thấy `artifacts/00_manifest`, `artifacts/03_structure
    - Notebook/Dataset: **Private**.
 4. Không gắn thêm checkpoint OFFLINE khác trong cùng notebook vì chế độ `AUTO` yêu cầu đúng một checkpoint.
 
-Trong cell cấu hình đầu tiên đặt:
+Cell cấu hình đầu tiên của notebook sinh tự động đã đặt sẵn:
 
 ```python
-RUN_PIPELINE = False
-LOAD_AURA = False
 RESTORE_ARCHIVE = "AUTO"
+OFFLINE_AI_MODE = "hybrid_ai"
+OFFLINE_AI_MODEL = "qwen3:8b"
+OFFLINE_AI_MAX_PROVISIONS = 2000
+LOAD_AURA = True
 ```
 
 Chạy cell bootstrap/cài môi trường của notebook. Kết quả đúng phải có dạng:
@@ -157,9 +159,12 @@ ai_env = {
 }
 
 result = run_logged(
-    ['kaggle/offline_ai_remote.py', '--mode', 'hybrid_ai'],
+    ['kaggle/offline_ai_remote.py', '--mode', 'hybrid_ai', '--max-provisions', '2000'],
     'offline_ai_enrichment.log',
     ai_env,
+    heartbeat_seconds=60,
+    stall_seconds=20 * 60,
+    total_seconds=11 * 60 * 60,
 )
 if result != 0:
     log = ROOT / 'artifacts/reports/offline_ai_enrichment.log'
@@ -167,7 +172,13 @@ if result != 0:
     raise RuntimeError('OFFLINE AI enrichment thất bại')
 ```
 
-Lần chạy lại trong cùng session sử dụng `.cache/offline_ai`, nên các record đã hoàn tất không phải gọi model lại.
+Trong bản one-click hiện hành, cache nằm tại `artifacts/04_knowledge/ai_cache`. Cache được đóng gói trong ZIP kết quả nên build sau có thể khôi phục và không phải gọi lại model cho cùng prompt/model/source. Mỗi heartbeat có dạng:
+
+```text
+HEARTBEAT elapsed=... stage=checklists progress=.../... cache=... log_bytes=... idle=... gpu=[...]
+```
+
+Nếu `progress` và `cache` không tăng trong 20 phút ở stage AI, notebook tự dừng. Không cần chờ thủ công nhiều giờ như phiên bản cũ.
 
 ## 7. Kiểm tra kết quả AI trước khi nạp Aura
 

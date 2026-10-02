@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 import hashlib,json,os
 from pathlib import Path
 from vn_labor_online.providers import HttpJsonProvider,OllamaProvider
@@ -29,6 +30,20 @@ def cached_structured(provider,system,payload,schema,cache_dir:Path,identity:str
     return value
 
 def cache_dir(cfg):
-    value=cfg.get('knowledge',{}).get('ai_cache_dir','.cache/offline_ai')
+    value=cfg.get('knowledge',{}).get('ai_cache_dir','artifacts/04_knowledge/ai_cache')
     path=Path(value)
     return path if path.is_absolute() else cfg['project_root']/path
+
+def report_ai_progress(output_dir:Path,stage:str,completed:int,total:int,**details):
+    """Persist a small, atomic heartbeat that the Kaggle parent can monitor."""
+    payload={
+      'schema_version':1,'stage':stage,'completed':int(completed),'total':int(total),
+      'updated_at':datetime.now(timezone.utc).isoformat(),**details,
+    }
+    path=Path(output_dir)/'reports/offline_ai_progress.json'
+    path.parent.mkdir(parents=True,exist_ok=True)
+    temporary=path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(payload,ensure_ascii=False,sort_keys=True),encoding='utf-8')
+    os.replace(temporary,path)
+    print('AI_PROGRESS '+json.dumps(payload,ensure_ascii=False,sort_keys=True),flush=True)
+    return payload

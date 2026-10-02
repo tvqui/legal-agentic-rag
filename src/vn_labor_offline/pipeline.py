@@ -16,6 +16,7 @@ from .validation import validate
 from .provenance import enrich_provenance
 from .provision_versions import materialize_provision_versions
 from .hierarchy_headings import build_hierarchy_headings
+from .ai_enrichment import report_ai_progress
 from .util import read_jsonl,write_jsonl
 
 
@@ -86,6 +87,7 @@ def run_all(cfg,checklist_mode=None):
 
 def rerun_enrichment(cfg,mode='ollama'):
     out=cfg['output_dir']
+    report_ai_progress(out,'prepare',0,1,mode=mode)
     (out/'reports/neo4j_validation.json').unlink(missing_ok=True)
     provisions=load_stage(out,'03_structure/provisions.jsonl'); cases=load_stage(out,'03_structure/cases.jsonl'); registry=load_stage(out,'02_registry/documents.jsonl')
     extracted=load_stage(out,'01_extracted/documents.jsonl')
@@ -95,6 +97,7 @@ def rerun_enrichment(cfg,mode='ollama'):
     identities, _=materialize_provision_versions(registry,provisions,out,cfg['project_root'])
     if mode in {'ai','hybrid_ai'}: cases=enrich_case_ontology(cases,cfg,out)
     checklists=build_checklists(provisions,cfg,out,mode=mode)
+    report_ai_progress(out,'graph_rebuild',0,1,mode=mode,checklists=len(checklists),cases=len(cases))
     issues,issue_edges=build_issue_assignments(provisions,cases,cfg,out)
     relation_candidates=build_relation_edges(registry,provisions,cases,out,extracted,cfg)
     relations=[r for r in relation_candidates if r.get('evidence_status')=='RESOLVED']
@@ -107,4 +110,7 @@ def rerun_enrichment(cfg,mode='ollama'):
     communities=build_case_communities(cases,embeddings,cfg)
     nodes,edges=build_graph(registry,provisions,cases,issues,issue_edges,checklists,relations,communities,out,identities)
     (out/'04_knowledge/communities.json').write_text(json.dumps(communities,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
-    return validate(registry,extracted,provisions,cases,checklists,nodes,edges,out,cfg)
+    result=validate(registry,extracted,provisions,cases,checklists,nodes,edges,out,cfg)
+    report_ai_progress(out,'enrichment_complete',1,1,mode=mode,checklists=len(checklists),
+                       cases=len(cases),nodes=len(nodes),edges=len(edges))
+    return result

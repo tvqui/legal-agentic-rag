@@ -1,6 +1,6 @@
 from __future__ import annotations
 import re
-from .ai_enrichment import cache_dir,cached_structured,provider_from_config
+from .ai_enrichment import cache_dir,cached_structured,provider_from_config,report_ai_progress
 from .evidence import locate_document_evidence
 from pathlib import Path
 from .util import stable_id, write_jsonl
@@ -102,11 +102,19 @@ def enrich_case_ontology(cases,cfg,output_dir):
     system="""Extract normalized Vietnamese labour-case ontology features from the quoted case only.
 Every feature must have a short exact source_quote. Do not infer unstated facts, guilt, intent, or criminal-law attributes.
 Return only JSON matching the schema."""
-    for case in cases:
+    attempted=succeeded=fallback=0
+    report_ai_progress(output_dir,'case_ontology',0,len(cases),ai_planned=len(cases),
+                       ai_attempted=0,ai_succeeded=0,ai_fallback=0)
+    for index,case in enumerate(cases,1):
         source='\n'.join(str(case.get(field) or '') for field in ('dispute','facts','reasoning','decision'))
         payload={'case_id':case['case_id'],'source':source[:30000]}
+        attempted+=1
         try: data=cached_structured(provider,system,payload,CASE_FEATURE_SCHEMA,cache,case['case_id'])
-        except Exception: enriched.append(case); continue
+        except Exception:
+            fallback+=1; enriched.append(case)
+            report_ai_progress(output_dir,'case_ontology',index,len(cases),ai_planned=len(cases),ai_attempted=attempted,
+                               ai_succeeded=succeeded,ai_fallback=fallback)
+            continue
         features=list(case.get('features',[]))
         allowed={'PARTY_PROFILE','EMPLOYMENT_RELATIONSHIP','EMPLOYMENT_EVENT','PROTECTED_STATUS','PROCEDURE','CLAIM_OR_REMEDY','OUTCOME'}
         for item in data.get('features',[])[:40] if isinstance(data,dict) else []:
@@ -119,5 +127,8 @@ Return only JSON matching the schema."""
               'provenance_status':'VERIFIED','generator':'structured-ai:'+str(getattr(provider,'model','unknown'))})
         unique={(x.get('type'),x.get('value'),x.get('source_quote')):x for x in features}
         enriched.append({**case,'features':list(unique.values())})
+        succeeded+=1
+        report_ai_progress(output_dir,'case_ontology',index,len(cases),ai_planned=len(cases),ai_attempted=attempted,
+                           ai_succeeded=succeeded,ai_fallback=fallback)
     write_jsonl(output_dir/'03_structure'/'cases.jsonl',enriched)
     return enriched

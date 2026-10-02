@@ -1,7 +1,7 @@
 from pathlib import Path
 import tempfile,unittest
-from vn_labor_offline.ai_enrichment import cached_structured
-from vn_labor_offline.checklists import ai_checklist
+from vn_labor_offline.ai_enrichment import cached_structured,report_ai_progress
+from vn_labor_offline.checklists import ai_checklist,select_hybrid_ai_ids
 
 class Provider:
     model='fixture-model'
@@ -29,5 +29,24 @@ class OfflineAIEnrichmentTests(unittest.TestCase):
             rows=ai_checklist(provision,provider,Path(directory),source,source,[])
         self.assertEqual(len(rows),1); self.assertEqual(rows[0]['provenance_status'],'VERIFIED')
         self.assertEqual(rows[0]['source_text'],'phải báo trước ít nhất 45 ngày')
+
+    def test_hybrid_selection_is_bounded_and_requires_rule_signals(self):
+        prepared=[
+          ({'provision_id':'p3','level':'ARTICLE','text':'x'*500},[{'type':'REQUIRED'}],()),
+          ({'provision_id':'p1','level':'POINT','text':'x'*100},[{'type':'REQUIRED'},{'type':'DEADLINE'}],()),
+          ({'provision_id':'p2','level':'CLAUSE','text':'x'*300},[],()),
+        ]
+        self.assertEqual(select_hybrid_ai_ids(prepared,1),{'p1'})
+        self.assertEqual(select_hybrid_ai_ids(prepared,10),{'p1','p3'})
+
+    def test_progress_is_atomic_and_machine_readable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)
+            payload=report_ai_progress(output,'checklists',7,20,ai_attempted=3)
+            stored=__import__('json').loads(
+                (output/'reports/offline_ai_progress.json').read_text(encoding='utf-8'))
+        self.assertEqual(payload,stored)
+        self.assertEqual(stored['stage'],'checklists')
+        self.assertEqual(stored['completed'],7)
 
 if __name__=='__main__': unittest.main()
