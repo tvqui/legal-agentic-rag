@@ -3,7 +3,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api')
   .replace(/\/+$/, '')
   .replace(/\/v1\/answer$/i, '')
   .replace(/\/v1$/i, '')
-const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 300000)
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 960000)
 
 export class ApiError extends Error {
   constructor(message, status = 0, details = null, category = 'NETWORK_ERROR', errorId = null) {

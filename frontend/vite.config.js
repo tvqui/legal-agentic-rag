@@ -7,6 +7,8 @@ export default defineConfig(({ mode }) => {
   // BACKEND_PROXY_TOKEN intentionally has no VITE_ prefix, so Vite does not
   // expose it to browser JavaScript. It is used only by the local dev proxy.
   const token = env.BACKEND_PROXY_TOKEN || ''
+  const configuredProxyTimeout = Number(env.BACKEND_PROXY_TIMEOUT_MS || 960000)
+  const proxyTimeout = Number.isFinite(configuredProxyTimeout) && configuredProxyTimeout > 0 ? configuredProxyTimeout : 960000
   const headers = { 'ngrok-skip-browser-warning': 'true' }
   if (token) headers.Authorization = `Bearer ${token}`
   return {
@@ -17,6 +19,8 @@ export default defineConfig(({ mode }) => {
           target,
           changeOrigin: true,
           secure: true,
+          timeout: proxyTimeout,
+          proxyTimeout,
           headers,
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
