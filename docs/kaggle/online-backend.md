@@ -1,7 +1,5 @@
 # Chạy toàn bộ ONLINE backend trên Kaggle
 
-> Cách khuyến nghị: dùng [Kaggle CLI một lệnh](online-cli.md) để tự động tạo/cập nhật notebook, theo dõi log, cập nhật URL và mở frontend. Các bước dưới đây là phương án chạy thủ công.
-
 ## Kết luận kiến trúc
 
 Kaggle API Token hoặc Legacy API Credentials chỉ xác thực Kaggle CLI/SDK để
