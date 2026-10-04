@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 
@@ -50,6 +51,15 @@ def wait_json(url: str, token: str | None, process: subprocess.Popen, timeout: i
             last_error = exc
             time.sleep(2)
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
+
+
+def _print_log_tail(path: Path, label: str, lines: int = 120) -> None:
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        print(f"===== {label} (last {min(lines, len(content))} lines) =====", flush=True)
+        print("\n".join(content[-lines:]), flush=True)
+    except Exception as exc:
+        print(f"Unable to read {label}: {type(exc).__name__}", flush=True)
 
 
 def _artifact_directory_roots(input_root: Path) -> list[Path]:
@@ -119,6 +129,7 @@ def main() -> int:
     api_key = secret("VN_LABOR_API_KEY")
     secret("NGROK_AUTHTOKEN")
     hf_token = secret("HF_TOKEN", required=False)
+    ngrok_domain = secret("NGROK_DOMAIN", required=False)
     artifact = detect_artifact(args.artifact)
     count = gpu_count()
     if count < 1:
@@ -167,13 +178,20 @@ def main() -> int:
             start_new_session=True,
         )
         wait_json(f"http://127.0.0.1:{args.port}/health", None, backend, 300)
-        readiness = wait_json(f"http://127.0.0.1:{args.port}/ready", api_key, backend, 120)
+        try:
+            readiness = get_json(f"http://127.0.0.1:{args.port}/ready", api_key)
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"ONLINE readiness failed: HTTP {exc.code}: {body}") from exc
         model_components = [readiness.get("components", {}).get(name, {})
                             for name in ("researcher", "auditor", "adjudicator")]
         if not readiness.get("ready") or any(item.get("status") != "READY" for item in model_components):
             raise RuntimeError(f"ONLINE backend is not fully ready: {readiness}")
         import ngrok
-        listener = ngrok.forward(f"localhost:{args.port}", authtoken_from_env=True, compression=True)
+        forward_options = {"authtoken_from_env": True, "compression": True}
+        if ngrok_domain:
+            forward_options["domain"] = ngrok_domain.removeprefix("https://").rstrip("/")
+        listener = ngrok.forward(f"localhost:{args.port}", **forward_options)
         print("REMOTE_BACKEND_URL=" + listener.url(), flush=True)
         print("Use this URL only as VITE_BACKEND_TARGET; keep VN_LABOR_API_KEY secret.", flush=True)
         while backend.poll() is None and ollama.poll() is None:
@@ -181,6 +199,12 @@ def main() -> int:
         raise RuntimeError(f"A service stopped: backend={backend.poll()} ollama={ollama.poll()}")
     except KeyboardInterrupt:
         return 0
+    except Exception:
+        ollama_log.flush()
+        backend_log.flush()
+        _print_log_tail(logs / "backend.log", "backend.log")
+        _print_log_tail(logs / "ollama.log", "ollama.log")
+        raise
     finally:
         if listener is not None:
             try:

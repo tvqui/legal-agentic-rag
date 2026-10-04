@@ -1,6 +1,6 @@
-﻿param(
+param(
   [Parameter(Position = 0)]
-  [ValidateSet('help','setup','setup-full','offline','dense','enrich','neo4j','load-neo4j','online','online-check','online-ollama','frontend','test','validate','kaggle')]
+  [ValidateSet('help','setup','setup-full','offline','dense','enrich','neo4j','load-neo4j','online','online-check','online-ollama','kaggle-online','kaggle-online-status','kaggle-online-logs','frontend','test','validate','kaggle')]
   [string]$Task = 'help',
   [string]$Config,
   [string]$HostAddress = '127.0.0.1',
@@ -72,6 +72,9 @@ VN Labor Legal GraphRAG
   run.bat online            Start deterministic ONLINE API
   run.bat online-check      Verify the pinned OFFLINE release for ONLINE
   run.bat online-ollama     Start ONLINE API with Ollama adjudication
+  run.bat kaggle-online     Start/reuse full Kaggle backend and local frontend
+  run.bat kaggle-online-status  Show the remote Kaggle run status
+  run.bat kaggle-online-logs    Print the latest remote Kaggle logs
   run.bat frontend          Start the React/Vite frontend
   run.bat test              Compile and run the repository test suite
   run.bat validate          Validate OFFLINE artifacts
@@ -140,6 +143,21 @@ try {
       $selected = if ($Config) { $Config } else { 'config/online_ollama.yaml' }
       & $python scripts/serve_online.py --config $selected --host $HostAddress --port $Port
       Assert-ExitCode 'ONLINE Ollama API'
+    }
+    'kaggle-online' {
+      $python = Get-ProjectPython
+      & $python scripts/kaggle_online_cli.py start
+      Assert-ExitCode 'Kaggle ONLINE automation'
+    }
+    'kaggle-online-status' {
+      $python = Get-ProjectPython
+      & $python scripts/kaggle_online_cli.py status
+      Assert-ExitCode 'Kaggle ONLINE status'
+    }
+    'kaggle-online-logs' {
+      $python = Get-ProjectPython
+      & $python scripts/kaggle_online_cli.py logs
+      Assert-ExitCode 'Kaggle ONLINE logs'
     }
     'frontend' {
       Push-Location (Join-Path $ProjectRoot 'frontend')
