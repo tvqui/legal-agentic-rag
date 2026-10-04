@@ -36,10 +36,11 @@ online:
   graph:
     enabled: true
     mode: adaptive
-    max_rounds: 4
-    max_nodes: 50
-    max_edges: 100
-    max_hops: 3
+    max_rounds: 2
+    max_nodes: 15
+    max_edges: 40
+    max_hops: 2
+    allowed_relations: [AMENDS, REPEALS, REPLACES, IMPLEMENTS, REFERENCES, VERSION_OF, PART_OF, CITES]
     wall_clock_ms: 1500
     hub_penalty: 0.15
     novelty_weight: 0.10
