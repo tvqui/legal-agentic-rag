@@ -1,6 +1,20 @@
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
+
+TRACKING_QUERY_KEYS={'utm_source','utm_medium','utm_campaign','utm_term','utm_content','fbclid','gclid'}
+
+def canonicalize_url(url:str)->str:
+    """Canonicalize an official URL without discarding identity parameters."""
+    parsed=urlparse((url or '').strip())
+    if not parsed.scheme or not parsed.netloc: return url
+    host=(parsed.hostname or '').lower()
+    port=f':{parsed.port}' if parsed.port and not (parsed.scheme=='https' and parsed.port==443) else ''
+    query=[(key,value) for key,value in parse_qsl(parsed.query,keep_blank_values=True)
+      if key.casefold() not in TRACKING_QUERY_KEYS]
+    return urlunparse((parsed.scheme.lower(),host+port,parsed.path or '/',parsed.params,
+      urlencode(sorted(query),doseq=True),'')).rstrip('/') if parsed.path=='/' and not query else urlunparse(
+      (parsed.scheme.lower(),host+port,parsed.path or '/',parsed.params,urlencode(sorted(query),doseq=True),''))
 
 
 class _LinkParser(HTMLParser):
@@ -31,7 +45,7 @@ def attachment_candidates(html: bytes, page_url: str, provider_id: str,
     results = []
     seen: set[str] = set()
     for href, label, attrs in parser.links:
-        absolute = urljoin(page_url, href.strip())
+        absolute = canonicalize_url(urljoin(page_url, href.strip()))
         path = urlparse(absolute).path.lower()
         hint = f"{label} {href}".casefold()
         binary_extension = path.endswith((".pdf", ".doc", ".docx", ".zip"))
@@ -69,7 +83,7 @@ class GenericOfficialAdapter:
     provider_id: str
 
     def candidate_urls(self, url: str) -> list[str]:
-        return [url] if url else []
+        return [canonicalize_url(url)] if url else []
 
     def discover_attachments(self, html: bytes, page_url: str, expected_identifier: str) -> list[dict]:
         return attachment_candidates(html, page_url, self.provider_id, expected_identifier)

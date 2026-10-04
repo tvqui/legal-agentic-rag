@@ -6,7 +6,8 @@ from .models import FactCandidate,QueryAnalysis,ResearcherResult
 from .providers import HttpJsonProvider,OllamaProvider
 
 SAFE_FACT_FIELDS={'actor','contract_type','notice_days','worked_months','notice_exception',
-  'special_occupation','protected_status'}
+  'special_occupation','protected_status','service_years','age','minor','disabled',
+  'work_category','termination_basis','force_majeure_exception','mutual_termination_agreement','travel_days'}
 
 def _fold(value):
     normalized=unicodedata.normalize('NFD',str(value).lower()).replace('đ','d')
@@ -18,7 +19,7 @@ def _entailed(field,value,quote):
         return (value=='EMPLOYEE' and any(x in folded for x in ('toi ','nguoi lao dong'))) or (value=='EMPLOYER' and any(x in folded for x in ('cong ty','nguoi su dung lao dong')))
     if field=='contract_type':
         return (value=='INDEFINITE' and 'khong xac dinh thoi han' in folded) or (value=='FIXED_TERM' and 'xac dinh thoi han' in folded and 'khong xac dinh' not in folded) or (value=='PROBATION' and 'thu viec' in folded)
-    if field in {'notice_days','worked_months'}:
+    if field in {'notice_days','worked_months','service_years','age','travel_days'}:
         try: return bool(re.search(r'(?<!\d)'+re.escape(str(int(value)))+r'(?!\d)',quote))
         except (TypeError,ValueError): return False
     if field=='notice_exception':

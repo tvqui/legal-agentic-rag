@@ -6,6 +6,7 @@
 - [Vận hành](operations.md)
 - [Human review](human-review.md)
 - [Kaggle](kaggle.md)
+- [Hoàn thiện và phát hành](project-completion.md)
 - [ONLINE backend trên Kaggle](kaggle/online-backend.md)
 - [Báo cáo OFFLINE hiện hành](offline/automation_completion_report.md)
 - [Báo cáo ONLINE hiện hành](online/completion_report.md)

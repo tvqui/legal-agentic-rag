@@ -23,17 +23,23 @@ class RerankerConfig(StrictModel):
 
 class GraphConfig(StrictModel):
     enabled:bool=True; mode:Literal['adaptive','fixed']='adaptive'
-    max_rounds:int=Field(4,ge=0); max_nodes:int=Field(50,ge=1); max_edges:int=Field(100,ge=0); max_hops:int=Field(3,ge=0)
+    max_rounds:int=Field(2,ge=0,le=2); max_nodes:int=Field(15,ge=1,le=15); max_edges:int=Field(40,ge=0,le=100); max_hops:int=Field(2,ge=0,le=2)
     wall_clock_ms:int=Field(1500,ge=1); hub_penalty:float=Field(.15,ge=0)
     relevance_weight:float=Field(.3,ge=0); authority_weight:float=Field(.15,ge=0); temporal_weight:float=Field(.1,ge=0)
     gap_weight:float=Field(.5,ge=0); novelty_weight:float=Field(.1,ge=0); redundancy_weight:float=Field(.1,ge=0); traversal_cost_weight:float=Field(.05,ge=0)
     edge_weights:dict[str,float]=Field(default_factory=lambda:{'AMENDS':1,'REPEALS':1,'REPLACES':1,'IMPLEMENTS':.9,'REFERENCES':.85,'PART_OF':.5,'NEXT':.3,'VERSION_OF':.7,'CITES':.5,'HAS_ISSUE':.4,'RELATES_TO_ISSUE':.4,'SIMILAR_TO':.1,'BELONGS_TO':.1})
+    allowed_relations:list[str]=Field(default_factory=lambda:['AMENDS','REPEALS','REPLACES','IMPLEMENTS','REFERENCES','VERSION_OF','PART_OF','CITES'])
     @field_validator('edge_weights')
     @classmethod
     def validate_edge_weights(cls,value):
         if any(not key or weight<0 for key,weight in value.items()):
             raise ValueError('edge_weights require non-empty relation names and non-negative values')
         return value
+    @field_validator('allowed_relations')
+    @classmethod
+    def validate_allowed_relations(cls,value):
+        if not value: raise ValueError('allowed_relations must not be empty')
+        return list(dict.fromkeys(str(item).strip().upper() for item in value if str(item).strip()))
 
 class ResearcherConfig(StrictModel):
     mode:Literal['deterministic','ollama','http']='deterministic'

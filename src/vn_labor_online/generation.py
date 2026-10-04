@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import unicodedata
+from fractions import Fraction
 from .config import AdjudicationConfig
 from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack
@@ -9,6 +10,82 @@ from .providers import HttpJsonProvider,OllamaProvider
 def _fold(value:str)->str:
     value=unicodedata.normalize('NFD',value.lower()).replace('đ','d')
     return ' '.join(''.join(char for char in value if unicodedata.category(char)!='Mn').split())
+
+def _find(pack,article,clause=None,point=None,instrument=None):
+    candidates=[item for item in pack.evidence if str(item.article or '')==str(article)
+      and (clause is None or str(item.clause or '')==str(clause))
+      and (point is None or str(item.point or '')==str(point))
+      and (instrument is None or item.instrument_number==instrument)]
+    candidates.sort(key=lambda item:(item.instrument_number!='18/VBHN-VPQH',-item.authority_rank,item.evidence_id))
+    return candidates[0] if candidates else None
+
+def _versions(items):
+    seen=set(); versions=[]
+    for item in items:
+        if item is None: continue
+        key=(item.instrument_number,item.valid_from,item.valid_to)
+        if key in seen: continue
+        seen.add(key)
+        status='DOCUMENT_LEVEL_FALLBACK' if 'DOCUMENT_LEVEL_TEMPORAL_FALLBACK' in item.warnings else 'PROVISION_VERIFIED'
+        versions.append(ApplicableLawVersion(instrument_number=item.instrument_number,valid_from=item.valid_from,
+          valid_to=item.valid_to,temporal_status=status))
+    return versions
+
+def _chain_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None)->AdjudicationDraft|None:
+    intent=pack.facts.get('query_intent'); basis=pack.facts.get('termination_basis')
+    claims=[]; lines=[]; used=[]
+    if intent=='WITHDRAW_TERMINATION':
+        rule=_find(pack,'38')
+        if not rule: return None
+        claim=Claim(claim_id='claim_withdrawal',text='Điều 38 cho phép hủy bỏ việc đơn phương chấm dứt trước khi hết thời hạn báo trước, nhưng phải thông báo bằng văn bản và phải được bên kia đồng ý.',evidence_ids=[rule.evidence_id])
+        claims=[claim]; used=[rule]; lines=['Không, chỉ tự gửi một văn bản mới chưa đủ.',f'- {claim.text} [{rule.evidence_id}]']
+    elif intent=='UNLAWFUL_DEFINITION_CONSEQUENCES':
+        definition=_find(pack,'39'); consequences=[_find(pack,'40',str(i)) for i in (1,2,3)]
+        if not definition or any(item is None for item in consequences): return None
+        claims=[Claim(claim_id='claim_definition',text='Điều 39 định nghĩa đơn phương chấm dứt hợp đồng lao động trái pháp luật là trường hợp chấm dứt không đúng các Điều 35, 36 và 37.',evidence_ids=[definition.evidence_id]),
+          Claim(claim_id='claim_obligations',text='Điều 40, các khoản 1–3, quy định riêng các nghĩa vụ của người lao động sau khi đơn phương chấm dứt trái pháp luật: không được trợ cấp thôi việc, bồi thường theo khoản 2 và hoàn trả chi phí đào tạo theo khoản 3 nếu phát sinh.',evidence_ids=[item.evidence_id for item in consequences])]
+        used=[definition,*consequences]; lines=['Hai nội dung nằm ở hai điều luật khác nhau:']+[f'- {claim.text} '+ ' '.join(f'[{eid}]' for eid in claim.evidence_ids) for claim in claims]
+    elif intent=='MUTUAL_TERMINATION':
+        agreement=_find(pack,'34','3')
+        if not agreement: return None
+        claim=Claim(claim_id='claim_mutual_agreement',text='Khoản 3 Điều 34 quy định trường hợp hai bên thỏa thuận chấm dứt hợp đồng lao động.',evidence_ids=[agreement.evidence_id])
+        claims=[claim]; used=[agreement]; lines=[
+          'Không. Với dữ kiện công ty đã đồng ý bằng văn bản cho chấm dứt sớm, phải đánh giá việc chấm dứt trước hết theo thỏa thuận của hai bên; không thể tự động áp hậu quả của việc người lao động đơn phương chấm dứt trái pháp luật.',
+          f'- {claim.text} [{agreement.evidence_id}]']
+    elif basis in {'LATE_WAGE','EMPLOYER_MISINFORMATION','SEXUAL_HARASSMENT'}:
+        locations={'LATE_WAGE':('b','97','4'),'EMPLOYER_MISINFORMATION':('g','16','1'),'SEXUAL_HARASSMENT':('d',None,None)}
+        point,ref_article,ref_clause=locations[basis]; rule=_find(pack,'35','2',point); reference=_find(pack,ref_article,ref_clause) if ref_article else None
+        if not rule or ref_article and not reference: return None
+        if basis=='LATE_WAGE':
+            direct='Điểm b khoản 2 Điều 35 cho phép người lao động chấm dứt hợp đồng không cần báo trước khi không được trả đủ lương hoặc trả lương không đúng thời hạn.'
+            linked='Ngoại lệ được dẫn chiếu là khoản 4 Điều 97: trường hợp bất khả kháng, người sử dụng lao động đã tìm mọi biện pháp khắc phục nhưng vẫn không thể trả đúng hạn, với giới hạn chậm không quá 30 ngày.'
+        elif basis=='EMPLOYER_MISINFORMATION':
+            direct='Điểm g khoản 2 Điều 35 cho phép chấm dứt không cần báo trước khi người sử dụng lao động cung cấp thông tin không trung thực theo khoản 1 Điều 16 và việc đó ảnh hưởng đến thực hiện hợp đồng.'
+            linked='Khoản 1 Điều 16 quy định nghĩa vụ của người sử dụng lao động phải cung cấp trung thực các thông tin liên quan trực tiếp đến giao kết hợp đồng.'
+        else:
+            direct='Điểm d khoản 2 Điều 35 cho phép người lao động bị quấy rối tình dục tại nơi làm việc chấm dứt hợp đồng không cần báo trước.'; linked=None
+        claims=[Claim(claim_id='claim_exception_rule',text=direct,evidence_ids=[rule.evidence_id])]
+        used=[rule]
+        if linked:
+            claims.append(Claim(claim_id='claim_cross_reference',text=linked,evidence_ids=[reference.evidence_id])); used.append(reference)
+        conclusive=basis!='LATE_WAGE' or pack.facts.get('force_majeure_exception') is False
+        lines=['Người lao động có quyền nghỉ không cần báo trước theo dữ kiện đã cung cấp.' if conclusive else 'Quy định trực tiếp và ngoại lệ cần kiểm tra là:']
+        lines += [f'- {claim.text} '+ ' '.join(f'[{eid}]' for eid in claim.evidence_ids) for claim in claims]
+    else:
+        return None
+    if partial: lines.append('Kết quả còn giới hạn vì metadata nguồn hoặc hiệu lực ở cấp điều khoản đang chờ người có chuyên môn duyệt.')
+    return AdjudicationDraft(answer_summary='\n'.join(lines),claims=claims,applicable_law_versions=_versions(used),
+      assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
+
+def _travel_time_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None)->AdjudicationDraft|None:
+    if pack.facts.get('query_intent')!='TRAVEL_TIME': return None
+    rule=_find(pack,'113','6')
+    if not rule: return None
+    days=pack.facts.get('travel_days'); extra=max(0,int(days)-2) if isinstance(days,int) else None
+    text='Khoản 6 Điều 113 quy định: khi nghỉ hằng năm và đi bằng đường bộ, đường sắt hoặc đường thủy, nếu tổng thời gian đi và về trên 02 ngày thì từ ngày thứ 03 trở đi được tính thêm thời gian đi đường ngoài ngày nghỉ hằng năm, và chỉ tính cho 01 lần nghỉ trong năm.'
+    if extra is not None: text+=f' Với tổng thời gian {days} ngày, phần được tính thêm là {extra} ngày (các ngày từ ngày thứ 03 trở đi).'
+    claim=Claim(claim_id='claim_travel_time',text=text,evidence_ids=[rule.evidence_id])
+    return AdjudicationDraft(answer_summary=f'{text} [{rule.evidence_id}]',claims=[claim],applicable_law_versions=_versions([rule]),assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
 
 def _employee_termination_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None)->AdjudicationDraft|None:
     if pack.requested_outcome!='ASSESS_LEGALITY' or pack.facts.get('actor')!='EMPLOYEE' or pack.facts.get('contract_type')!='INDEFINITE':
@@ -19,6 +96,10 @@ def _employee_termination_answer(pack:VerifiedEvidencePack,partial:bool,assumpti
     for item in pack.evidence: by_article.setdefault(str(item.article or ''),[]).append(item)
     notice=next((item for item in by_article.get('35',[]) if item.clause=='1' and item.point=='a'
       and '45 ngay' in _fold(item.text) and 'khong xac dinh thoi han' in _fold(item.text)),None)
+    special_delegation=next((item for item in by_article.get('35',[]) if item.clause=='1' and item.point=='d'
+      and 'dac thu' in _fold(item.text)),None)
+    special_notice=next((item for item in by_article.get('7',[]) if item.instrument_number=='145/2020/NĐ-CP'
+      and item.clause=='2' and item.point=='a' and '120 ngay' in _fold(item.text)),None)
     classification=next((item for item in by_article.get('39',[]) if 'trai phap luat' in _fold(item.text)),None)
     consequences={}
     for item in by_article.get('40',[]):
@@ -26,14 +107,43 @@ def _employee_termination_answer(pack:VerifiedEvidencePack,partial:bool,assumpti
         if item.clause=='1' and 'khong duoc tro cap thoi viec' in folded: consequences['1']=item
         elif item.clause=='2' and 'nua thang tien luong' in folded and 'ngay khong bao truoc' in folded: consequences['2']=item
         elif item.clause=='3' and 'chi phi dao tao' in folded: consequences['3']=item
-    if not notice or not classification or set(consequences)!={'1','2','3'}: return None
-    required_days=45; shortfall=max(0,required_days-notice_days); unlawful=notice_days<required_days and pack.facts.get('notice_exception') is False
-    if not unlawful: return None
+    special_occ=pack.facts.get('special_occupation')
+    if special_occ is None: return None
+    if special_occ is True:
+        if not special_delegation or not special_notice: return None
+        required_days=120; notice_evidence=[special_delegation.evidence_id,special_notice.evidence_id]
+    else:
+        if not notice: return None
+        required_days=45; notice_evidence=[notice.evidence_id]
+    shortfall=max(0,required_days-notice_days); unlawful=notice_days<required_days and pack.facts.get('notice_exception') is False
+    if special_occ is True:
+        claim_notice_text=f'Điểm d khoản 1 Điều 35 và Điều 7 Nghị định 145/2020/NĐ-CP yêu cầu báo trước ít nhất {required_days} ngày đối với ngành, nghề, công việc đặc thù; báo trước {notice_days} ngày còn thiếu {shortfall} ngày.'
+        claim_comp_text=f'Khoản 2 Điều 40 yêu cầu bồi thường nửa tháng tiền lương theo hợp đồng và khoản tiền tương ứng với tiền lương của {shortfall} ngày còn thiếu thời hạn báo trước theo quy tắc ngành nghề đặc thù.'
+    elif special_occ is False:
+        claim_notice_text=f'Khoản 1 điểm a Điều 35 yêu cầu báo trước ít nhất {required_days} ngày đối với hợp đồng lao động không xác định thời hạn; báo trước {notice_days} ngày còn thiếu {shortfall} ngày.'
+        claim_comp_text=f'Khoản 2 Điều 40 yêu cầu bồi thường nửa tháng tiền lương theo hợp đồng và khoản tiền tương ứng với tiền lương của {shortfall} ngày còn thiếu thời hạn báo trước.'
+    if not unlawful:
+        if notice_days<required_days: return None
+        claim_notice_text=(f'Điểm d khoản 1 Điều 35 và Điều 7 Nghị định 145/2020/NĐ-CP yêu cầu báo trước ít nhất {required_days} ngày đối với ngành, nghề, công việc đặc thù; '
+          f'báo trước {notice_days} ngày đáp ứng thời hạn này.') if special_occ is True else (
+          f'Khoản 1 điểm a Điều 35 yêu cầu báo trước ít nhất {required_days} ngày đối với hợp đồng lao động không xác định thời hạn; báo trước {notice_days} ngày đáp ứng thời hạn này.')
+        claim=Claim(claim_id='claim_notice_period',text=claim_notice_text,evidence_ids=notice_evidence)
+        markers=' '.join(f'[{evidence_id}]' for evidence_id in notice_evidence)
+        items=[x for x in (notice,special_delegation,special_notice) if x is not None]
+        versions=[]; seen=set()
+        for item in items:
+            key=(item.instrument_number,item.valid_from,item.valid_to)
+            if key in seen: continue
+            seen.add(key); status='DOCUMENT_LEVEL_FALLBACK' if 'DOCUMENT_LEVEL_TEMPORAL_FALLBACK' in item.warnings else 'PROVISION_VERIFIED'
+            versions.append(ApplicableLawVersion(instrument_number=item.instrument_number,valid_from=item.valid_from,valid_to=item.valid_to,temporal_status=status))
+        return AdjudicationDraft(answer_summary=f'Đáp ứng thời hạn báo trước theo dữ kiện đã cung cấp.\n- {claim.text} {markers}',
+          claims=[claim],applicable_law_versions=versions,assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
+    if not classification or set(consequences)!={'1','2','3'}: return None
     claims=[
-      Claim(claim_id='claim_notice_period',text=f'Khoản 1 điểm a Điều 35 yêu cầu báo trước ít nhất {required_days} ngày đối với hợp đồng lao động không xác định thời hạn; báo trước {notice_days} ngày còn thiếu {shortfall} ngày.',evidence_ids=[notice.evidence_id]),
+      Claim(claim_id='claim_notice_period',text=claim_notice_text,evidence_ids=notice_evidence),
       Claim(claim_id='claim_unlawful_termination',text='Điều 39 xác định việc đơn phương chấm dứt hợp đồng lao động không đúng Điều 35 là đơn phương chấm dứt hợp đồng lao động trái pháp luật.',evidence_ids=[classification.evidence_id]),
       Claim(claim_id='claim_no_severance',text='Khoản 1 Điều 40 quy định người lao động không được trợ cấp thôi việc.',evidence_ids=[consequences['1'].evidence_id]),
-      Claim(claim_id='claim_compensation',text=f'Khoản 2 Điều 40 yêu cầu bồi thường nửa tháng tiền lương theo hợp đồng và khoản tiền tương ứng với tiền lương của {shortfall} ngày còn thiếu thời hạn báo trước.',evidence_ids=[consequences['2'].evidence_id]),
+      Claim(claim_id='claim_compensation',text=claim_comp_text,evidence_ids=[consequences['2'].evidence_id]),
       Claim(claim_id='claim_training_cost',text='Khoản 3 Điều 40 yêu cầu hoàn trả chi phí đào tạo theo Điều 62 nếu có chi phí đào tạo thuộc trường hợp này.',evidence_ids=[consequences['3'].evidence_id])]
     termination_date=pack.facts.get('termination_date'); notice_date=pack.facts.get('notice_date')
     date_context=f' (thông báo ngày {notice_date}, dự kiến nghỉ ngày {termination_date})' if notice_date and termination_date else ''
@@ -41,12 +151,15 @@ def _employee_termination_answer(pack:VerifiedEvidencePack,partial:bool,assumpti
     for claim in claims:
         markers=' '.join(f'[{evidence_id}]' for evidence_id in claim.evidence_ids)
         lines.append(f'- {claim.text} {markers}')
-    lines.append('Cần thêm thông tin về ngành, nghề hoặc công việc để xác định liệu quy tắc báo trước đặc thù có áp dụng.')
-    source=notice.official_url or classification.official_url
+    if special_occ is True:
+        lines.append('Áp dụng quy tắc ngành, nghề, công việc đặc thù với thời hạn báo trước ít nhất 120 ngày.')
+    elif special_occ is False:
+        lines.append('Xác nhận không thuộc ngành, nghề đặc thù; áp dụng thời hạn báo trước 45 ngày.')
+    source=(special_notice.official_url if special_notice else None) or (notice.official_url if notice else None) or classification.official_url
     if source: lines.append(f'Nguồn chính thức: {source}')
     if partial: lines.append('Kết quả còn giới hạn vì metadata nguồn hoặc hiệu lực ở cấp điều khoản đang chờ người có chuyên môn duyệt.')
     seen=set(); versions=[]
-    for item in [notice,classification,*consequences.values()]:
+    for item in [x for x in (notice,special_delegation,special_notice,classification,*consequences.values()) if x is not None]:
         key=(item.instrument_number,item.valid_from,item.valid_to)
         if key in seen: continue
         seen.add(key); status='DOCUMENT_LEVEL_FALLBACK' if 'DOCUMENT_LEVEL_TEMPORAL_FALLBACK' in item.warnings else 'PROVISION_VERIFIED'
@@ -56,10 +169,32 @@ def _employee_termination_answer(pack:VerifiedEvidencePack,partial:bool,assumpti
 
 def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None)->AdjudicationDraft|None:
     query=_fold(pack.query)
-    if not any(term in query for term in ('nghi phep','phep nam','nghi hang nam')):
+    intent=pack.facts.get('query_intent')
+    if intent not in {'ANNUAL_LEAVE_CALC','ANNUAL_LEAVE_OVERVIEW'} and not any(term in query for term in ('nghi phep','phep nam','nghi hang nam','ngay phep')):
         return None
     try: worked_months=int(pack.facts.get('worked_months',-1))
     except (TypeError,ValueError): return None
+    if intent=='ANNUAL_LEAVE_CALC':
+        category=pack.facts.get('work_category')
+        if category=='SPECIAL_HEAVY': base,point=16,'c'
+        elif category=='NORMAL' and not pack.facts.get('minor') and not pack.facts.get('disabled'): base,point=12,'a'
+        else: base,point=14,'b'
+        base_rule=_find(pack,'113','1',point); service_years=int(pack.facts.get('service_years') or 0); bonus=service_years//5
+        seniority=_find(pack,'114') if bonus else None
+        if not base_rule or bonus and not seniority: return None
+        used=[base_rule]+([seniority] if seniority else []); evidence_ids=[item.evidence_id for item in used]
+        if worked_months<12:
+            proportional=_find(pack,'113','2'); calculation=_find(pack,'66','1',instrument='145/2020/NĐ-CP')
+            if not proportional or not calculation: return None
+            used += [proportional,calculation]; evidence_ids += [proportional.evidence_id,calculation.evidence_id]
+            result=Fraction((base+bonus)*worked_months,12)
+            rendered=str(result.numerator) if result.denominator==1 else f'{result.numerator}/{result.denominator} ngày (xấp xỉ {float(result):.2f} ngày)'
+            conclusion=f'Mức nền là {base} ngày, cộng {bonus} ngày thâm niên; làm {worked_months} tháng nên phép tính là ({base} + {bonus}) / 12 × {worked_months} = {rendered}. Không tự áp dụng quy tắc làm tròn nếu evidence hiện có không quy định.'
+        else:
+            result=base+bonus; conclusion=f'Mức nền phù hợp là {base} ngày; thâm niên {service_years} năm làm tăng {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày.'
+        claim=Claim(claim_id='claim_leave_calculation',text=conclusion,evidence_ids=evidence_ids)
+        return AdjudicationDraft(answer_summary=f'{conclusion} '+ ' '.join(f'[{eid}]' for eid in evidence_ids),claims=[claim],
+          applicable_law_versions=_versions(used),assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
     if worked_months<12: return None
     evidence=[]
     for days,required,forbidden in (
@@ -95,6 +230,10 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
 def adjudicate(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->AdjudicationDraft:
     if not pack.evidence:
         return AdjudicationDraft(answer_summary='Không đủ bằng chứng trong corpus để trả lời câu hỏi này.',claims=[],applicable_law_versions=[],limitations=pack.coverage_state.gaps)
+    chain=_chain_answer(pack,partial,assumptions)
+    if chain: return chain
+    travel=_travel_time_answer(pack,partial,assumptions)
+    if travel: return travel
     employee_termination=_employee_termination_answer(pack,partial,assumptions)
     if employee_termination: return employee_termination
     annual_leave=_annual_leave_answer(pack,partial,assumptions)

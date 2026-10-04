@@ -97,6 +97,37 @@ def _claim_supported(text:str,evidence:Evidence)->bool:
     claim={x for x in re.findall(r'\w+',text.lower()) if len(x)>2 and x not in stop}
     source={x for x in re.findall(r'\w+',' '.join(y for y in (evidence.source_text,evidence.text,evidence.breadcrumb) if y).lower()) if len(x)>2 and x not in stop}
     return bool(claim) and len(claim&source)/len(claim)>=.35
+
+def _claim_reference_supported(text:str,claim_items:list[Evidence])->list[str]:
+    """Validate each legal locator against evidence attached to this claim.
+
+    A locator is accepted when it is the structural locator of an attached
+    evidence item or is quoted verbatim inside that evidence (for example,
+    Article 40 referring onward to Article 62).
+    """
+    problems=[]
+    source=' '.join(' '.join(y for y in (item.source_text,item.text,item.breadcrumb) if y) for item in claim_items)
+    instruments={_norm_reference(item.document_number) for item in claim_items if item.document_number}
+    articles={str(item.article_number).lower() for item in claim_items if item.article_number}
+    clauses={str(item.clause_number).lower() for item in claim_items if item.clause_number}
+    points={str(item.point_number).lower() for item in claim_items if item.point_number}
+    for number in re.findall(r'\b\d{1,4}/\d{4}/[A-ZĐ0-9-]+\b',text,re.I):
+        if _norm_reference(number) not in instruments and _norm_reference(number) not in _norm_reference(source):
+            problems.append('CLAIM_UNSUPPORTED_INSTRUMENT:'+number)
+    for article in re.findall(r'(?i)\bđiều\s+(\d+[a-z]?)\b',text):
+        if article.lower() not in articles and not re.search(rf'(?i)\bđiều\s+{re.escape(article)}\b',source):
+            problems.append('CLAIM_UNSUPPORTED_ARTICLE:'+article)
+    for clause in re.findall(r'(?i)\bkhoản\s+(\d+[a-z]?)\b',text):
+        if clause.lower() not in clauses and not re.search(rf'(?i)\bkhoản\s+{re.escape(clause)}\b',source):
+            problems.append('CLAIM_UNSUPPORTED_CLAUSE:'+clause)
+    for point in re.findall(r'(?i)\bđiểm\s+([a-zđ])\b',text):
+        if point.lower() not in points and not re.search(rf'(?i)\bđiểm\s+{re.escape(point)}\b',source):
+            problems.append('CLAIM_UNSUPPORTED_POINT:'+point)
+    allowed_urls={item.source_url for item in claim_items if item.source_url}
+    for url in re.findall(r'https?://[^\s)\]>]+',text):
+        if url.rstrip('.,;') not in allowed_urls:
+            problems.append('CLAIM_UNSUPPORTED_URL:'+url.rstrip('.,;'))
+    return problems
 def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:list[Claim]|None=None)->tuple[bool,list[str]]:
     ids={x.unit_id for x in items if x.verified}; problems=[]
     raw_markers=set(re.findall(r'\[([^\[\]]+)\]',answer))
@@ -141,6 +172,9 @@ def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:l
     for claim in claims or []:
         if not claim.evidence_ids: problems.append('CLAIM_WITHOUT_EVIDENCE:'+claim.claim_id)
         elif set(claim.evidence_ids)-ids: problems.append('CLAIM_UNSUPPORTED:'+claim.claim_id)
-        elif not any(_claim_supported(claim.text,by_id[evidence_id]) for evidence_id in claim.evidence_ids):
-            problems.append('CLAIM_CONTENT_UNSUPPORTED:'+claim.claim_id)
+        else:
+            claim_items=[by_id[evidence_id] for evidence_id in claim.evidence_ids]
+            if not any(_claim_supported(claim.text,item) for item in claim_items):
+                problems.append('CLAIM_CONTENT_UNSUPPORTED:'+claim.claim_id)
+            problems.extend(f'{issue}:{claim.claim_id}' for issue in _claim_reference_supported(claim.text,claim_items))
     return not problems,list(dict.fromkeys(problems))

@@ -5,8 +5,10 @@ from pathlib import Path
 from .util import stable_id, write_jsonl
 
 ARTICLE_RE = re.compile(r"^\s*(?:Điều|ĐIỀU)\s+(\d+[a-zA-ZĐđ]?)\s*(?:[\.:]\s*(.*)|$)")
-CLAUSE_RE = re.compile(r"^\s*(\d+)\s*[\.)]\s+(.+)$")
-POINT_RE = re.compile(r"^\s*([a-zA-ZđĐ])\s*[\)\.]\s+(.+)$")
+CLAUSE_RE = re.compile(r"^\s*(\d+)\s*[\.)]\s*(\S.*)$")
+# Vietnamese provisions use alphabetic point markers, including đ). OCR often
+# drops the whitespace after the marker, so it must not be required.
+POINT_RE = re.compile(r"^\s*([a-zđ])\s*[\)\.]\s*(\S.*)$",re.I)
 CHAPTER_RE = re.compile(r"^\s*(?:Chương|CHƯƠNG)\s+([IVXLCDM\d]+)\s*$")
 SECTION_RE = re.compile(r"^\s*(?:Mục|MỤC)\s+(\d+)\s*$")
 

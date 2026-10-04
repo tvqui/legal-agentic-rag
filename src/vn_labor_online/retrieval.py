@@ -161,22 +161,45 @@ class Retriever:
         employee-termination rule or its statutory consequences merely because
         employer-side provisions share more words with the query.
         """
-        if 'TERMINATION' not in issues or facts.get('actor')!='EMPLOYEE': return []
-        allowed_documents={'45/2019/QH14','18/VBHN-VPQH'}
+        allowed_documents={'45/2019/QH14','18/VBHN-VPQH','145/2020/NĐ-CP'}
+        intent=facts.get('query_intent'); basis=facts.get('termination_basis'); locations=set()
+        if 'TERMINATION' in issues and (facts.get('actor')=='EMPLOYEE' or intent in {'WITHDRAW_TERMINATION','UNLAWFUL_DEFINITION_CONSEQUENCES','MUTUAL_TERMINATION'}):
+            if basis=='LATE_WAGE': locations|={('35','2','b'),('97','4','')}
+            elif basis=='EMPLOYER_MISINFORMATION': locations|={('35','2','g'),('16','1','')}
+            elif basis=='SEXUAL_HARASSMENT': locations.add(('35','2','d'))
+            if intent=='WITHDRAW_TERMINATION': locations.add(('38','',''))
+            if intent=='UNLAWFUL_DEFINITION_CONSEQUENCES': locations|={('39','',''),('40','1',''),('40','2',''),('40','3','')}
+            if intent=='MUTUAL_TERMINATION': locations.add(('34','3',''))
+            if not basis and intent not in {'WITHDRAW_TERMINATION','UNLAWFUL_DEFINITION_CONSEQUENCES','MUTUAL_TERMINATION'}:
+                if facts.get('contract_type')=='INDEFINITE': locations.add(('35','1','a'))
+                if facts.get('special_occupation') is True:
+                    locations|={('35','1','d'),('7','2','a')}
+                threshold=120 if facts.get('special_occupation') is True else 45
+                if facts.get('notice_exception') is False and isinstance(facts.get('notice_days'),int) and facts['notice_days']<threshold:
+                    locations|={('39','',''),('40','1',''),('40','2',''),('40','3','')}
+        if 'LEAVE' in issues:
+            if intent=='TRAVEL_TIME': locations.add(('113','6',''))
+            elif intent in {'ANNUAL_LEAVE_CALC','ANNUAL_LEAVE_OVERVIEW'}:
+                category=facts.get('work_category')
+                if intent=='ANNUAL_LEAVE_OVERVIEW': locations|={('113','1','a'),('113','1','b'),('113','1','c')}
+                elif category=='SPECIAL_HEAVY': locations.add(('113','1','c'))
+                elif category=='NORMAL' and not facts.get('minor') and not facts.get('disabled'): locations.add(('113','1','a'))
+                else: locations.add(('113','1','b'))
+                if int(facts.get('service_years') or 0)>=5: locations.add(('114','',''))
+                if isinstance(facts.get('worked_months'),int) and facts['worked_months']<12:
+                    locations|={('113','2',''),('66','1','')}
+        if not locations: return []
         matched=[]
         for unit in self.store.units:
             if unit.get('kind')!='PROVISION' or unit.get('document_number') not in allowed_documents: continue
             article=str(unit.get('article_number') or ''); clause=str(unit.get('clause_number') or ''); point=str(unit.get('point_number') or '').lower()
             text=' '.join(' '.join(str(unit.get(field) or '').split()) for field in ('breadcrumb','text','source_text')).lower()
-            required=False
-            if facts.get('contract_type')=='INDEFINITE' and article=='35' and clause=='1' and point=='a':
-                required='45 ngày' in text and 'không xác định thời hạn' in text
-            elif article=='35' and clause=='2' and not point:
-                required='không cần báo trước' in text
-            elif article=='39' and not clause:
-                required='trái pháp luật' in text and 'điều 35' in text
-            elif article=='40' and clause in {'1','2','3'}:
-                required=any(term in text for term in ('không được trợ cấp thôi việc','nửa tháng tiền lương','chi phí đào tạo'))
+            required=(article,clause,point) in locations
+            # Article 66 is the implementing rule only in Decree 145; similarly,
+            # Article 7 belongs to that decree while the remaining anchors belong
+            # to the Labour Code or its consolidated text.
+            if article in {'66','7'} and unit.get('document_number')!='145/2020/NĐ-CP': required=False
+            if article not in {'66','7'} and unit.get('document_number')=='145/2020/NĐ-CP': required=False
             if required: matched.append(unit)
         # Prefer the clean consolidated text for each structural location, while
         # retaining the original act as a fallback when no consolidated unit exists.

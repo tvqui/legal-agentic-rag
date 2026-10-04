@@ -18,6 +18,7 @@ GAP_RELATIONS={
   'case_law':{'CITES':{'IN','OUT'},'HAS_ISSUE':{'IN','OUT'},'RELATES_TO_ISSUE':{'IN','OUT'},'SIMILAR_TO':{'IN','OUT'},'BELONGS_TO':{'IN','OUT'}},
   'governing_rule':{'CITES':{'OUT'},'RELATES_TO_ISSUE':{'IN','OUT'},'IMPLEMENTS':{'OUT'},'REFERENCES':{'IN','OUT'},'PART_OF':{'IN','OUT'}},
   'official_source':{'VERSION_OF':{'IN','OUT'},'PART_OF':{'IN','OUT'}},
+  'transitional_rule':{'REFERENCES':{'IN','OUT'},'VERSION_OF':{'IN','OUT'},'PART_OF':{'IN','OUT'}},
 }
 
 class GraphExplorer:
@@ -41,6 +42,7 @@ class GraphExplorer:
             for relation,directions in GAP_RELATIONS.get(gap,{}).items(): preferred.setdefault(relation,set()).update(directions)
         for source in frontier_ids:
             for edge,target,direction in self.adj.get(source,[]):
+                if edge['type'] not in self.cfg.allowed_relations: continue
                 if target in visited: continue
                 if not fixed and (not preferred or direction not in preferred.get(edge['type'],set())): continue
                 score,parts=self._score(edge,target,gaps,query,source,direction)
@@ -67,6 +69,7 @@ class GraphExplorer:
           'critical_edges_followed':list(dict.fromkeys(followed)),'elapsed_ms':round((time.monotonic()-started)*1000,2)}
     def expand(self,seeds:list[Evidence],gaps:list[str],query:str='')->tuple[list[Evidence],dict]:
         """Compatibility wrapper that performs bounded multi-round expansion."""
+        seeds=seeds[:self.cfg.max_nodes]
         visited={e.unit_id for e in seeds}; paths={e.unit_id:list(e.graph_path) for e in seeds}
         relation_paths={e.unit_id:list(e.graph_relations) for e in seeds}; direction_paths={e.unit_id:list(e.graph_directions) for e in seeds}
         frontier=list(visited)

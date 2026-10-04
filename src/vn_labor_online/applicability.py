@@ -109,24 +109,50 @@ Do not infer missing facts, choose a different law version, create evidence, or 
     def _deterministic(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str):
         relevant=applicability(items,query,issues); accepted_ids={x.unit_id for x in relevant}; decisions=[]
         for item in items:
-            matched=item.unit_id in accepted_ids or item.retrieval_method=='policy'
+            matched=item.unit_id in accepted_ids or item.retrieval_method=='policy' or 'policy' in item.component_scores
             text=' '.join(x for x in (item.source_text,item.text) if x).lower(); folded=_fold(text)
             document=(item.document_number or '').upper(); article=str(item.article_number or '')
             employee_termination='TERMINATION' in issues and facts.get('actor')=='EMPLOYEE'
             unlawful_employee_exit=(facts.get('contract_type')=='INDEFINITE' and facts.get('notice_exception') is False
               and isinstance(facts.get('notice_days'),int) and facts['notice_days']<45)
+            intent=facts.get('query_intent'); basis=facts.get('termination_basis')
             if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36':
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'])
             elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='UNKNOWN',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['SPECIAL_OCCUPATION_NOT_ESTABLISHED'])
-            elif employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='35' and facts.get('contract_type')=='INDEFINITE' and item.point_number in {'b','c'}:
+            elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is True and item.clause_number=='2' and item.point_number=='a' and '120 ngay' in folded:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_SPECIAL_OCCUPATION_RULE_MATCH'])
+            elif employee_termination and article=='35' and item.clause_number=='1' and item.point_number=='d' and facts.get('special_occupation') is True:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_SPECIAL_OCCUPATION_DELEGATION_MATCH'])
+            # Points b/c of clause 1 are the notice periods for fixed-term
+            # contracts.  The same point letters in clause 2 are employee
+            # no-notice exceptions and must be evaluated by the basis-specific
+            # rules below.
+            elif employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='35' and item.clause_number=='1' and facts.get('contract_type')=='INDEFINITE' and item.point_number in {'b','c'}:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['CONTRACT_TYPE_MISMATCH'])
             elif employee_termination and article=='35' and item.clause_number=='1' and item.point_number=='a' and '45 ngay' in folded and 'khong xac dinh thoi han' in folded:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_RULE_MATCH'])
+            elif employee_termination and basis=='LATE_WAGE' and ((article=='35' and item.clause_number=='2' and item.point_number=='b') or (article=='97' and item.clause_number=='4')):
+                conditions='SATISFIED' if facts.get('force_majeure_exception') is False else 'UNKNOWN'
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status=conditions,exception_status='NOT_TRIGGERED' if conditions=='SATISFIED' else 'UNKNOWN',audit_status='PASS' if conditions=='SATISFIED' or requested_outcome!='ASSESS_LEGALITY' else 'UNRESOLVED',reasons=['DETERMINISTIC_LATE_WAGE_CHAIN'])
+            elif employee_termination and basis=='EMPLOYER_MISINFORMATION' and ((article=='35' and item.clause_number=='2' and item.point_number=='g') or (article=='16' and item.clause_number=='1')):
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_MISINFORMATION_CHAIN'])
+            elif employee_termination and basis=='SEXUAL_HARASSMENT' and article=='35' and item.clause_number=='2' and item.point_number=='d':
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_HARASSMENT_EXCEPTION'])
+            elif intent=='WITHDRAW_TERMINATION' and article=='38':
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_WITHDRAWAL_RULE'])
+            elif intent=='UNLAWFUL_DEFINITION_CONSEQUENCES' and article in {'39','40'}:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN'])
+            elif intent=='MUTUAL_TERMINATION' and article=='34' and item.clause_number=='3':
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_MUTUAL_AGREEMENT_RULE'])
+            elif employee_termination and article in {'39','40'} and (facts.get('notice_exception') is True or facts.get('mutual_termination_agreement') is True):
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='TRIGGERED',audit_status='FAIL',reasons=['LIABILITY_TRIGGER_NOT_ESTABLISHED'])
             elif employee_termination and article=='35' and item.clause_number=='2' and facts.get('notice_exception') is False:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='NOT_APPLICABLE',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_RULE_MATCH'])
             elif employee_termination and article in {'39','40'} and unlawful_employee_exit:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_RULE_MATCH'])
+            elif 'LEAVE' in issues and (item.retrieval_method=='policy' or 'policy' in item.component_scores) and (article in {'113','114'} or document=='145/2020/NĐ-CP' and article=='66'):
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_LEAVE_RULE_CHAIN'])
             elif not matched:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['ISSUE_OR_QUERY_MISMATCH'])
             elif facts.get('worked_months') is not None and int(facts['worked_months'])>=12 and 'chua du 12 thang' in folded:

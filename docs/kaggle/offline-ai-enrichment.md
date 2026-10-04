@@ -1,335 +1,177 @@
-# Tạo OFFLINE build chất lượng cao hơn trên Kaggle
+# Chạy OFFLINE hoàn chỉnh trên Kaggle trong khi tiếp tục kiểm thử ONLINE
 
-Quy trình này bắt đầu từ checkpoint `vn_labor_results_v8.1(aura).zip`. Nó không OCR lại 95 tài liệu và không dựng lại Dense/BM25 nếu retrieval units không đổi. Nó chạy lại phần tri thức bằng Qwen3-8B, dựng lại graph, audit, nạp đúng graph mới vào Aura và xuất một ZIP kết quả mới.
+Quy trình này dành cho repository hiện tại. Nó dùng extraction cache trong checkpoint V8.1 để tránh OCR lại,
+nhưng dựng lại toàn bộ phần phụ thuộc bằng code mới:
 
-## Cách one-click khuyến nghị
+`Document Registry → Structured Provisions → Knowledge/Version Graph → Dense + BM25 → Aura`
 
-Nếu hai Dataset đã được **Add Input** và bốn Neo4j Secrets đã được cấp quyền, hãy import bản mới của `build/kaggle/VN_Labor_Kaggle_V8.ipynb`, bật **GPU T4 x2** và **Internet**, rồi chọn **Save Version → Save & Run All** đúng một lần. Notebook đã khóa `hybrid_ai`, `LOAD_AURA=True`, giới hạn 2.000 provision AI, in heartbeat mỗi 60 giây, tự dừng khi tiến độ đứng 20 phút hoặc toàn bước vượt 11 giờ, và chỉ xuất ZIP sau khi technical build cùng Aura validation PASS.
+ONLINE trên máy local vẫn có thể tiếp tục dùng `vn_labor_results_v8.1(aura).zip` trong lúc Kaggle chạy.
+Chỉ thay artifact ONLINE sau khi ZIP mới đã hoàn tất và vượt kiểm tra.
 
-## 1. Chọn chế độ
+## Thiết kế chống mất một phiên chạy dài
 
-- `hybrid_ai` — **khuyến nghị**: xếp hạng deterministic các provision đã có tín hiệu quy phạm và dùng AI để tinh chỉnh tối đa 2.000 provision. Checklist heuristic vẫn được giữ làm fallback và được hợp nhất theo exact source quote. Cách này tránh thiết kế cũ gọi tuần tự khoảng 15.286 fragment không có tín hiệu quy phạm. Case ontology vẫn được enrichment bằng AI.
-- `ai` — vòng thử nghiệm sau: gọi AI cho mọi provision đủ dài; nếu một lời gọi lỗi hoặc không có exact quote hợp lệ thì fallback về heuristic.
+Notebook mới chạy theo các mốc sau:
 
-Mọi checklist/feature do AI tạo chỉ được nhận khi có `source_quote` xuất hiện trong nguồn và provenance được resolve. AI không được tự phê duyệt metadata, temporal hoặc nguồn pháp lý.
+1. Xác minh SHA của package và đối chiếu file ID giữa corpus với extraction checkpoint.
+2. Chấp nhận môi trường Kaggle Python 3.12 hoặc 3.13 và ghim Torch theo container hiện tại.
+3. Dựng lại toàn bộ artifact từ extracted text bằng parser/code hiện tại, gồm Dense và BM25.
+4. Audit toàn bộ đầu ra local.
+5. Xuất `vn_labor_results_technical_checkpoint.zip` **trước khi chạy AI**.
+6. Chạy Qwen3-8B ở chế độ `hybrid_ai`, mặc định tối đa 250 provision; mỗi kết quả hợp lệ được ghi cache nguyên tử.
+7. Nạp graph cuối vào Aura, kiểm build ID và audit bốn đầu ra.
+8. Xuất `vn_labor_results.zip`.
 
-## 2. Chuẩn bị trên máy local
+Nếu AI hoặc phiên Kaggle lỗi sau bước 4, bản technical checkpoint vẫn còn. Notebook cũng cố tạo
+`vn_labor_results_recovery.zip`, chứa cache AI đã hoàn thành để phiên sau tiếp tục.
 
-Cần hai file:
+Không chương trình nào có thể bảo đảm 100% trước lỗi hạ tầng Kaggle, mất Internet hoặc Aura tạm ngừng.
+Quy trình trên bảo đảm fail-closed, không báo PASS giả, và giảm phần công việc bị mất khi có lỗi ngoài code.
 
-1. `D:\data_thô\legal-agentic-rag\build\kaggle\vn_labor_kaggle_v8.zip`
-2. Checkpoint đã PASS Aura: `vn_labor_results_v8.1(aura).zip`
+## Hai file cần upload
 
-SHA-256 của package code hiện tại:
+1. `build/kaggle/vn_labor_kaggle_v8.zip` — package mới vừa tạo từ repository hiện tại.
+2. `vn_labor_results_v8.1(aura).zip` — checkpoint cũ đã PASS kỹ thuật.
 
-```text
-d3996b4f987bc9d8b77004ebdf5e6695eeb83ad8eb8db7137876acede8253910
-```
+Tạo hoặc cập nhật hai **Private Dataset** riêng trên Kaggle. Không upload `.env`, mật khẩu Aura,
+virtual environment, model cache hoặc token.
 
-Không upload `.env`, API key, Neo4j password, cache model hoặc `.venv`.
+Sau khi cập nhật Dataset code, vào trang Dataset và kiểm tra timestamp/version mới. Xóa Input code cũ khỏi
+Notebook rồi Add Input lại nếu Kaggle vẫn ghim phiên bản Dataset cũ.
 
-## 3. Tạo hai Kaggle Dataset Private
+## Bốn Kaggle Secrets bắt buộc
 
-### Dataset code
-
-1. Vào Kaggle → **Datasets** → **New Dataset**.
-2. Upload `vn_labor_kaggle_v8.zip`.
-3. Đặt tên, ví dụ `vn-labor-kaggle-v8-ai`.
-4. Chọn **Private** rồi tạo Dataset.
-
-Kaggle thường tự giải nén ZIP. Trong Input phải nhìn thấy `vn_labor_bundle/bundle_manifest.json`, `src/`, `config/` và `kaggle/`.
-
-### Dataset checkpoint
-
-Nếu checkpoint V8.1 đã tồn tại trên Kaggle thì dùng lại. Nếu chưa có:
-
-1. Tạo Dataset Private thứ hai.
-2. Upload `vn_labor_results_v8.1(aura).zip`.
-3. Đặt tên, ví dụ `vn-labor-results-v8-1-aura`.
-
-Trong Input phải nhìn thấy `artifacts/00_manifest`, `artifacts/03_structure`, `artifacts/05_graph`, `artifacts/06_indexes` và `artifacts/reports`.
-
-## 4. Tạo Notebook
-
-1. Tạo Notebook mới hoặc import `build/kaggle/VN_Labor_Kaggle_V8.ipynb`.
-2. Trong **Add Input**, thêm đúng hai Dataset ở trên.
-3. Trong **Settings**:
-   - Accelerator: **GPU T4 x2** nếu có; một GPU vẫn chạy được nhưng chậm hơn.
-   - Internet: **On**.
-   - Notebook/Dataset: **Private**.
-4. Không gắn thêm checkpoint OFFLINE khác trong cùng notebook vì chế độ `AUTO` yêu cầu đúng một checkpoint.
-
-Cell cấu hình đầu tiên của notebook sinh tự động đã đặt sẵn:
-
-```python
-RESTORE_ARCHIVE = "AUTO"
-OFFLINE_AI_MODE = "hybrid_ai"
-OFFLINE_AI_MODEL = "qwen3:8b"
-OFFLINE_AI_MAX_PROVISIONS = 2000
-LOAD_AURA = True
-```
-
-Chạy cell bootstrap/cài môi trường của notebook. Kết quả đúng phải có dạng:
-
-```text
-Checkpoint: .../artifacts
-Bundle verified: 96 corpus files.
-Project: /kaggle/working/vn_labor_project
-```
-
-Sau đó kiểm tra checkpoint:
-
-```python
-assert (ROOT / 'artifacts/03_structure/provisions.jsonl').is_file()
-assert (ROOT / 'artifacts/05_graph/nodes.jsonl').is_file()
-assert (ROOT / 'artifacts/06_indexes/retrieval_units.jsonl').is_file()
-print('ROOT =', ROOT)
-print('PYTHON =', PYTHON)
-```
-
-Không chạy `vn_labor_offline.cli all`; lệnh đó sẽ chạy lại toàn bộ pipeline.
-
-## 5. Cài và khởi động Ollama/Qwen3-8B
-
-Thêm một cell mới sau bootstrap:
-
-```python
-import os
-import subprocess
-import time
-import urllib.request
-from pathlib import Path
-
-subprocess.run(
-    'curl -fsSL https://ollama.com/install.sh | sh',
-    shell=True,
-    check=True,
-)
-
-gpu_lines = subprocess.check_output(
-    ['nvidia-smi', '--query-gpu=index', '--format=csv,noheader'],
-    text=True,
-).splitlines()
-ollama_gpu = '1' if len(gpu_lines) > 1 else '0'
-ollama_env = dict(
-    os.environ,
-    OLLAMA_HOST='127.0.0.1:11434',
-    OLLAMA_MODELS='/kaggle/working/ollama_models',
-    CUDA_VISIBLE_DEVICES=ollama_gpu,
-)
-
-try:
-    urllib.request.urlopen('http://127.0.0.1:11434/api/tags', timeout=2)
-    ollama = None
-    print('Ollama đã chạy.')
-except Exception:
-    ollama_log = open('/kaggle/working/ollama-offline.log', 'w', encoding='utf-8')
-    ollama = subprocess.Popen(
-        ['ollama', 'serve'],
-        env=ollama_env,
-        stdout=ollama_log,
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
-    for _ in range(60):
-        try:
-            urllib.request.urlopen('http://127.0.0.1:11434/api/tags', timeout=2)
-            break
-        except Exception:
-            time.sleep(2)
-    else:
-        raise RuntimeError('Ollama không khởi động; xem /kaggle/working/ollama-offline.log')
-
-subprocess.run(['ollama', 'pull', 'qwen3:8b'], env=ollama_env, check=True)
-print('Qwen3-8B sẵn sàng trên GPU', ollama_gpu)
-```
-
-Cảnh báo `systemd is not running` khi cài Ollama trên Kaggle là bình thường vì server được khởi động trực tiếp bằng `ollama serve`. Notebook one-click giới hạn installer ở 10 phút; nếu binary đã được cài nhưng installer không tự thoát, notebook đóng installer và tiếp tục kiểm API. Sau đó notebook in tiến độ `Ollama pull` khoảng 20 giây một lần, dừng nếu log không thay đổi 15 phút hoặc tổng thời gian tải vượt 90 phút.
-
-## 6. Chạy `hybrid_ai`
-
-Dùng `run_logged` đã được định nghĩa trong cell bootstrap để tránh output notebook quá lớn:
-
-```python
-ai_env = {
-    'VN_LABOR_OFFLINE_AI_PROVIDER': 'ollama',
-    'VN_LABOR_OFFLINE_AI_URL': 'http://127.0.0.1:11434/api/chat',
-    'VN_LABOR_OFFLINE_AI_MODEL': 'qwen3:8b',
-    'VN_LABOR_OFFLINE_AI_TIMEOUT_SECONDS': '300',
-}
-
-result = run_logged(
-    ['kaggle/offline_ai_remote.py', '--mode', 'hybrid_ai', '--max-provisions', '2000'],
-    'offline_ai_enrichment.log',
-    ai_env,
-    heartbeat_seconds=60,
-    stall_seconds=20 * 60,
-    total_seconds=11 * 60 * 60,
-)
-if result != 0:
-    log = ROOT / 'artifacts/reports/offline_ai_enrichment.log'
-    print(log.read_text(encoding='utf-8', errors='replace')[-12000:])
-    raise RuntimeError('OFFLINE AI enrichment thất bại')
-```
-
-Trong bản one-click hiện hành, cache nằm tại `artifacts/04_knowledge/ai_cache`. Cache được đóng gói trong ZIP kết quả nên build sau có thể khôi phục và không phải gọi lại model cho cùng prompt/model/source. Mỗi heartbeat có dạng:
-
-```text
-HEARTBEAT elapsed=... stage=checklists progress=.../... cache=... log_bytes=... idle=... gpu=[...]
-```
-
-Nếu `progress` và `cache` không tăng trong 20 phút ở stage AI, notebook tự dừng. Không cần chờ thủ công nhiều giờ như phiên bản cũ.
-
-## 7. Kiểm tra kết quả AI trước khi nạp Aura
-
-```python
-import json
-from collections import Counter
-
-def read_jsonl(path):
-    with path.open(encoding='utf-8-sig') as stream:
-        return [json.loads(line) for line in stream if line.strip()]
-
-checklists = read_jsonl(ROOT / 'artifacts/04_knowledge/diagnostic_checklists.jsonl')
-cases = read_jsonl(ROOT / 'artifacts/03_structure/cases.jsonl')
-print('Checklist generators:', Counter(row.get('generator') for row in checklists))
-print('Verified checklist:', sum(row.get('provenance_status') == 'VERIFIED' for row in checklists), '/', len(checklists))
-print('AI case features:', sum(
-    str(feature.get('generator', '')).startswith('structured-ai:')
-    for case in cases for feature in case.get('features', [])
-))
-
-for name in ('offline_ai_enrichment.json', 'final_outputs_validation.json', 'summary.json'):
-    path = ROOT / 'artifacts/reports' / name
-    if path.exists():
-        print('\n---', name, '---')
-        print(path.read_text(encoding='utf-8', errors='replace')[:8000])
-```
-
-Trước khi nạp Aura, audit có thể báo `STALE_NEO4J_BUILD` hoặc `NEO4J_BUILD_NOT_VERIFIED`. Đây là trạng thái dự kiến vì graph vừa thay đổi nhưng Aura vẫn còn build cũ. Các lỗi cấu trúc, provenance, Dense/BM25 hoặc graph khác vẫn phải được xử lý trước khi tiếp tục.
-
-## 8. Nạp graph mới vào Aura
-
-Trong **Add-ons → Secrets**, bảo đảm notebook được cấp quyền đọc:
+Trong Notebook, mở **Add-ons → Secrets** và cấp quyền cho:
 
 - `NEO4J_URI`
 - `NEO4J_USER`
 - `NEO4J_PASSWORD`
 - `NEO4J_DATABASE`
 
-Không cần xóa thủ công instance cũ. Loader thay dataset thuộc dự án trong đúng database.
+`NEO4J_USER` thường là `neo4j`. `NEO4J_DATABASE` phải là database ID thật trong credentials Aura,
+không tự điền chữ `neo4j` nếu instance của bạn dùng ID khác.
 
-Chạy cell:
+## Tạo và chạy Notebook
+
+1. Import `build/kaggle/VN_Labor_Kaggle_V8.ipynb` vào Kaggle.
+2. Add Input đúng hai Private Dataset nói trên.
+3. Mở **Settings**:
+   - Accelerator: **GPU T4 x2**.
+   - Internet: **On**.
+   - Notebook: **Private**.
+4. Không gắn thêm checkpoint OFFLINE thứ hai; chế độ `AUTO` yêu cầu đúng một checkpoint.
+5. Chọn **Save Version → Save & Run All**.
+
+Không cần chạy từng cell. Không bấm Stop Session trong khi version đang chạy.
+
+## Cấu hình mặc định đã chọn
 
 ```python
-from kaggle_secrets import UserSecretsClient
+RESTORE_ARCHIVE = "AUTO"
+RUN_AI_ENRICHMENT = True
+OFFLINE_AI_MODEL = "qwen3:8b"
+OFFLINE_AI_MAX_PROVISIONS = 250
+LOAD_AURA = True
+TOTAL_SECONDS = 10 * 60 * 60
+```
 
-secret_client = UserSecretsClient()
-neo4j_env = {
-    name: secret_client.get_secret(name).strip()
-    for name in ('NEO4J_URI', 'NEO4J_USER', 'NEO4J_PASSWORD', 'NEO4J_DATABASE')
+250 là giới hạn số provision được AI tinh chỉnh trong phiên đầu, không phải giới hạn dữ liệu pháp luật.
+Toàn bộ provision vẫn được parse, đưa vào graph, Dense/BM25 và có checklist heuristic khi phù hợp.
+Giới hạn này tránh lặp lại lần chạy 2.000 provision đã vượt 8 giờ.
+
+Nếu ưu tiên chắc chắn hoàn tất technical build hơn AI, đổi duy nhất:
+
+```python
+RUN_AI_ENRICHMENT = False
+```
+
+Bản này vẫn là OFFLINE technical build đầy đủ; nó chỉ không có lớp tinh chỉnh checklist/case ontology bằng Qwen.
+
+## Thời gian dự kiến
+
+Thời gian phụ thuộc Kaggle và tốc độ model:
+
+- Chuẩn bị môi trường + BGE-M3: khoảng 10–40 phút.
+- Rebuild structure/graph/Dense/BM25 từ extraction cache: khoảng 30 phút–3 giờ.
+- Qwen3-8B cho 250 provision và case ontology: thường khoảng 1–6 giờ.
+- Aura + audit + nén ZIP: khoảng 10–60 phút.
+
+Mục tiêu là hoàn tất trong 10 giờ. Đây là ước lượng, không phải cam kết thời gian của Kaggle.
+
+## Kiểm tra khi chạy nền
+
+Trong trang Version đang chạy, mở **Logs**. Heartbeat khoảng mỗi phút có dạng:
+
+```text
+HEARTBEAT elapsed=... stage=... progress=.../... ai=.../... cache=... idle=... gpu=[...]
+```
+
+Các stage hợp lệ:
+
+- `technical_rebuild`
+- `technical_checkpoint`
+- `ai_enrichment`, `case_ontology`, `checklists`
+- `ai_complete`
+- `aura_load`
+- `complete`
+
+Log pip có dòng `dependency resolver ... conflicts` về package có sẵn của Kaggle không tự động là lỗi.
+Chỉ kết luận lỗi khi cell/runner có traceback hoặc exit code khác 0.
+
+Notebook tự dừng AI nếu không tăng tiến độ 20 phút, và tự dừng toàn quy trình sau 10 giờ để tránh giữ GPU vô hạn.
+
+## File cần tải sau khi chạy
+
+Trong tab **Output**:
+
+- `vn_labor_results.zip`: kết quả cuối, chỉ xuất sau quy trình hoàn tất.
+- `vn_labor_results_technical_checkpoint.zip`: bản kỹ thuật được lưu trước AI.
+- `vn_labor_results_recovery.zip`: chỉ xuất khi có lỗi hoặc timeout; dùng để tiếp tục.
+- `offline_final_build.log`: log đầy đủ nếu cần chẩn đoán.
+
+Ưu tiên tải `vn_labor_results.zip`. Đổi tên local thành một tên version rõ ràng, ví dụ
+`vn_labor_results_v9_final_aura.zip`, nhưng không sửa nội dung ZIP.
+
+## Dấu hiệu thành công
+
+Mở `artifacts/reports/offline_final_run.json` trong ZIP. Kết quả cuối phải có:
+
+```json
+{
+  "status": "PASS",
+  "stage": "complete"
 }
-if not neo4j_env['NEO4J_URI'].startswith('neo4j+s://'):
-    raise ValueError('NEO4J_URI phải bắt đầu bằng neo4j+s://')
-if not all(neo4j_env.values()):
-    raise ValueError('Thiếu Neo4j Secret')
-
-result = run_logged(['kaggle/remote.py', 'aura'], 'neo4j_load.log', neo4j_env)
-if result != 0:
-    log = ROOT / 'artifacts/reports/neo4j_load.log'
-    print(log.read_text(encoding='utf-8', errors='replace')[-12000:])
-    raise RuntimeError('Nạp Aura thất bại')
-
-subprocess.run([str(PYTHON), 'kaggle/remote.py', 'export'], cwd=ROOT, check=True)
 ```
 
-Kết quả cuối cần thỏa:
+Đồng thời:
 
-- `registry = PASS`
-- `structure = PASS`
-- `graph = PASS`
-- `indexes = PASS`
+- `final_outputs_validation.json.ready_for_offline_v1 = true`
+- registry, structure, graph, indexes đều PASS
 - `neo4j_validation.json.passed = true`
-- Graph và Aura có cùng build ID
+- build ID local và Aura giống nhau
+- `kaggle_run.json.pipeline_exit_code = 0`
 
-`ONLINE-ready` vẫn có thể là `CHƯA ĐẠT` vì source/temporal/Gold human review chưa hoàn tất. Điều đó không có nghĩa enrichment thất bại; ONLINE có thể tiếp tục ở provisional mode và phải giữ cảnh báo.
+`offline_ready_for_online` có thể vẫn là `false` vì human legal review/Gold chưa xong. Đây không phải lỗi kỹ thuật.
+ONLINE vẫn dùng provisional mode và phải giữ cảnh báo cho người dùng.
 
-## 9. Tải kết quả
+## Nếu phiên chạy lỗi hoặc hết giờ
 
-```python
-from IPython.display import FileLink, display
+1. Tải `vn_labor_results_recovery.zip` nếu có.
+2. Nếu recovery không có, tải `vn_labor_results_technical_checkpoint.zip`.
+3. Tạo Private Dataset checkpoint mới từ ZIP đó.
+4. Ở Notebook phiên sau, thay Input checkpoint V8.1 bằng checkpoint mới; vẫn chỉ gắn một checkpoint.
+5. Save Version → Save & Run All lại.
 
-archive = ROOT.parent / 'vn_labor_results.zip'
-assert archive.is_file()
-display(FileLink(str(archive)))
-print('Size MiB:', round(archive.stat().st_size / 1024**2, 1))
-```
+Cache AI nằm trong `artifacts/04_knowledge/ai_cache`. Những prompt/model/source đã hoàn thành sẽ được dùng lại.
+Sau khi phiên 250 hoàn tất, có thể tăng `OFFLINE_AI_MAX_PROVISIONS` lên 500; 250 mục đầu sẽ đọc cache và
+AI chỉ cần xử lý phần mới. Chỉ tăng theo từng nấc khi còn quota.
 
-Tải `vn_labor_results.zip` về máy. Nên đổi tên thành `vn_labor_results_v9_ai_aura.zip` để không ghi đè V8.1 trước khi test ONLINE.
+## Trong lúc Kaggle chạy
 
-Nếu bấm **Save & Run All**, Kaggle sẽ tạo một phiên mới và chạy lại toàn bộ cell. Sau khi đã chạy tương tác thành công, tải ZIP trực tiếp bằng link trên để tránh tiêu tốn thêm quota.
+Giữ backend/frontend local dùng artifact V8.1 hiện tại và tiếp tục:
 
-## 10. Đưa build mới vào ONLINE
+1. chạy bộ test ONLINE;
+2. kiểm tra các câu hỏi Gold/edge case;
+3. sửa query analysis, applicability, evidence coverage, generation và citation;
+4. không đổi schema artifact OFFLINE nếu không thật sự cần.
 
-1. Upload ZIP mới thành một Dataset Private mới.
-2. Mở notebook ONLINE, thêm Dataset đó làm Input.
-3. Cập nhật repository:
-
-```bash
-cd /kaggle/working/legal-agentic-rag
-git pull --ff-only
-python -m pip install -q -e ".[retrieval,online,llm,community]" ngrok
-```
-
-4. Tìm thư mục artifact và tạo config pin:
-
-```python
-from pathlib import Path
-import subprocess
-
-markers = list(Path('/kaggle/input').rglob('artifacts/reports/final_outputs_validation.json'))
-if len(markers) != 1:
-    raise RuntimeError('Cần đúng một Dataset kết quả OFFLINE mới; tìm thấy: ' + str(len(markers)))
-ARTIFACT = markers[0].parents[2]
-
-subprocess.run([
-    'python', 'scripts/pin_online_artifact.py',
-    '--artifact', str(ARTIFACT),
-    '--output', '/kaggle/working/online_pinned.yaml',
-], check=True)
-```
-
-5. Chạy backend bằng đúng artifact/config vừa pin. Gọi bằng `subprocess.run` vì `ARTIFACT` là biến Python:
-
-```python
-subprocess.run([
-    'python', 'kaggle/online_remote.py',
-    '--artifact', str(ARTIFACT),
-    '--config', '/kaggle/working/online_pinned.yaml',
-], check=True)
-```
-
-## 11. Khi nào thử chế độ `ai`
-
-Chỉ chạy sau khi hybrid đã hoàn tất và được giữ làm mốc so sánh:
-
-```python
-result = run_logged(
-    ['kaggle/offline_ai_remote.py', '--mode', 'ai'],
-    'offline_ai_full.log',
-    ai_env,
-)
-```
-
-Không thay production build chỉ vì số checklist tăng. So sánh hai build trên cùng Gold set bằng recall@k, MRR/nDCG, fact accuracy, applicability accuracy, citation precision, temporal accuracy và abstention correctness. Giữ build hybrid nếu full-AI không cải thiện rõ ràng hoặc tạo nhiều review queue hơn.
-
-## 12. Xử lý lỗi thường gặp
-
-- `Restore the V8.1 checkpoint before enrichment`: checkpoint chưa được Add Input hoặc chưa chạy cell bootstrap.
-- `found 0`/`found 2`: thiếu Input hoặc đang gắn nhiều checkpoint/package cùng lúc.
-- `Connection refused 127.0.0.1:11434`: Ollama chưa chạy; xem `/kaggle/working/ollama-offline.log`.
-- `Missing Kaggle Secret`: tạo secret và bật quyền cho notebook.
-- `DatabaseNotFound`: `NEO4J_DATABASE` sai; dùng đúng database name/ID trong credentials Aura.
-- `STALE_NEO4J_BUILD`: graph mới chưa được nạp Aura; chạy bước 8.
-- Notebook hết thời gian: tải/export checkpoint hiện có; không xóa cache trong session. Chạy `hybrid_ai` trước thay vì `ai`.
-- CUDA OOM: bảo đảm Ollama dùng GPU 1; nếu chỉ có một GPU, dùng Qwen nhỏ hơn là thay đổi cần đánh giá lại, không tự coi tương đương Qwen3-8B.
+Khi ZIP mới PASS, pin artifact mới vào ONLINE, chạy lại regression/evaluation rồi mới thay build đang dùng.

@@ -1,15 +1,23 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api')
+  .trim()
+  .replace(/\/+$/, '')
+  .replace(/\/v1\/answer$/i, '')
+  .replace(/\/v1$/i, '')
+const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 300000)
 
 export class ApiError extends Error {
-  constructor(message, status = 0, details = null) {
+  constructor(message, status = 0, details = null, category = 'NETWORK_ERROR', errorId = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    this.category = category
+    this.errorId = errorId
   }
 }
 
 function documentType(number = '') {
+  number = String(number || '')
   if (number.includes('/NĐ-CP')) return 'Nghị định'
   if (number.includes('/TT-')) return 'Thông tư'
   if (number.includes('/QH')) return number.startsWith('45/') ? 'Bộ luật' : 'Luật'
@@ -52,7 +60,7 @@ function numberEvidenceMarkers(answer, citations) {
 }
 
 function responseStatus(payload) {
-  if (payload.status === 'INSUFFICIENT_EVIDENCE') return 'low-evidence'
+  if (['INSUFFICIENT_EVIDENCE', 'NEED_MORE_FACTS', 'ABSTAIN'].includes(payload.status)) return 'low-evidence'
   if (payload.status === 'ERROR') return 'error'
   return 'completed'
 }
@@ -63,7 +71,7 @@ const NOTICE_LABELS = {
   SOURCE_CATALOG_HUMAN_REVIEW_INCOMPLETE: 'Nguồn đang chờ người có chuyên môn xác minh.',
   PROVISION_TEMPORAL_REVIEW_INCOMPLETE: 'Hiệu lực ở cấp điều khoản đang chờ người có chuyên môn xác minh.',
   GOLD_NOT_APPROVED: 'Bộ câu hỏi đánh giá chất lượng chưa được duyệt.',
-  CORPUS_MAY_BE_STALE: 'Ngày được hỏi nằm ngoài ngày chốt của bộ dữ liệu.',
+  CORPUS_MAY_BE_STALE: 'Bộ dữ liệu có thể chưa bao gồm thay đổi pháp luật sau ngày chốt.',
   QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT: 'Bạn chưa nhập ngày tra cứu; hệ thống dùng ngày chốt của bộ dữ liệu.',
 }
 
@@ -87,16 +95,37 @@ async function parseResponse(response) {
     throw new ApiError(`Backend trả về dữ liệu không hợp lệ (HTTP ${response.status}).`, response.status)
   }
   if (!response.ok) {
-    const detail = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail || payload)
-    throw new ApiError(detail || `Yêu cầu thất bại (HTTP ${response.status}).`, response.status, payload)
+    const detail = typeof payload.detail === 'string' ? payload.detail : null
+    const message = payload.message || detail || `Yêu cầu thất bại (HTTP ${response.status}).`
+    throw new ApiError(message, response.status, payload.details || payload, payload.category || 'BACKEND_ERROR', payload.error_id || null)
   }
   return payload
 }
 
+function boundedSignal(parentSignal, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const abort = () => controller.abort(parentSignal?.reason)
+  if (parentSignal?.aborted) abort()
+  else parentSignal?.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs)
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer)
+      parentSignal?.removeEventListener('abort', abort)
+    },
+  }
+}
+
 export const chatService = {
   async health(signal) {
-    const response = await fetch(`${API_BASE_URL}/health`, { signal })
-    return parseResponse(response)
+    const bounded = boundedSignal(signal, Math.min(REQUEST_TIMEOUT_MS, 15000))
+    try {
+      const response = await fetch(`${API_BASE_URL}/health`, { signal: bounded.signal })
+      return await parseResponse(response)
+    } finally {
+      bounded.cleanup()
+    }
   },
 
   async sendMessage({ conversationId, question, conversationContext = [], facts = {}, queryDate, signal }) {
@@ -107,13 +136,24 @@ export const chatService = {
     }
     if (queryDate) request.query_date = queryDate
 
-    const response = await fetch(`${API_BASE_URL}/v1/answer`, {
-      method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-      signal,
-    })
-    const payload = await parseResponse(response)
+    const bounded = boundedSignal(signal)
+    let payload
+    try {
+      const response = await fetch(`${API_BASE_URL}/v1/answer`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: bounded.signal,
+      })
+      payload = await parseResponse(response)
+    } catch (error) {
+      if (bounded.signal.aborted && !signal?.aborted) {
+        throw new ApiError('AI backend xử lý quá thời gian cho phép. Vui lòng thử lại.', 408, null, 'TIMEOUT')
+      }
+      throw error
+    } finally {
+      bounded.cleanup()
+    }
     const citations = (payload.citations || []).map((citation, index) => mapCitation(citation, payload, index))
     return {
       id: payload.query_id || crypto.randomUUID(),

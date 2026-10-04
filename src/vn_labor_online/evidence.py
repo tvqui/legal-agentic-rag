@@ -5,6 +5,24 @@ from difflib import SequenceMatcher
 from .compression import compress_evidence
 from .models import ApplicabilityDecision,Evidence,EvidencePlan,EvidenceState,EvidenceSlot,SlotStatus,VerifiedEvidenceItem,VerifiedEvidencePack
 
+DELEGATION_PHRASES=(
+    'chính phủ quy định chi tiết',
+    'bộ trưởng quy định chi tiết',
+    'theo quy định của chính phủ',
+    'được thực hiện theo quy định của chính phủ',
+)
+
+def extend_plan_for_evidence(plan:EvidencePlan,items:list[Evidence],facts:dict,query_date:str|None)->EvidencePlan:
+    """Add only evidence-driven mandatory slots before graph expansion."""
+    mandatory=list(plan.mandatory_slots)
+    verified_text=' '.join(' '.join(y for y in (item.text,item.source_text) if y).lower() for item in items if item.verified)
+    if any(phrase in verified_text for phrase in DELEGATION_PHRASES) and 'implementing_regulation' not in mandatory:
+        mandatory.append('implementing_regulation')
+    from .temporal import requires_transition_rule
+    if requires_transition_rule(facts.get('contract_start_year'),query_date) and 'transitional_rule' not in mandatory:
+        mandatory.append('transitional_rule')
+    return plan.model_copy(update={'mandatory_slots':mandatory})
+
 def _texts(items:list[Evidence],needles:tuple[str,...])->list[str]:
     return [x.unit_id for x in items if any(n in ' '.join(' '.join(y.split()) for y in (x.text,x.source_text,x.breadcrumb) if y).lower() for n in needles)]
 
@@ -34,10 +52,22 @@ def state_for(items:list[Evidence],plan:EvidencePlan|list[str],query_date:str|No
                 candidates=[x.unit_id for x in verified if str(x.article_number or '')=='40' and all(needle in ' '.join(y for y in (x.text,x.source_text,x.breadcrumb) if y).lower() for needle in needles)]
                 if candidates: grouped.append(candidates[0])
             ids=grouped if len(grouped)==len(groups) else []
+        elif slot=='exception_rule': ids=[x.unit_id for x in verified if str(x.article_number or '')=='35' and str(x.clause_number or '')=='2' and str(x.point_number or '') in {'b','d','g'}]
+        elif slot=='wage_delay_reference': ids=[x.unit_id for x in verified if str(x.article_number or '')=='97' and str(x.clause_number or '')=='4']
+        elif slot=='disclosure_reference': ids=[x.unit_id for x in verified if str(x.article_number or '')=='16' and str(x.clause_number or '')=='1']
+        elif slot=='withdrawal_rule': ids=[x.unit_id for x in verified if str(x.article_number or '')=='38']
+        elif slot=='agreement_rule': ids=[x.unit_id for x in verified if str(x.article_number or '')=='34' and str(x.clause_number or '')=='3']
+        elif slot=='travel_time_rule': ids=[x.unit_id for x in verified if str(x.article_number or '')=='113' and str(x.clause_number or '')=='6']
+        elif slot=='leave_base_rule': ids=[x.unit_id for x in verified if str(x.article_number or '')=='113' and str(x.clause_number or '')=='1' and str(x.point_number or '') in {'a','b','c'}]
+        elif slot=='seniority_rule': ids=[x.unit_id for x in verified if str(x.article_number or '')=='114']
+        elif slot=='proportional_leave_rule': ids=[x.unit_id for x in verified if (str(x.article_number or '')=='113' and str(x.clause_number or '')=='2') or (x.document_number=='145/2020/NĐ-CP' and str(x.article_number or '')=='66')]
+        elif slot=='leave_calculation_rule': ids=[x.unit_id for x in verified if x.document_number=='145/2020/NĐ-CP' and str(x.article_number or '')=='66' and str(x.clause_number or '')=='1']
         elif slot=='conditions': ids=_texts(verified,('nếu ','khi ','trường hợp','điều kiện','đủ 12 tháng','làm việc đủ','có đủ','theo tỷ lệ','tương ứng'))
         elif slot=='implementing_regulation': ids=[x.unit_id for x in verified if 'IMPLEMENTS' in x.graph_relations or x.document_number and any(t in x.document_number for t in ('NĐ-CP','TT-'))]
         elif slot=='amendment_history': ids=[x.unit_id for x in verified if {'AMENDS','REPEALS','REPLACES','VERSION_OF'}&set(x.graph_relations)]
         elif slot=='case_law': ids=[x.unit_id for x in verified if x.kind=='CASE']
+        elif slot=='transitional_rule':
+            ids=[x.unit_id for x in verified if str(x.article_number or '')=='220' and x.document_number in {'45/2019/QH14','18/VBHN-VPQH'}]
         if ids: status=SlotStatus.FOUND_VERIFIED
         elif fallback_ids: status=SlotStatus.FOUND
         elif slot in conditional: status=SlotStatus.UNRESOLVED

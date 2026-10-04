@@ -132,14 +132,35 @@ class OnlineTests(unittest.TestCase):
         self.assertEqual(result.facts['notice_date'],'2026-09-10'); self.assertEqual(result.facts['termination_date'],'2026-09-30')
         self.assertEqual(result.query_date,'2026-09-30'); self.assertEqual(result.facts['notice_days'],20)
         self.assertIs(result.facts['notice_exception'],False); self.assertEqual(result.requested_outcome,'ASSESS_LEGALITY')
-        self.assertFalse(result.missing_facts); self.assertEqual(result.route,Route.STANDARD)
+        self.assertTrue(any('đặc thù' in prompt for prompt in result.missing_facts)); self.assertEqual(result.route,Route.STANDARD)
         self.assertIn('legal_classification',plan.mandatory_slots); self.assertIn('legal_consequences',plan.mandatory_slots)
+    def test_employee_wants_to_leave_after_days_is_gated_before_retrieval(self):
+        question='Tôi ký hợp đồng không xác định thời hạn và muốn nghỉ sau 20 ngày. Tôi có được nghỉ không?'
+        result=analyze(intake(question,[]))
+        self.assertIn('TERMINATION',result.legal_issues)
+        self.assertEqual(result.facts['actor'],'EMPLOYEE')
+        self.assertEqual(result.facts['notice_days'],20)
+        self.assertNotIn('worked_months',result.facts)
+        self.assertTrue(any('đặc thù' in prompt for prompt in result.missing_facts))
+    def test_complete_first_person_resignation_does_not_enter_employer_fact_gate(self):
+        question=('Tôi ký hợp đồng lao động không xác định thời hạn. Tôi không làm ngành, nghề, công việc đặc thù '
+          'và không thuộc trường hợp được nghỉ không cần báo trước. Tôi chỉ báo trước 20 ngày. Việc nghỉ như vậy '
+          'có đúng không và hậu quả là gì? Ngày dự kiến nghỉ chính thức là 30/09/2026.')
+        result=analyze(intake(question,[])); plan=plan_evidence(result)
+        self.assertEqual(result.facts['actor'],'EMPLOYEE')
+        self.assertIs(result.facts['special_occupation'],False)
+        self.assertEqual(result.facts['termination_date'],'2026-09-30')
+        self.assertEqual(result.query_date,'2026-09-30')
+        self.assertFalse(result.missing_facts)
+        self.assertNotIn('termination_reason',result.facts)
+        self.assertIn('legal_classification',plan.mandatory_slots)
+        self.assertIn('legal_consequences',plan.mandatory_slots)
     def test_fact_completeness(self):
         a=analyze(intake('Công ty chấm dứt hợp đồng có đúng luật không?',[])); self.assertTrue(a.missing_facts)
     def test_analyzer_extracts_month_notice_and_plans_termination_evidence(self):
         a=analyze(intake('Công ty cho tôi nghỉ tháng 6/2020, báo trước 10 ngày có đúng luật không?',[]))
         self.assertEqual(a.query_date,'2020-06-01'); self.assertEqual(a.query_date_end,'2020-06-30'); self.assertEqual(a.query_date_precision,'MONTH'); self.assertEqual(a.facts['notice_days'],10)
-        self.assertEqual(a.route,Route.COMPLEX); self.assertIn('notice_requirement',plan_evidence(a).mandatory_slots)
+        self.assertEqual(a.route,Route.STANDARD); self.assertIn('notice_requirement',plan_evidence(a).mandatory_slots)
         self.assertEqual(len(a.missing_facts),3)
     def test_supplied_facts_complete_the_fact_gate(self):
         a=analyze(intake('Công ty cho tôi nghỉ tháng 6/2020, báo trước 10 ngày có đúng luật không?',[]),
@@ -287,13 +308,55 @@ class OnlineTests(unittest.TestCase):
         evidence=[VerifiedEvidenceItem(evidence_id=uid,instrument_number='18/VBHN-VPQH',article=article,clause=clause,point=point,
           text=text,binding=True,official_source=True,authority_rank=100,official_url='https://congbao.chinhphu.vn/source') for uid,article,clause,point,text in rows]
         facts={'actor':'EMPLOYEE','contract_type':'INDEFINITE','notice_days':20,'notice_exception':False,
-          'notice_date':'2026-09-10','termination_date':'2026-09-30'}
+          'special_occupation':False,'notice_date':'2026-09-10','termination_date':'2026-09-30'}
         pack=VerifiedEvidencePack(query='Tôi báo trước 20 ngày có đúng quy định và hậu quả pháp lý gì?',query_date='2026-09-30',
           facts=facts,requested_outcome='ASSESS_LEGALITY',coverage_state=state,evidence=evidence)
         draft=adjudicate(pack,True,[])
         self.assertIn('Không đúng quy định',draft.answer_summary); self.assertIn('còn thiếu 25 ngày',draft.answer_summary)
         self.assertIn('Khoản 1 Điều 40',draft.answer_summary); self.assertIn('Khoản 2 Điều 40',draft.answer_summary)
         self.assertIn('Khoản 3 Điều 40',draft.answer_summary); self.assertNotIn('Điều 36',draft.answer_summary)
+    def test_employee_termination_special_occupation_true(self):
+        state=EvidenceState(slots={'governing_rule':{'status':SlotStatus.FOUND_VERIFIED,'evidence_ids':['n','u','c1','c2','c3']}},
+          gaps=['official_source'],coverage=.8,mandatory_slots=['governing_rule'])
+        rows=[
+          ('n','35','1','a','Ít nhất 45 ngày nếu làm việc theo hợp đồng lao động không xác định thời hạn;'),
+          ('d','35','1','d','Đối với một số ngành, nghề, công việc đặc thù thì thời hạn báo trước được thực hiện theo quy định của Chính phủ.'),
+          ('u','39','','','Đơn phương chấm dứt hợp đồng lao động không đúng Điều 35 là trái pháp luật.'),
+          ('c1','40','1','','Không được trợ cấp thôi việc.'),
+          ('c2','40','2','','Phải bồi thường nửa tháng tiền lương theo hợp đồng và tiền lương trong những ngày không báo trước.'),
+          ('c3','40','3','','Phải hoàn trả chi phí đào tạo quy định tại Điều 62.')]
+        evidence=[VerifiedEvidenceItem(evidence_id=uid,instrument_number='18/VBHN-VPQH',article=article,clause=clause,point=point,
+          text=text,binding=True,official_source=True,authority_rank=100,official_url='https://congbao.chinhphu.vn/source') for uid,article,clause,point,text in rows]
+        evidence.append(VerifiedEvidenceItem(evidence_id='s',instrument_number='145/2020/NĐ-CP',article='7',clause='2',point='a',
+          text='Ít nhất 120 ngày đối với hợp đồng lao động không xác định thời hạn.',binding=True,official_source=True,
+          authority_rank=100,official_url='https://congbao.chinhphu.vn/source-145'))
+        facts={'actor':'EMPLOYEE','contract_type':'INDEFINITE','notice_days':20,'notice_exception':False,
+          'special_occupation':True,'notice_date':'2026-09-10','termination_date':'2026-09-30'}
+        pack=VerifiedEvidencePack(query='Tôi làm việc ngành đặc thù báo trước 20 ngày có đúng quy định không?',query_date='2026-09-30',
+          facts=facts,requested_outcome='ASSESS_LEGALITY',coverage_state=state,evidence=evidence)
+        draft=adjudicate(pack,True,[])
+        self.assertIn('Không đúng quy định',draft.answer_summary)
+        self.assertIn('còn thiếu 100 ngày',draft.answer_summary)
+        self.assertIn('Điều 7 Nghị định 145/2020/NĐ-CP',draft.answer_summary)
+    def test_employee_termination_special_occupation_false(self):
+        state=EvidenceState(slots={'governing_rule':{'status':SlotStatus.FOUND_VERIFIED,'evidence_ids':['n','u','c1','c2','c3']}},
+          gaps=['official_source'],coverage=.8,mandatory_slots=['governing_rule'])
+        rows=[
+          ('n','35','1','a','Ít nhất 45 ngày nếu làm việc theo hợp đồng lao động không xác định thời hạn;'),
+          ('u','39','','','Đơn phương chấm dứt hợp đồng lao động không đúng Điều 35 là trái pháp luật.'),
+          ('c1','40','1','','Không được trợ cấp thôi việc.'),
+          ('c2','40','2','','Phải bồi thường nửa tháng tiền lương theo hợp đồng và tiền lương trong những ngày không báo trước.'),
+          ('c3','40','3','','Phải hoàn trả chi phí đào tạo quy định tại Điều 62.')]
+        evidence=[VerifiedEvidenceItem(evidence_id=uid,instrument_number='18/VBHN-VPQH',article=article,clause=clause,point=point,
+          text=text,binding=True,official_source=True,authority_rank=100,official_url='https://congbao.chinhphu.vn/source') for uid,article,clause,point,text in rows]
+        facts={'actor':'EMPLOYEE','contract_type':'INDEFINITE','notice_days':20,'notice_exception':False,
+          'special_occupation':False,'notice_date':'2026-09-10','termination_date':'2026-09-30'}
+        pack=VerifiedEvidencePack(query='Tôi không thuộc ngành đặc thù báo trước 20 ngày có đúng không?',query_date='2026-09-30',
+          facts=facts,requested_outcome='ASSESS_LEGALITY',coverage_state=state,evidence=evidence)
+        draft=adjudicate(pack,True,[])
+        self.assertIn('Không đúng quy định',draft.answer_summary)
+        self.assertIn('còn thiếu 25 ngày',draft.answer_summary)
+        self.assertIn('Xác nhận không thuộc ngành, nghề đặc thù',draft.answer_summary)
     def test_pipeline_defaults_undated_query_to_corpus_snapshot(self):
         cfg=self.cfg.model_copy(update={'corpus_snapshot_as_of':'2025-01-01'})
         out=OnlinePipeline(cfg).ask(QueryRequest(question='Điều 1 của 145/2020/ND-CP quy định gì?'))
@@ -371,6 +434,11 @@ class OnlineTests(unittest.TestCase):
         self.assertTrue(any(x.startswith('FABRICATED_URL_IN_ANSWER') for x in issues))
     def test_pipeline_need_more_facts_skips_retrieval(self):
         p=OnlinePipeline(self.cfg); p.retriever.bm25=lambda *a,**k:self.fail('retrieval must not run'); out=p.ask(QueryRequest(question='Công ty chấm dứt hợp đồng có đúng luật không?')); self.assertEqual(out.status,Stop.NEED_MORE_FACTS)
+    def test_pipeline_employee_leave_after_days_skips_retrieval(self):
+        p=OnlinePipeline(self.cfg); p.retriever.bm25=lambda *a,**k:self.fail('retrieval must not run')
+        out=p.ask(QueryRequest(question='Tôi ký hợp đồng không xác định thời hạn và muốn nghỉ sau 20 ngày. Tôi có được nghỉ không?'))
+        self.assertEqual(out.status,Stop.NEED_MORE_FACTS); self.assertFalse(out.citations)
+        self.assertNotIn('worked_months',out.facts)
     def test_pipeline_rejects_untrusted_review_bypass(self):
         from pydantic import ValidationError
         with self.assertRaises(ValidationError):

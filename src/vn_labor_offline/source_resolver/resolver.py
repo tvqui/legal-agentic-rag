@@ -22,6 +22,14 @@ from .verification.decision import decide
 from .verification.identity import verify_identity
 from .providers.generic_official import GenericOfficialAdapter
 from .providers.vbpl import VBPLAdapter
+from .providers.congbao import CongBaoAdapter
+from .providers.vanban_chinhphu import VanBanChinhPhuAdapter
+from .providers.toaan import ToaanAdapter
+
+def _adapter_for(provider_id:str):
+    adapters={'vbpl':VBPLAdapter,'congbao':CongBaoAdapter,
+      'vanban_chinhphu':VanBanChinhPhuAdapter,'toaan':ToaanAdapter}
+    return adapters.get(provider_id,lambda:GenericOfficialAdapter(provider_id))()
 
 
 class SourceResolver:
@@ -261,8 +269,8 @@ class SourceResolver:
                 payload = destination.read_bytes()
                 if candidate.role in {"IDENTITY", "STATUS_HISTORY"} and (fetch["content_type"].split(";")[0].lower() in {"text/html", "application/xhtml+xml"} or payload.lstrip().startswith(b"<")):
                     identity_ok, identity_reason = verify_identity(record["canonical_identifier"], extract_text(payload))
-                    adapter = VBPLAdapter() if candidate.provider_id == "vbpl" else None
-                    is_shell = bool(adapter and adapter.is_homepage(fetch["final_url"], extract_text(payload)))
+                    adapter = _adapter_for(candidate.provider_id)
+                    is_shell = bool(hasattr(adapter,'is_homepage') and adapter.is_homepage(fetch["final_url"], extract_text(payload)))
                     identity_source = "STATUS_PAGE" if candidate.role == "STATUS_HISTORY" else "IDENTITY_PAGE"
                     identity_evidence = self._select_identity(identity_evidence, fetch | {
                         "identity_match": identity_ok and not is_shell,
@@ -275,7 +283,6 @@ class SourceResolver:
                     identity_state = "FETCHED" if identity_ok and not is_shell else "NEEDS_REVIEW"
                     outcomes.append({"role": candidate.role, "state": identity_state,
                                      "reasons": outcome_reasons})
-                    adapter = adapter or GenericOfficialAdapter(candidate.provider_id)
                     if not (authority_ok and identity_ok and not is_shell):
                         discovered = []
                     else:

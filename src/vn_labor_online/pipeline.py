@@ -6,7 +6,7 @@ from .applicability import LegalApplicabilityAuditor
 from .artifact_store import ArtifactStore
 from .audit import deterministic_audit,citations,reference_audit
 from .config import OnlineConfig
-from .evidence import state_for,build_verified_pack,detect_authoritative_conflicts,select_for_plan
+from .evidence import state_for,build_verified_pack,detect_authoritative_conflicts,select_for_plan,extend_plan_for_evidence
 from .generation import LegalAdjudicator
 from .errors import IndexUnavailable
 from .graph import GraphExplorer
@@ -82,6 +82,14 @@ class OnlinePipeline:
           'verified_fact_candidates':sum(candidate.verified for candidate in analysis.fact_candidates),'fallback':bool(research_warnings)})
         trace.events.append({'event':'freshness','corpus_snapshot_as_of':snapshot,'warning':freshness_relevant and 'CORPUS_MAY_BE_STALE' in warnings})
         trace.events.append({'event':'evidence_plan','mandatory_slots':plan.mandatory_slots,'conditional_slots':plan.conditional_slots})
+        if not analysis.in_scope:
+            trace.stop_reason=Stop.ABSTAIN; trace.reference_audit='PASS'; trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2)
+            trace.events.append({'event':'scope_gate','status':'ABSTAIN','reason':'OUT_OF_LABOR_LAW_SCOPE'}); persist(trace,self.cfg.trace_dir)
+            return AnswerResponse(query_id=env.query_id,status=Stop.ABSTAIN,
+              answer='Câu hỏi nằm ngoài phạm vi pháp luật lao động của hệ thống.',evidence_status='OUT_OF_SCOPE',
+              applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
+              limitations=['out_of_scope'],warnings=warnings+['OUT_OF_LABOR_LAW_SCOPE'],facts=analysis.facts,
+              build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
         if analysis.missing_facts:
             trace.stop_reason=Stop.NEED_MORE_FACTS; trace.reference_audit='NOT_RUN'; trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2)
             trace.events.append({'event':'fact_gate','status':'NEED_MORE_FACTS','missing':analysis.missing_facts}); persist(trace,self.cfg.trace_dir)
@@ -125,7 +133,12 @@ class OnlinePipeline:
                 trace.events.append({'event':'neural_reranker','status':'DEGRADED','error':type(exc.__cause__ or exc).__name__})
         items=rerank(items,self.cfg); audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
         verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
-        warnings+=app_warnings; state=state_for(verified,plan,analysis.query_date,allow_fallback)
+        warnings+=app_warnings
+        extended_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
+        if extended_plan.mandatory_slots!=plan.mandatory_slots:
+            plan=extended_plan
+            trace.events.append({'event':'evidence_plan_extended','mandatory_slots':plan.mandatory_slots})
+        state=state_for(verified,plan,analysis.query_date,allow_fallback)
         trace.timings_ms['seed_retrieval_and_audit']=round((time.perf_counter()-stage)*1000,2)
         trace.retrieval_candidates=[{'unit_id':x.unit_id,'method':x.retrieval_method,'score':round(x.score,8),
           'authority_verified':x.authority_verified} for x in items[:50]]
@@ -136,8 +149,9 @@ class OnlinePipeline:
           'critical_edges_followed':hierarchy_relations}
         budget_reason=None; stage=time.perf_counter()
         if self.cfg.graph.enabled and not exact_only:
-            visited={x.unit_id for x in verified}; paths={x.unit_id:list(x.graph_path) for x in verified}
-            relation_paths={x.unit_id:list(x.graph_relations) for x in verified}; direction_paths={x.unit_id:list(x.graph_directions) for x in verified}
+            graph_seeds=verified[:self.cfg.graph.max_nodes]
+            visited={x.unit_id for x in graph_seeds}; paths={x.unit_id:list(x.graph_path) for x in graph_seeds}
+            relation_paths={x.unit_id:list(x.graph_relations) for x in graph_seeds}; direction_paths={x.unit_id:list(x.graph_directions) for x in graph_seeds}
             frontier=list(visited)
             max_rounds=1 if analysis.route==Route.STANDARD and self.cfg.graph.mode=='adaptive' else min(self.cfg.graph.max_rounds,self.cfg.graph.max_hops)
             graph_started=time.monotonic()

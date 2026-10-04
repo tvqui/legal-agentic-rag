@@ -79,6 +79,31 @@ def construct_from_extracted(cfg,extracted,checklist_mode=None,build_indexes=Tru
     write_jsonl(out/'reports/build_issues.jsonl',failures)
     return validate(registry,extracted,provisions,cases,checklists,nodes,edges,out,cfg)
 
+def rebuild_from_checkpoint(cfg,checklist_mode='heuristic'):
+    """Rebuild structure/knowledge/graph/indexes without repeating OCR.
+
+    The raw corpus bundled with the current code must have exactly the same
+    content-derived file IDs as the restored extraction checkpoint. This
+    fail-closed check prevents silently combining old extracted text with a
+    different corpus.
+    """
+    out=cfg['output_dir']; extracted_path=out/'01_extracted/documents.jsonl'
+    if not extracted_path.is_file():
+        raise RuntimeError('Checkpoint is missing artifacts/01_extracted/documents.jsonl')
+    extracted=load_stage(out,'01_extracted/documents.jsonl')
+    manifest=scan(cfg['data_dir'],out)
+    manifest_ids={row.get('file_id') for row in manifest}
+    extracted_ids={row.get('file_id') for row in extracted}
+    if (not manifest or not extracted or len(manifest_ids)!=len(manifest) or
+            len(extracted_ids)!=len(extracted) or manifest_ids!=extracted_ids):
+        missing=sorted(manifest_ids-extracted_ids)[:5]
+        extra=sorted(extracted_ids-manifest_ids)[:5]
+        raise RuntimeError(
+          f'Checkpoint/corpus mismatch: manifest={len(manifest)} extracted={len(extracted)} '
+          f'missing_extraction={missing} stale_extraction={extra}')
+    resolve_source_catalog(manifest,cfg['project_root'],out)
+    return construct_from_extracted(cfg,extracted,checklist_mode)
+
 def run_all(cfg,checklist_mode=None):
     manifest=scan(cfg['data_dir'],cfg['output_dir'])
     resolve_source_catalog(manifest,cfg['project_root'],cfg['output_dir'])

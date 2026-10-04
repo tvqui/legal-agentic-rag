@@ -6,7 +6,7 @@ from typing import Any,Literal
 from pydantic import BaseModel,ConfigDict,Field,field_validator
 
 class Route(str,Enum): DIRECT="DIRECT"; STANDARD="STANDARD"; COMPLEX="COMPLEX"
-class Stop(str,Enum): SUFFICIENT="SUFFICIENT"; PARTIAL_ALLOWED="PARTIAL_ALLOWED"; NEED_MORE_FACTS="NEED_MORE_FACTS"; INSUFFICIENT_EVIDENCE="INSUFFICIENT_EVIDENCE"; CONFLICTING_EVIDENCE="CONFLICTING_EVIDENCE"; ERROR="ERROR"
+class Stop(str,Enum): SUFFICIENT="SUFFICIENT"; PARTIAL_ALLOWED="PARTIAL_ALLOWED"; NEED_MORE_FACTS="NEED_MORE_FACTS"; INSUFFICIENT_EVIDENCE="INSUFFICIENT_EVIDENCE"; CONFLICTING_EVIDENCE="CONFLICTING_EVIDENCE"; ABSTAIN="ABSTAIN"; ERROR="ERROR"
 class SlotStatus(str,Enum): MISSING="MISSING"; CANDIDATE="CANDIDATE"; FOUND="FOUND"; FOUND_VERIFIED="FOUND_VERIFIED"; CONFLICT="CONFLICT"; UNRESOLVED="UNRESOLVED"; NOT_APPLICABLE="NOT_APPLICABLE"
 class ExplicitReference(BaseModel):
     instrument_number:str|None=None; article:str|None=None; clause:str|None=None; point:str|None=None
@@ -75,6 +75,7 @@ class QueryAnalysis(BaseModel):
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
     fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)
+    in_scope:bool=True
 class EvidencePlan(BaseModel):
     mandatory_slots:list[str]; conditional_slots:list[str]=Field(default_factory=list)
 class Evidence(BaseModel):
