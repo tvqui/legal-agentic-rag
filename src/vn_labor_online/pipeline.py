@@ -225,10 +225,15 @@ class OnlinePipeline:
         else:
             draft,generation_warnings=self.adjudicator.generate(pack,partial,assumptions)
             answer=draft.answer_summary
+            if 'ANSWER_QUALITY_BLOCKED' in generation_warnings:
+                status=Stop.INSUFFICIENT_EVIDENCE
+                state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['source_text_quality']))})
+                answer='Nội dung nguồn còn lỗi đọc chữ hoặc câu trả lời chưa đạt kiểm tra chất lượng. Chưa thể đưa ra kết luận đáng tin cậy; cần đối chiếu bản gốc.'
+                draft=AdjudicationDraft(answer_summary=answer,claims=[],applicable_law_versions=[],assumptions=assumptions,limitations=state.gaps)
             used_ids=list(dict.fromkeys(evidence_id for claim in draft.claims for evidence_id in claim.evidence_ids))
             selected_by_id={item.unit_id:item for item in selected}
             reference_items=[selected_by_id[evidence_id] for evidence_id in used_ids if evidence_id in selected_by_id] if used_ids else selected
-            refs=citations(reference_items)
+            refs=[] if status==Stop.INSUFFICIENT_EVIDENCE else citations(reference_items)
         trace.timings_ms['adjudication']=round((time.perf_counter()-adjudication_started)*1000,2)
         warnings+=generation_warnings
         if conflicts:

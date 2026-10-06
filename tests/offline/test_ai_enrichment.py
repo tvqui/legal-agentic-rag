@@ -1,7 +1,7 @@
 from pathlib import Path
 import tempfile,unittest
 from vn_labor_offline.ai_enrichment import cached_structured,report_ai_progress
-from vn_labor_offline.checklists import ai_checklist,select_hybrid_ai_ids
+from vn_labor_offline.checklists import ai_checklist,checklist_identity,finalize_checklists,select_hybrid_ai_ids
 
 class Provider:
     model='fixture-model'
@@ -38,6 +38,27 @@ class OfflineAIEnrichmentTests(unittest.TestCase):
         ]
         self.assertEqual(select_hybrid_ai_ids(prepared,1),{'p1'})
         self.assertEqual(select_hybrid_ai_ids(prepared,10),{'p1','p3'})
+
+    def test_semantic_checklist_ids_do_not_collide_between_rule_types(self):
+        quote='Nguoi lao dong phai bao truoc it nhat 45 ngay.'
+        required=checklist_identity('prov_1','REQUIRED',quote)
+        deadline=checklist_identity('prov_1','DEADLINE',quote)
+        self.assertNotEqual(required,deadline)
+        self.assertEqual(required,checklist_identity('prov_1','REQUIRED','  '+quote+'  '))
+
+    def test_hybrid_rows_are_canonical_and_prefer_structured_ai(self):
+        quote='Nguoi lao dong phai bao truoc it nhat 45 ngay.'
+        base={'provision_id':'prov_1','source_text':quote,'provenance_status':'VERIFIED'}
+        rows=finalize_checklists([
+          {**base,'checklist_id':'old-heuristic','type':'REQUIRED','generator':'heuristic','question':'heuristic'},
+          {**base,'checklist_id':'old-ai','type':'REQUIRED','generator':'structured-ai:qwen','question':'ai'},
+          {**base,'checklist_id':'old-collision','type':'DEADLINE','generator':'structured-ai:qwen','question':'deadline'},
+        ])
+        self.assertEqual(len(rows),2)
+        self.assertEqual(len({row['checklist_id'] for row in rows}),2)
+        required=next(row for row in rows if row['type']=='REQUIRED')
+        self.assertEqual(required['question'],'ai')
+        self.assertEqual(required['checklist_id'],checklist_identity('prov_1','REQUIRED',quote))
 
     def test_progress_is_atomic_and_machine_readable(self):
         with tempfile.TemporaryDirectory() as directory:

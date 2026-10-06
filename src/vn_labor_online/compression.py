@@ -1,11 +1,12 @@
 from __future__ import annotations
 import re
 from .models import Evidence
+from .answer_quality import clean_source_excerpt
 
 CRITICAL=('không','trừ','chỉ khi','điều kiện','ngoại lệ','báo trước','tham chiếu','theo quy định tại')
 
 def compress_evidence(item:Evidence,query:str,max_chars:int=700)->str:
-    text=' '.join((item.source_text or item.text).split())
+    text=' '.join(clean_source_excerpt(item.source_text or item.text,query).split())
     if len(text)<=max_chars: return text
     query_terms={x for x in re.findall(r'\w+',query.lower()) if len(x)>3}
     sentences=[x.strip() for x in re.split(r'(?<=[.;:!?])\s+',text) if x.strip()]

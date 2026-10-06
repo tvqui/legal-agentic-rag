@@ -107,6 +107,8 @@ def main() -> int:
     parser.add_argument("--ai-max-provisions", type=int, default=250)
     parser.add_argument("--skip-ai", action="store_true")
     parser.add_argument("--load-aura", action="store_true")
+    parser.add_argument("--refresh-extraction", action="store_true",
+                        help="Run page-v5 selective OCR and page-quality audit before rebuilding")
     args = parser.parse_args()
     if args.ai_max_provisions < 0:
         raise ValueError("--ai-max-provisions cannot be negative")
@@ -121,6 +123,9 @@ def main() -> int:
            ai_max_provisions=args.ai_max_provisions, load_aura=args.load_aura)
 
     try:
+        if args.refresh_extraction:
+            _state("extraction_quality_refresh")
+            _run(["-m", "vn_labor_offline.cli", "extract", "--config", str(config)])
         _state("technical_rebuild")
         _run(["-m", "vn_labor_offline.cli", "rebuild", "--config", str(config), "--mode", "heuristic"])
         technical = _technical_audit()

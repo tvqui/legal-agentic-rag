@@ -9,6 +9,18 @@ extraction:
   document_timeout_seconds: 600
   # A timed-out worker leaves completed page caches. Retry resumes from them.
   document_timeout_attempts: 3
+  # Cheap checks run on every page. OCR remains selective; visual previews are
+  # rendered only for suspicious pages and are bounded per document.
+  page_max_replacement_fraction: 0.02
+  page_max_control_fraction: 0.01
+  page_min_alnum_fraction: 0.45
+  page_max_dominant_character_fraction: 0.35
+  page_max_duplicate_line_fraction: 0.60
+  page_compare_min_chars: 80
+  page_min_native_ocr_token_dice: 0.35
+  page_quality_render_previews: true
+  page_quality_max_previews_per_document: 12
+  page_quality_preview_dpi: 96
 
 cleaning:
   unicode_form: NFC

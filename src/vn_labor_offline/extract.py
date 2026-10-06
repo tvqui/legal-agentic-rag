@@ -7,9 +7,10 @@ import pymupdf as fitz
 from bs4 import BeautifulSoup
 from docx import Document
 from .cleaning import clean_text, remove_repeated_page_lines
+from .page_quality import initial_page_reasons, finalize_page_quality, text_layer_metrics, write_page_quality_artifacts
 from .util import write_jsonl, stable_id
 
-EXTRACTION_SCHEMA = 'page-v4-legal-markers'
+EXTRACTION_SCHEMA = 'page-v5-quality-audit'
 
 
 def extract_pdf_native(path: Path) -> tuple[str, list[str]]:
@@ -92,8 +93,11 @@ def extract_pdf_pages(path: Path, row: dict, cfg: dict, output_dir: Path):
             coverage=image_area/max(page.rect.get_area(),1)
             blank=review.get('action')=='NO_BODY_TEXT' or (count==0 and not images and not page.get_drawings())
             bad_fraction=(native.count('\ufffd')+native.count('\x00'))/max(len(native),1)
+            native_reasons,native_quality,_=initial_page_reasons(
+                native,native,used_ocr=False,blank=blank,settings=settings)
             needs=not blank and (rotation or mode=='always' or count<40 or
-                (count<threshold and coverage>.25) or (coverage>.6 and count<2000) or bad_fraction>.02)
+                (count<threshold and coverage>.25) or (coverage>.6 and count<2000) or
+                bad_fraction>.02 or bool(native_reasons))
             text=native; method='pymupdf'; error=None; status='NOT_NEEDED'
             key=stable_id(EXTRACTION_SCHEMA,row['sha256'],str(i+1),json.dumps(cache_settings,sort_keys=True),json.dumps(review,sort_keys=True),prefix='page')
             cached=cache/(key+'.json')
@@ -113,11 +117,39 @@ def extract_pdf_pages(path: Path, row: dict, cfg: dict, output_dir: Path):
             elif needs: status='DISABLED'
             if review.get('action')=='NO_BODY_TEXT':
                 text=''; method='reviewed_no_body_text'; status='REVIEWED_NO_BODY_TEXT'
+            quality_reasons,_,agreement=initial_page_reasons(
+                native,text,used_ocr=method.startswith('docling'),blank=blank,settings=settings)
             pages.append(text)
             provenance.append({'page':i+1,'method':method,'chars':len(text),'native_chars':count,
                 'image_coverage':round(coverage,3),'bad_character_fraction':bad_fraction,'ocr':method.startswith('docling'),'ocr_status':status,
-                'blank':blank,'error':error,'file_id':row['file_id'],'sha256':row['sha256'],'page_review':review})
+                'blank':blank,'error':error,'file_id':row['file_id'],'sha256':row['sha256'],'page_review':review,
+                'native_quality':native_quality,'selected_quality':text_layer_metrics(text),
+                'native_ocr_agreement':agreement,'quality_reason_codes':quality_reasons})
     return pages,provenance
+
+
+def render_suspicious_page_previews(path: Path, provenance: list[dict], output_dir: Path,
+                                    settings: dict) -> None:
+    if not bool(settings.get('page_quality_render_previews',True)):
+        return
+    limit=max(0,int(settings.get('page_quality_max_previews_per_document',12)))
+    dpi=max(72,min(160,int(settings.get('page_quality_preview_dpi',96))))
+    candidates=[row for row in provenance if row.get('page_quality_status') in {'ERROR','REVIEW_REQUIRED'}
+                and not row.get('page_review')][:limit]
+    if not candidates:
+        return
+    target=output_dir/'01_extracted'/'suspicious_page_previews'; target.mkdir(parents=True,exist_ok=True)
+    with fitz.open(path) as pdf:
+        for row in candidates:
+            name=f"{row['file_id']}_p{int(row['page']):04d}.png"
+            destination=target/name
+            try:
+                pix=pdf[int(row['page'])-1].get_pixmap(matrix=fitz.Matrix(dpi/72,dpi/72),alpha=False)
+                temporary=destination.with_suffix('.tmp.png')
+                pix.save(temporary); os.replace(temporary,destination)
+                row['preview_path']=destination.relative_to(output_dir).as_posix()
+            except Exception as exc:
+                row['preview_error']=f'{type(exc).__name__}: {exc}'
 
 
 def extract_docx(path: Path) -> str:
@@ -238,6 +270,7 @@ def extract_one(row: dict, cfg: dict, output_dir: Path) -> dict:
             raw = json.dumps(json.loads(path.read_text(encoding="utf-8")), ensure_ascii=False, indent=2); pages=[raw]; method="json"
         else:
             raise RuntimeError(f"Unsupported file type {ext}")
+        selected_pages=list(pages)
         if pages:
             pages = remove_repeated_page_lines(
                 pages,
@@ -247,8 +280,12 @@ def extract_one(row: dict, cfg: dict, output_dir: Path) -> dict:
         cleaned_pages=[clean_text(p, cfg['cleaning'].get('unicode_form','NFC')) for p in pages]
         cleaned = '\n\n'.join(cleaned_pages) if pages else clean_text(raw,cfg['cleaning'].get('unicode_form','NFC'))
         offset=0
-        for p,content in zip(page_provenance,cleaned_pages):
-            p['text_start']=offset; p['text_end']=offset+len(content); p['cleaned_chars']=len(content); offset+=len(content)+2
+        for p,content,selected in zip(page_provenance,cleaned_pages,selected_pages):
+            p['text_start']=offset; p['text_end']=offset+len(content)
+            finalize_page_quality(p,content,selected)
+            offset+=len(content)+2
+        if ext=='.pdf' and page_provenance:
+            render_suspicious_page_previews(path,page_provenance,output_dir,cfg['extraction'])
     except Exception as e:
         cleaned = ""; error = str(e)
     out = {
@@ -368,4 +405,5 @@ def extract_all(manifest: list[dict], cfg: dict, output_dir: Path) -> list[dict]
     write_jsonl(output_dir / "01_extracted" / "documents.jsonl", rows)
     failures = [r for r in rows if r.get("extraction_error") or r.get("text_chars", 0) < 100]
     write_jsonl(output_dir / "reports" / "extraction_issues.jsonl", failures)
+    write_page_quality_artifacts(rows,output_dir)
     return rows

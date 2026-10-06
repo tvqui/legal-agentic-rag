@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from vn_labor_offline.config import load_yaml, resolve_paths
 from vn_labor_offline.extract import extract_one, extract_pdf_pages
+from vn_labor_offline.page_quality import compare_native_ocr, finalize_page_quality, initial_page_reasons, write_page_quality_artifacts
 from vn_labor_offline.legal_structure import parse_legal_document
 from vn_labor_offline.metadata import find_doc_number
 from vn_labor_offline.ocr_serialization import reading_lines, legal_plain_text
@@ -76,6 +77,43 @@ class SerializationTests(unittest.TestCase):
         self.assertIn('đ) Nội dung gốc', result)
         self.assertNotIn('1. ', result)
         self.assertIn('Điều 8. Văn bản trong ảnh', result)
+
+
+class PageQualityTests(unittest.TestCase):
+    def test_native_ocr_disagreement_is_queued_without_auto_selecting_longer_text(self):
+        settings={'page_compare_min_chars':20,'page_min_native_ocr_token_dice':.35}
+        native='Điều 1. Người lao động được nghỉ hằng năm theo quy định.'
+        ocr='Bảng biểu hoàn toàn khác nội dung và không chứa quy định gốc.'
+        reasons,metrics,agreement=initial_page_reasons(
+            native,ocr,used_ocr=True,blank=False,settings=settings)
+        self.assertIn('NATIVE_OCR_LOW_AGREEMENT',reasons)
+        self.assertLess(agreement['token_dice'],.35)
+        self.assertGreater(metrics['nonspace_chars'],20)
+
+    def test_cleaning_loss_is_a_blocking_page_error(self):
+        page={'blank':False,'ocr_status':'NOT_NEEDED','quality_reason_codes':[],
+              'page_review':{'action':'ROTATE','degrees':90,'reason':'orientation only'}}
+        finalize_page_quality(page,'','Nội dung pháp lý đã có trước khi làm sạch')
+        self.assertEqual(page['page_quality_status'],'ERROR')
+        self.assertIn('EMPTY_AFTER_CLEANING',page['quality_reason_codes'])
+
+    def test_page_artifacts_separate_error_and_review_queue(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)
+            rows=[{'file_id':'f','relative_path':'a.pdf','sha256':'s','page_provenance':[
+                {'page':1,'status':'x','method':'pymupdf','ocr_status':'NOT_NEEDED','chars':20,
+                 'cleaned_chars':20,'page_quality_status':'REVIEW_REQUIRED',
+                 'quality_reason_codes':['TEXT_LAYER_LOW_ALNUM_RATIO']},
+                {'page':2,'method':'pymupdf','ocr_status':'NOT_NEEDED','chars':20,
+                 'cleaned_chars':0,'blank':False,'page_quality_status':'ERROR',
+                 'quality_reason_codes':['EMPTY_AFTER_CLEANING']}]}]
+            summary=write_page_quality_artifacts(rows,out)
+            self.assertEqual(summary['pages'],2)
+            self.assertEqual(summary['review_queue_pages'],2)
+            self.assertEqual(summary['error_pages'],1)
+            self.assertFalse(summary['passed'])
+            self.assertTrue((out/'01_extracted/page_audit.jsonl').is_file())
+            self.assertTrue((out/'review_queues/page_extraction_review.jsonl').is_file())
 
 
 class AttachmentTests(unittest.TestCase):
@@ -179,12 +217,28 @@ class AttachmentTests(unittest.TestCase):
         ocr.assert_called_once()
         self.assertEqual(pages,['Correct source text'])
 
+    def test_abnormal_native_text_layer_routes_only_that_page_to_ocr(self):
+        import pymupdf as fitz
+        path=self.root/'abnormal.pdf'
+        with fitz.open() as doc:
+            page=doc.new_page()
+            for line in range(12):
+                page.insert_text((30,30+line*15),'XXXXXXXXXX')
+            doc.save(path)
+        cfg=copy.deepcopy(self.cfg); cfg['extraction']['use_docling']='auto'
+        with patch('vn_labor_offline.extract.extract_pdf_docling',
+                   return_value='Điều 1. Nội dung OCR có thể đọc được.') as ocr:
+            pages,provenance=extract_pdf_pages(path,self.row,cfg,self.root/'out')
+        ocr.assert_called_once()
+        self.assertEqual(pages[0],'Điều 1. Nội dung OCR có thể đọc được.')
+        self.assertIn('TEXT_LAYER_REPEATED_GLYPH',provenance[0]['quality_reason_codes'])
+
     def test_document_timeout_retries_resume_worker(self):
         from vn_labor_offline.extract import extract_all
         cfg=copy.deepcopy(self.cfg); cfg['extraction']['document_timeout_seconds']=.1
         cfg['extraction']['document_timeout_attempts']=2
         response={'text':'Recovered after page-cache resume','text_chars':33,'extraction_error':None,
-                  'page_provenance':[],'extraction_schema':'page-v4-legal-markers'}
+                  'page_provenance':[],'extraction_schema':'page-v5-quality-audit'}
         def worker(*args,**kwargs):
             if worker.calls==0:
                 worker.calls+=1
@@ -203,7 +257,7 @@ class AttachmentTests(unittest.TestCase):
         cfg=copy.deepcopy(self.cfg)
         response={**self.row,'text':'Existing successful extraction with enough content for reuse.',
                   'text_chars':61,'extraction_error':None,'page_provenance':[],
-                  'extraction_schema':'page-v4-legal-markers','text_source':None}
+                  'extraction_schema':'page-v5-quality-audit','text_source':None}
 
         def worker(*args,**kwargs):
             request=json.loads(Path(args[0][-1]).read_text(encoding='utf-8'))

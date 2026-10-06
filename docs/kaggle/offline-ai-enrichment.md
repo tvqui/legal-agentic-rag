@@ -175,3 +175,26 @@ Giữ backend/frontend local dùng artifact V8.1 hiện tại và tiếp tục:
 4. không đổi schema artifact OFFLINE nếu không thật sự cần.
 
 Khi ZIP mới PASS, pin artifact mới vào ONLINE, chạy lại regression/evaluation rồi mới thay build đang dùng.
+# Kiểm tra chất lượng extraction theo trang
+
+Notebook mới chạy `apt-get update -y` và cài `zstd` trước mọi bước Python. Khi
+`REFRESH_EXTRACTION_QUALITY = True`, checkpoint cũ vẫn được dùng để phục hồi,
+nhưng extraction được cập nhật theo schema `page-v5-quality-audit` trước khi
+dựng lại structure/graph/index. Việc này có thể làm phiên đầu tiên lâu hơn.
+
+Pipeline kiểm `cleaned_chars` trên từng trang, phát hiện text layer có ký tự
+lỗi/control, tỷ lệ chữ-số thấp, ký tự lặp bất thường và dòng trùng. Với trang
+đã OCR, native text và OCR text được so bằng token overlap và tỷ lệ độ dài;
+kết quả dài hơn không tự động được coi là đúng hơn. Trang đáng ngờ có preview
+giới hạn 96 DPI, tối đa 12 trang mỗi tài liệu.
+
+Các đầu ra để kiểm tra sau khi chạy:
+
+- `artifacts/01_extracted/page_audit.jsonl`
+- `artifacts/01_extracted/suspicious_page_previews/`
+- `artifacts/review_queues/page_extraction_review.jsonl`
+- `artifacts/reports/page_extraction_quality.json`
+
+`ERROR` (ví dụ mất sạch nội dung sau cleaning hoặc OCR thất bại) làm technical
+validation fail. `REVIEW_REQUIRED` được giữ trong hàng đợi và không bị tự động
+phê duyệt hoặc tự động thay nội dung pháp lý.

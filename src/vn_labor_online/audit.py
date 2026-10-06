@@ -3,6 +3,7 @@ import re
 from datetime import date
 from .artifact_store import ArtifactStore
 from .models import Evidence,Citation,Claim
+from .answer_quality import language_issues
 
 def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|None,allow_document_temporal_fallback:bool=False,query_date_end:str|None=None)->list[Evidence]:
     out=[]
@@ -130,6 +131,10 @@ def _claim_reference_supported(text:str,claim_items:list[Evidence])->list[str]:
     return problems
 def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:list[Claim]|None=None)->tuple[bool,list[str]]:
     ids={x.unit_id for x in items if x.verified}; problems=[]
+    # Source-copy corruption is checked by the adjudicator; guard the final public surface too.
+    problems.extend('ANSWER_TEXT_QUALITY:'+issue for issue in language_issues(answer,allow_admin=True))
+    for claim in claims or []:
+        problems.extend('CLAIM_TEXT_QUALITY:'+issue+':'+claim.claim_id for issue in language_issues(claim.text,allow_admin=True))
     raw_markers=set(re.findall(r'\[([^\[\]]+)\]',answer))
     # Legal text may contain formulae in brackets. Treat only known evidence IDs
     # or ID-shaped labels as citation markers.

@@ -11,6 +11,7 @@ def quality_issues(registry,extracted,provisions,nodes,edges,out,cfg=None):
     docs={d['document_id']:d for d in registry}
     segments={s.get('segment_id'):s for s in read_jsonl(out/'03_structure/segments.jsonl')}
     def error(kind,**detail): issues.append({'severity':'ERROR','type':kind,**detail})
+    def warning(kind,**detail): issues.append({'severity':'WARN','type':kind,**detail})
     for d in registry:
         legal=d.get('source_group') in {'LEGAL_DOCUMENT','CONSOLIDATED'}
         if not legal: continue
@@ -37,7 +38,11 @@ def quality_issues(registry,extracted,provisions,nodes,edges,out,cfg=None):
             pages=x.get('page_provenance',[])
             if not pages or len(pages)!=x.get('page_count',len(pages)) or [p.get('page') for p in pages]!=list(range(1,len(pages)+1)):
                 error('MISSING_PAGE_PROVENANCE',document_id=d['document_id'])
-            if any(p.get('ocr_status') in {'FAILED','DISABLED'} or not p.get('blank') and p.get('chars',0)==0 for p in pages):
+            if any(p.get('ocr_status') in {'FAILED','DISABLED'} or
+                   (not p.get('blank') and p.get('chars',0)==0) or
+                   p.get('page_quality_status')=='ERROR' or
+                   (not p.get('blank') and p.get('chars',0)>0 and p.get('cleaned_chars',p.get('chars',0))==0)
+                   for p in pages):
                 error('INCOMPLETE_PAGE_EXTRACTION',document_id=d['document_id'])
         if 0<x.get('text_chars',0)<1200 and not d.get('short_document_verified'):
             error('SHORT_LEGAL_DOCUMENT_REVIEW',document_id=d['document_id'])
@@ -77,6 +82,13 @@ def quality_issues(registry,extracted,provisions,nodes,edges,out,cfg=None):
         if source.get('page_provenance') and (not pages or p.get('page_start')!=min(pages) or
             p.get('page_end')!=max(pages)):
             error('INVALID_PROVISION_PAGE_PROVENANCE',provision_id=p['provision_id'])
+    page_quality_path=out/'reports/page_extraction_quality.json'
+    if page_quality_path.exists():
+        page_quality=json.loads(page_quality_path.read_text(encoding='utf-8'))
+        if page_quality.get('error_pages',0):
+            error('PAGE_EXTRACTION_QUALITY_FAILED',count=page_quality['error_pages'])
+        if page_quality.get('review_queue_pages',0):
+            warning('PAGE_EXTRACTION_REVIEW_REQUIRED',count=page_quality['review_queue_pages'])
     for key,count in Counter(p.get('canonical_path') for p in provisions).items():
         if key and count>1: error('DUPLICATE_CANONICAL_PATH',canonical_path=key,count=count)
     ns={n['id']:n for n in nodes}

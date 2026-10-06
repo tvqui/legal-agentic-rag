@@ -48,6 +48,7 @@ class KaggleTests(unittest.TestCase):
         self.assertIn('vn_labor_results_recovery.zip', source)
         self.assertIn('AI_ENV.clear()', source)
         self.assertIn('TOTAL_SECONDS', source)
+        self.assertIn("arguments.append('--refresh-extraction')", source)
 
     def test_install_skips_ensurepip_and_repairs_existing_environment(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -91,9 +92,14 @@ class KaggleTests(unittest.TestCase):
         source_text = chr(10).join(''.join(cell['source']) for cell in notebook['cells'])
         serialized = json.dumps(notebook)
         self.assertIn('RUN_AI_ENRICHMENT = True', source_text)
+        self.assertIn("['apt-get', 'update', '-y']", source_text)
+        self.assertIn("['apt-get', 'install', '-y', 'zstd']", source_text)
+        self.assertIn('REFRESH_EXTRACTION_QUALITY = True', source_text)
         self.assertIn('OFFLINE_AI_MAX_PROVISIONS = 250', source_text)
-        self.assertIn("bootstrap.install(ROOT, extras='retrieval,graph,community')", source_text)
-        self.assertIn("kaggle/remote.py', 'preflight-rebuild'", source_text)
+        self.assertIn("bootstrap.install(ROOT, extras='ocr,retrieval,graph,community')", source_text)
+        self.assertIn("kaggle/remote.py', 'preflight'", source_text)
+        self.assertIn('CHECKLIST_ID_SCHEMA_VERSION >= 2', source_text)
+        self.assertIn('Diagnostic ID collision regression: PASS', source_text)
         self.assertIn('HEARTBEAT elapsed=', source_text)
         self.assertIn('vn_labor_results_technical_checkpoint.zip', source_text)
         self.assertIn('vn_labor_results_recovery.zip', source_text)

@@ -12,7 +12,7 @@ from vn_labor_offline.config import load_yaml,resolve_paths,validate_config,CONF
 from vn_labor_offline.neo4j_loader import validate_export,neo4j_properties,replace_transaction
 from vn_labor_offline.util import read_jsonl
 from vn_labor_offline.quality import quality_issues
-from vn_labor_offline.graph_builder import build_graph,graph_parent_id
+from vn_labor_offline.graph_builder import build_graph,graph_parent_id,validate_unique_nodes
 from vn_labor_offline.scanner import resolve_source_catalog
 from vn_labor_offline.provision_versions import materialize_provision_versions
 from vn_labor_offline.gold import validate_gold_record
@@ -154,6 +154,12 @@ class OfflineTests(unittest.TestCase):
         self.assertTrue(all((p['provision_id'],graph_parent_id(p)) in hierarchy for p in provisions))
         article_ids={p['provision_id'] for p in provisions if p['level']=='ARTICLE'}
         self.assertFalse(any(e['type']=='NEXT' and e['source'] in article_ids and e['target'] in article_ids for e in edges))
+
+    def test_duplicate_graph_node_error_identifies_the_collision(self):
+        nodes=[{'id':'diag_same','label':'DiagnosticItem','properties':{'provision_id':'prov_1'}},
+               {'id':'diag_same','label':'DiagnosticItem','properties':{'provision_id':'prov_2'}}]
+        with self.assertRaisesRegex(ValueError,'diag_same.*prov_1.*prov_2'):
+            validate_unique_nodes(nodes)
 
     def test_temporal_alias_conflict_is_rejected(self):
         registry=[{**self.doc,'issuer':'Quốc hội','promulgated_date':'2019-11-20','source_url':'https://example.test',

@@ -3,6 +3,7 @@ from pathlib import Path
 import json,subprocess,sys
 from .scanner import scan, resolve_source_catalog
 from .extract import extract_all
+from .page_quality import write_page_quality_artifacts
 from .metadata import build_registry
 from .legal_structure import parse_all
 from .cases import build_cases,enrich_case_ontology
@@ -38,6 +39,7 @@ def saved_embeddings(out,units):
 
 def construct_from_extracted(cfg,extracted,checklist_mode=None,build_indexes=True):
     out=cfg['output_dir']; out.mkdir(parents=True,exist_ok=True)
+    write_page_quality_artifacts(extracted,out)
     # A restored checkpoint may contain proof for an older graph build.
     (out/'reports/neo4j_validation.json').unlink(missing_ok=True)
     write_jsonl(out/'reports/build_issues.jsonl',[])
@@ -109,6 +111,13 @@ def run_all(cfg,checklist_mode=None):
     resolve_source_catalog(manifest,cfg['project_root'],cfg['output_dir'])
     extracted=extract_all(manifest,cfg,cfg['output_dir'])
     return construct_from_extracted(cfg,extracted,checklist_mode)
+
+
+def refresh_extraction(cfg):
+    """Re-audit/re-extract documents with the current page-quality schema."""
+    manifest=scan(cfg['data_dir'],cfg['output_dir'])
+    resolve_source_catalog(manifest,cfg['project_root'],cfg['output_dir'])
+    return extract_all(manifest,cfg,cfg['output_dir'])
 
 def rerun_enrichment(cfg,mode='ollama'):
     out=cfg['output_dir']

@@ -17,6 +17,43 @@ TRIGGERS = [
 
 LEVEL_PRIORITY = {"POINT": 0, "CLAUSE": 1, "ARTICLE": 2}
 
+# Increment this when the semantic identity of a DiagnosticItem changes. The
+# Kaggle notebook probes it before starting a multi-hour model run so an old
+# code Dataset fails in minutes rather than at graph export.
+CHECKLIST_ID_SCHEMA_VERSION = 2
+
+
+def checklist_identity(provision_id: str, rule_type: str, source_text: str) -> str:
+    """Return one stable ID for one grounded atomic rule.
+
+    Generator position is deliberately excluded: heuristic and AI generation
+    can enumerate the same quote at different positions. Rule type is part of
+    the identity because one quote can express more than one atomic rule.
+    """
+    normalized_type = str(rule_type or "CONDITION").strip().upper()
+    normalized_quote = " ".join(str(source_text or "").split())
+    return stable_id(provision_id, normalized_type, normalized_quote, prefix="diag")
+
+
+def finalize_checklists(rows: list[dict]) -> list[dict]:
+    """Prefer grounded AI rows, assign canonical IDs and reject real collisions."""
+    unique = {}
+    for original in rows:
+        row = dict(original)
+        row["type"] = str(row.get("type") or "CONDITION").strip().upper()
+        row["source_text"] = " ".join(str(row.get("source_text") or "").split())
+        key = (row.get("provision_id"), row["type"], row["source_text"])
+        current = unique.get(key)
+        if current is None or (str(row.get("generator", "")).startswith("structured-ai:") and
+                               not str(current.get("generator", "")).startswith("structured-ai:")):
+            row["checklist_id"] = checklist_identity(*key)
+            unique[key] = row
+    result = list(unique.values())
+    ids = [row["checklist_id"] for row in result]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Diagnostic checklist ID collision after semantic normalization")
+    return result
+
 
 def heuristic_checklist(provision: dict, segment_text: str = "", document_text: str = "",
                         pages: list[dict] | None = None) -> list[dict]:
@@ -37,7 +74,7 @@ def heuristic_checklist(provision: dict, segment_text: str = "", document_text: 
         evidence_text, evidence_span, provenance_status = locate_evidence(
             provision, s, segment_text, document_text, pages)
         items.append({
-            "checklist_id": stable_id(provision["provision_id"], str(len(items)+1), s, prefix="diag"),
+            "checklist_id": checklist_identity(provision["provision_id"], typ, s),
             "provision_id": provision["provision_id"], "source_provision_id": provision["provision_id"],
             "type": typ, "question": q, "source_text": s, "evidence_text": evidence_text,
             "evidence_span": evidence_span,
@@ -77,7 +114,7 @@ Nguồn:
         if status != "RESOLVED":
             continue
         out.append({
-            "checklist_id": stable_id(provision["provision_id"], str(i), it.get("source_text",""), prefix="diag"),
+            "checklist_id": checklist_identity(provision["provision_id"], it.get("type"), evidence),
             "provision_id": provision["provision_id"], "source_provision_id": provision["provision_id"],
             "provenance_status": "VERIFIED", "evidence_span": evidence_span,
             "type": it.get("type","CONDITION"),
@@ -105,7 +142,7 @@ Return at most 20 items and only JSON matching the schema."""
         if not quote or quote not in normalized_source: continue
         evidence_text,evidence_span,status=locate_evidence(provision,quote,segment_text,document_text,pages)
         if status!='RESOLVED': continue
-        out.append({'checklist_id':stable_id(provision['provision_id'],str(index),quote,prefix='diag'),
+        out.append({'checklist_id':checklist_identity(provision['provision_id'],item.get('type'),quote),
           'provision_id':provision['provision_id'],'source_provision_id':provision['provision_id'],
           'provenance_status':'VERIFIED','evidence_span':evidence_span,'type':item.get('type','CONDITION'),
           'question':item.get('question',''),'source_text':quote,'evidence_text':evidence_text,
@@ -174,14 +211,7 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
               ai_planned=planned,ai_attempted=ai_attempted,ai_succeeded=ai_succeeded,
               ai_fallback=ai_fallback)
     # Prefer the structured-AI form when both generators ground the same atomic rule.
-    unique={}
-    for row in rows:
-        key=(row.get('provision_id'),row.get('type'),' '.join(str(row.get('source_text','')).split()))
-        current=unique.get(key)
-        if current is None or (str(row.get('generator','')).startswith('structured-ai:') and
-                               not str(current.get('generator','')).startswith('structured-ai:')):
-            unique[key]=row
-    rows=list(unique.values())
+    rows=finalize_checklists(rows)
     accepted=[r for r in rows if r.get('provenance_status')=='VERIFIED']
     write_jsonl(output_dir / "04_knowledge" / "diagnostic_review_queue.jsonl",
                 [r for r in rows if r.get('provenance_status')!='VERIFIED'])

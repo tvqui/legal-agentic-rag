@@ -23,7 +23,12 @@ def write_notebook():
         if cell['cell_type'] == 'code':
             compile(''.join(cell['source']), f'cell-{i}', 'exec')
     destination = DEST / 'VN_Labor_Kaggle_V8.ipynb'
-    destination.write_text(json.dumps(notebook, ensure_ascii=False, indent=2), encoding='utf-8')
+    payload=json.dumps(notebook, ensure_ascii=False, indent=2)
+    destination.write_text(payload, encoding='utf-8')
+    alias=DEST/'ai-v9-1.ipynb'; alias.write_text(payload,encoding='utf-8')
+    for path in (destination,alias):
+        digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        Path(str(path)+'.sha256').write_text(f'{digest}  {path.name}\n',encoding='ascii')
     print(json.dumps({'notebook': str(destination), 'code_syntax': 'PASS', 'workflow': 'V8_1_CHECKPOINT_FIRST_REBUILD_AI_AURA'}, ensure_ascii=False, indent=2))
     return destination
 

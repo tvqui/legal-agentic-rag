@@ -15,25 +15,33 @@ def make_notebook():
     md("""# VN Labor — OFFLINE final build (checkpoint-first)
 
 Notebook này dùng hai Kaggle Input Private: package code mới và checkpoint `vn_labor_results_v8.1(aura).zip`.
-Nó dựng lại toàn bộ registry → structure → knowledge → graph → Dense/BM25 từ extraction cache, lưu một
-checkpoint kỹ thuật, sau đó mới chạy AI enrichment có giới hạn, nạp Aura, audit và xuất ZIP cuối.
+Nó dùng checkpoint để phục hồi cache, chạy lại extraction chọn lọc theo page-v5, rồi dựng registry → structure →
+knowledge → graph → Dense/BM25, lưu checkpoint kỹ thuật, chạy AI enrichment, nạp Aura, audit và xuất ZIP cuối.
 
 Nếu Kaggle/Ollama lỗi sau khi checkpoint kỹ thuật đã tạo, Output vẫn có bản kỹ thuật hoàn chỉnh và thường có
 thêm recovery ZIP chứa AI cache để tiếp tục ở phiên sau. Bật **GPU T4 x2**, **Internet** và bốn Aura Secrets.
 """)
+    code("""# System prerequisites must be installed before Python/package setup.
+# Shell equivalents: !apt-get update -y ; !apt-get install -y zstd
+import subprocess as _system_setup
+_system_setup.run(['apt-get', 'update', '-y'], check=True)
+_system_setup.run(['apt-get', 'install', '-y', 'zstd'], check=True)
+print('System prerequisite zstd: PASS', flush=True)
+""")
     code("""RESTORE_ARCHIVE = "AUTO"
+REFRESH_EXTRACTION_QUALITY = True
 RUN_AI_ENRICHMENT = True
 OFFLINE_AI_MODEL = "qwen3:8b"
 OFFLINE_AI_MAX_PROVISIONS = 250
 LOAD_AURA = True
 HEARTBEAT_SECONDS = 60
-AI_STALL_SECONDS = 20 * 60
-TOTAL_SECONDS = 10 * 60 * 60
+AI_STALL_SECONDS = 30 * 60
+TOTAL_SECONDS = 11 * 60 * 60 + 30 * 60
 """)
 
     md("""## 1. Xác minh Input, khôi phục checkpoint và cài môi trường
 
-Build này không chạy OCR lại. Vì vậy nó không cài Docling/EasyOCR và không tải model OCR; Dense/BM25 vẫn được dựng lại.
+Build cài Docling/EasyOCR và chỉ OCR các trang mà kiểm tra text layer đánh dấu đáng ngờ. Trang sạch vẫn dùng native text.
 """)
     code("""import importlib.util
 import json
@@ -65,7 +73,7 @@ spec = importlib.util.spec_from_file_location('vn_kaggle_bootstrap', source / 'k
 bootstrap = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bootstrap)
 ROOT = bootstrap.prepare(source, restore=restore)
-PYTHON = bootstrap.install(ROOT, extras='retrieval,graph,community')
+PYTHON = bootstrap.install(ROOT, extras='ocr,retrieval,graph,community')
 REPORTS = ROOT / 'artifacts/reports'
 REPORTS.mkdir(parents=True, exist_ok=True)
 
@@ -139,7 +147,18 @@ def run_logged(arguments, name, extra_env=None, heartbeat_seconds=60,
             raise
 
 subprocess.run([str(PYTHON), 'kaggle/remote.py', 'configure'], cwd=ROOT, check=True)
-subprocess.run([str(PYTHON), 'kaggle/remote.py', 'preflight-rebuild'], cwd=ROOT, check=True)
+subprocess.run([str(PYTHON), 'kaggle/remote.py', 'preflight'], cwd=ROOT, check=True)
+# Guard the regression that previously failed only after a six-hour AI run. A
+# stale code Dataset now stops here before Ollama is installed or invoked.
+collision_probe = '''from vn_labor_offline.checklists import CHECKLIST_ID_SCHEMA_VERSION,finalize_checklists
+assert CHECKLIST_ID_SCHEMA_VERSION >= 2
+base={'provision_id':'p','source_text':'same quote','provenance_status':'VERIFIED'}
+rows=finalize_checklists([{**base,'type':'REQUIRED','generator':'heuristic'},
+                          {**base,'type':'DEADLINE','generator':'structured-ai:qwen'}])
+assert len(rows)==2 and len({row['checklist_id'] for row in rows})==2
+'''
+subprocess.run([str(PYTHON), '-c', collision_probe], cwd=ROOT, check=True)
+print('Diagnostic ID collision regression: PASS', flush=True)
 print('Bundle/checkpoint/environment: PASS', flush=True)
 """)
 
@@ -266,6 +285,8 @@ Mốc `vn_labor_results_technical_checkpoint.zip` được tạo trước AI. N�
 """)
     code("""arguments = ['kaggle/offline_final_remote.py',
              '--ai-max-provisions', str(OFFLINE_AI_MAX_PROVISIONS)]
+if REFRESH_EXTRACTION_QUALITY:
+    arguments.append('--refresh-extraction')
 if not RUN_AI_ENRICHMENT:
     arguments.append('--skip-ai')
 if LOAD_AURA:

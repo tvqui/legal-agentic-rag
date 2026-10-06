@@ -28,7 +28,11 @@ def resolve_paths(cfg: dict, config_path: str | Path) -> dict:
 
 
 CONFIG_KEYS={
-    'extraction':{'min_text_chars_before_ocr','use_docling','ocr_languages','ocr_use_gpu','document_timeout_seconds','document_timeout_attempts'},
+    'extraction':{'min_text_chars_before_ocr','use_docling','ocr_languages','ocr_use_gpu','document_timeout_seconds','document_timeout_attempts',
+                  'page_max_replacement_fraction','page_max_control_fraction','page_min_alnum_fraction',
+                  'page_max_dominant_character_fraction','page_max_duplicate_line_fraction',
+                  'page_compare_min_chars','page_min_native_ocr_token_dice','page_quality_render_previews',
+                  'page_quality_max_previews_per_document','page_quality_preview_dpi'},
     'cleaning':{'unicode_form','repeated_line_page_ratio','repeated_line_max_chars'},
     'parsing':{'keep_unparsed_preamble','minimum_provision_chars'},
     'knowledge':{'checklist_mode','ollama_model','issue_min_score','relation_confidence_threshold','case_ontology_mode','ai_provider','ai_url','ai_model','ai_health_url','ai_timeout_seconds','ai_cache_dir','ai_max_provisions'},

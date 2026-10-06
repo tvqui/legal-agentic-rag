@@ -71,12 +71,17 @@ const NOTICE_LABELS = {
   SOURCE_CATALOG_HUMAN_REVIEW_INCOMPLETE: 'Nguồn đang chờ người có chuyên môn xác minh.',
   PROVISION_TEMPORAL_REVIEW_INCOMPLETE: 'Hiệu lực ở cấp điều khoản đang chờ người có chuyên môn xác minh.',
   GOLD_NOT_APPROVED: 'Bộ câu hỏi đánh giá chất lượng chưa được duyệt.',
+  source_text_quality: 'Nội dung nguồn còn lỗi đọc chữ, cần đối chiếu bản gốc.',
+  ANSWER_QUALITY_BLOCKED: 'Câu trả lời chưa đạt kiểm tra chất lượng nội dung.',
+  ANSWER_LANGUAGE_SAFE_FALLBACK: 'Hệ thống dùng cách trả lời dự phòng để giữ nguyên nội dung pháp lý.',
   CORPUS_MAY_BE_STALE: 'Bộ dữ liệu có thể chưa bao gồm thay đổi pháp luật sau ngày chốt.',
   QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT: 'Bạn chưa nhập ngày tra cứu; hệ thống dùng ngày chốt của bộ dữ liệu.',
 }
 
 function humanizeNotice(value) {
   if (NOTICE_LABELS[value]) return NOTICE_LABELS[value]
+  if (value.startsWith('SOURCE_TEXT_QUALITY:')) return 'Nội dung nguồn có chữ đáng ngờ, cần đối chiếu bản gốc.'
+  if (value.startsWith('ANSWER_TEXT_QUALITY:') || value.startsWith('ANSWER_LANGUAGE_REPAIR_REJECTED:')) return 'Hệ thống phát hiện lỗi câu chữ và đã kiểm tra cách trả lời dự phòng.'
   if (value.startsWith('DOCUMENT_LEVEL_TEMPORAL_FALLBACK_USED:')) {
     return 'Hiệu lực được kiểm tra tạm thời ở cấp văn bản.'
   }
@@ -84,7 +89,7 @@ function humanizeNotice(value) {
 }
 
 function humanizeNotices(values = []) {
-  return [...new Set(values.map(humanizeNotice))]
+  return [...new Set(values.filter(value => !['ANSWER_LAYOUT_CLEANED', 'ANSWER_LANGUAGE_REPAIRED'].includes(value)).map(humanizeNotice))]
 }
 
 async function parseResponse(response) {

@@ -27,6 +27,27 @@ def hierarchy_ids(p: dict) -> tuple[str | None, str | None]:
     return chapter_id,section_id
 
 
+def validate_unique_nodes(nodes: list[dict]) -> None:
+    """Fail closed with enough provenance to diagnose an ID collision."""
+    grouped = {}
+    for value in nodes:
+        grouped.setdefault(value.get("id"), []).append(value)
+    duplicates = {nid: values for nid, values in grouped.items() if len(values) > 1}
+    if not duplicates:
+        return
+    examples = []
+    for nid, values in list(duplicates.items())[:8]:
+        origins = [
+            f"{item.get('label')}:{item.get('properties', {}).get('provision_id') or item.get('properties', {}).get('document_id') or '?'}"
+            for item in values
+        ]
+        examples.append(f"{nid}=>{','.join(origins)}")
+    raise ValueError(
+        "Duplicate graph node IDs; refusing to overwrite legal content. Collisions: "
+        + " | ".join(examples)
+    )
+
+
 def graph_parent_id(p: dict) -> str:
     """Return the parent represented by PART_OF in the exported graph."""
     if p.get("level") != "ARTICLE":
@@ -134,8 +155,7 @@ def build_graph(registry, provisions, cases, issues, issue_edges, checklists, re
     for c in communities.get("community_nodes",[]): nodes.append(node(c["id"],"Community",layer="ontology",**c))
     for e in communities.get("edges",[]): edges.append(edge(e["source"],e["target"],e["type"],**e.get("properties",{})))
 
-    if len({n['id'] for n in nodes})!=len(nodes):
-        raise ValueError('Duplicate graph node IDs; refusing to overwrite legal content.')
+    validate_unique_nodes(nodes)
     # Keep dangling edges visible to validation instead of silently deleting them.
     edges=list({e['id']:e for e in edges}.values())
     gdir=output_dir/"05_graph"; gdir.mkdir(parents=True,exist_ok=True)
