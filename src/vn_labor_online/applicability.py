@@ -47,7 +47,16 @@ class LegalApplicabilityAuditor:
         if requested_outcome!='ASSESS_LEGALITY' or not self.provider:
             return base_accepted,base_decisions,base_warnings
         by_item={item.unit_id:item for item in items}; hard={d.evidence_id:d for d in base_decisions if d.audit_status=='FAIL'}
-        locked={d.evidence_id:d for d in base_decisions if 'DETERMINISTIC_RULE_MATCH' in d.reasons}
+        # Exact statutory chains proved from explicit facts are final.  A
+        # probabilistic auditor may assess other candidates, but cannot
+        # override these deterministic applicability decisions.
+        proven_reasons={
+          'DETERMINISTIC_RULE_MATCH','DETERMINISTIC_SPECIAL_OCCUPATION_RULE_MATCH',
+          'DETERMINISTIC_SPECIAL_OCCUPATION_DELEGATION_MATCH','DETERMINISTIC_LATE_WAGE_CHAIN',
+          'DETERMINISTIC_MISINFORMATION_CHAIN','DETERMINISTIC_HARASSMENT_EXCEPTION',
+          'DETERMINISTIC_WITHDRAWAL_RULE','DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN',
+          'DETERMINISTIC_MUTUAL_AGREEMENT_RULE','DETERMINISTIC_LEAVE_RULE_CHAIN'}
+        locked={d.evidence_id:d for d in base_decisions if proven_reasons.intersection(d.reasons)}
         eligible=[item for item in items if item.unit_id not in hard and item.unit_id not in locked][:self.cfg.max_items]
         overflow=[item for item in items if item.unit_id not in hard and item.unit_id not in locked][self.cfg.max_items:]
         if not eligible:

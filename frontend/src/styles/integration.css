@@ -17,5 +17,7 @@
 .response-notice p { margin: 0 0 4px; }
 .response-notice p:last-child { margin-bottom: 0; }
 .source-unavailable { color: var(--muted); font-size: 12px; }
+.error-diagnostics { margin: 8px 0; color: var(--muted); font-size: 11px; }
+.error-diagnostics summary { cursor: pointer; }
 .spin { animation: integration-spin 1s linear infinite; }
 @keyframes integration-spin { to { transform: rotate(360deg); } }

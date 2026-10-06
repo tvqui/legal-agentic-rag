@@ -75,7 +75,9 @@ def audit(neo4j=False):
     return code
 
 
-def export():
+def export(archive_name='vn_labor_results.zip'):
+    if Path(archive_name).name != archive_name or not archive_name.lower().endswith('.zip'):
+        raise ValueError('archive_name must be a plain .zip filename')
     reports = OUT / 'reports'
     reports.mkdir(parents=True, exist_ok=True)
     def read(name):
@@ -102,7 +104,7 @@ def export():
               'Chi tiết: summary.json, validation_issues.jsonl, final_outputs_validation.md và các log trong reports/.',
               'Báo cáo này được thay mới mỗi lần export; không tự sửa metadata để xóa lỗi.']
     (reports / 'tong_hop_sau_chay.md').write_text('\n'.join(lines), encoding='utf-8')
-    archive = ROOT.parent / 'vn_labor_results.zip'
+    archive = ROOT.parent / archive_name
     temporary = archive.with_suffix('.tmp')
     with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as z:
         for p in sorted(OUT.rglob('*')):
@@ -114,11 +116,21 @@ def export():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['configure', 'preflight', 'audit', 'export', 'aura'])
+    parser.add_argument('action', choices=['configure', 'preflight', 'preflight-rebuild', 'audit', 'export', 'aura'])
+    parser.add_argument('--archive-name', default='vn_labor_results.zip')
     args = parser.parse_args()
     if args.action == 'configure': configure()
     elif args.action == 'preflight': preflight()
-    elif args.action == 'export': export()
+    elif args.action == 'export': export(args.archive_name)
+    elif args.action == 'preflight-rebuild':
+        import torch, faiss, bm25s
+        if not torch.cuda.is_available(): raise RuntimeError('CUDA unavailable. Enable GPU.')
+        required=('00_manifest/files.jsonl','01_extracted/documents.jsonl','01_extracted/page_cache',
+                  '03_structure/provisions.jsonl','06_indexes/retrieval_units.jsonl')
+        missing=[name for name in required if not (OUT/name).exists()]
+        if missing: raise RuntimeError('Checkpoint is incomplete: '+', '.join(missing))
+        subprocess.run([sys.executable,str(ROOT/'scripts/prepare_dense_model.py')],check=True)
+        print('Rebuild preflight PASS; GPU:',torch.cuda.get_device_name(0),flush=True)
     elif args.action == 'audit': sys.exit(audit())
     elif args.action == 'aura':
         from vn_labor_offline.neo4j_loader import load_neo4j

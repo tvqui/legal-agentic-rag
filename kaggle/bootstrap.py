@@ -97,10 +97,17 @@ def prepare(source, working=Path('/kaggle/working'), restore=''):
     return root
 
 
-def install(root):
+def install(root, extras='ocr,retrieval,graph,community'):
     from importlib.metadata import version, PackageNotFoundError
-    if sys.version_info[:2] != (3, 12):
-        raise RuntimeError('This bundle targets the verified Kaggle Python 3.12 environment.')
+    allowed={'ocr','retrieval','graph','community'}
+    selected=[item.strip() for item in str(extras).split(',') if item.strip()]
+    if not selected or any(item not in allowed for item in selected):
+        raise ValueError('Unsupported Kaggle dependency profile')
+    python_version = tuple(sys.version_info[:2])
+    if not ((3, 12) <= python_version < (3, 14)):
+        raise RuntimeError(
+            f'This bundle supports Kaggle Python 3.12 or 3.13; found {python_version[0]}.{python_version[1]}.'
+        )
     constraints = (root / 'kaggle/constraints.txt').read_text(encoding='utf-8')
     for name in ('torch', 'torchvision', 'torchaudio'):
         try:
@@ -120,6 +127,6 @@ def install(root):
     # This also avoids treating an existing bin/python as proof of a complete env.
     subprocess.run([sys.executable, '-m', 'pip', '--python', str(python),
                     'install', '--disable-pip-version-check',
-                    '-c', str(constraint_path), '-e', str(root) + '[ocr,retrieval,graph,community]',
+                    '-c', str(constraint_path), '-e', str(root) + '[' + ','.join(selected) + ']',
                     'setuptools==81.0.0'], check=True)
     return python

@@ -35,6 +35,7 @@ YEAR_WORD=re.compile(r'\bnăm\s*(20\d{2})\b',re.I)
 NOTICE_DAYS=re.compile(
     r'(?:(?:báo|thông báo)\s*trước(?:\s+cho\s+(?:tôi|người lao động))?|(?:muốn|dự định|sẽ)?\s*nghỉ(?:\s+\w+){0,2}\s+sau)\s*(\d+)\s*ngày',
     re.I)
+NO_NOTICE=re.compile(r'\b(?:không|chưa)\s+(?:hề\s+)?(?:báo|thông báo)\s*trước(?:\s+\d+\s*ngày)?|\bnghỉ\s+ngay\b',re.I)
 WORKED_MONTHS=re.compile(r'làm(?:\s+việc)?[^.]{0,50}?(\d+)\s*tháng',re.I)
 SERVICE_YEARS=re.compile(r'(?:(?:đã\s+)?làm(?:\s+việc)?(?:\s+liên\s+tục)?(?:\s+cho\s+(?:cùng\s+)?(?:công\s+ty(?:\s+này)?|người\s+sử\s+dụng\s+lao\s+động))?\s*(?:được\s*)?(\d+)\s*năm|năm\s+thứ\s+(\d+))',re.I)
 AGE=re.compile(r'(?<!\d)(\d{1,2})\s*tuổi',re.I)
@@ -119,7 +120,7 @@ def _needle_match(query,needles):
 
 def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
     """Attach exact current-turn spans to facts produced by deterministic parsing."""
-    patterns={'notice_days':NOTICE_DAYS,'worked_months':WORKED_MONTHS,'service_years':SERVICE_YEARS,
+    patterns={'worked_months':WORKED_MONTHS,'service_years':SERVICE_YEARS,
       'age':AGE,'travel_days':TRAVEL_DAYS,'notice_date':NOTICE_DATE_DMY,
       'termination_date':TERMINATION_DATE_DMY,'contract_start_year':CONTRACT_START_YEAR}
     needles={
@@ -133,10 +134,14 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
       'termination_basis':('trả lương không đúng thời hạn','trả lương chậm','trả lương trễ','quấy rối tình dục','cung cấp sai thông tin','cung cấp thông tin không trung thực'),
       'mutual_termination_agreement':('đồng ý cho','hai bên thỏa thuận','công ty đồng ý'),
       'work_category':('đặc biệt nặng nhọc','nặng nhọc','điều kiện bình thường','công việc văn phòng'),
-      'disabled':('người khuyết tật','khuyết tật')}
+      'disabled':('người khuyết tật','khuyết tật'),
+      'training_costs':('không có chi phí đào tạo','có chi phí đào tạo','chi phí đào tạo')}
     result=[]
     for field,value in facts.items():
-        match=patterns[field].search(query) if field in patterns else _needle_match(query,needles.get(field,()))
+        if field=='notice_days':
+            match=NO_NOTICE.search(query) if value==0 else NOTICE_DAYS.search(query)
+        else:
+            match=patterns[field].search(query) if field in patterns else _needle_match(query,needles.get(field,()))
         if match: result.append(_fact_candidate(field,value,query,match))
     return result
 
@@ -166,6 +171,8 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             if not _fact_present(field,query,query_date,facts): missing.append(prompt)
         if any(term in query for term in ('bao nhiêu tiền','tính tiền','mức bồi thường')) and facts.get('monthly_salary') is None:
             missing.append('Mức tiền lương theo hợp đồng dùng để tính bồi thường là bao nhiêu?')
+        if any(term in query for term in ('bao nhiêu tiền','tính tiền','mức bồi thường')) and facts.get('training_costs') is None:
+            missing.append('Có chi phí đào tạo phải hoàn trả theo Điều 62 hay không; nếu có thì số tiền và thỏa thuận đào tạo là gì?')
     else:
         for issue in issues:
             for field,prompt in FACTS.get(issue,{}).items():
@@ -177,8 +184,10 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     # query_date is the date on which the user wants the law evaluated.  It is
     # not necessarily a factual event date, so keep it in QueryAnalysis instead
     # of presenting it to users as a fact of their case.
+    no_notice=NO_NOTICE.search(q)
     notice=NOTICE_DAYS.search(q)
-    if notice: facts['notice_days']=int(notice.group(1))
+    if no_notice: facts['notice_days']=0
+    elif notice: facts['notice_days']=int(notice.group(1))
     worked=WORKED_MONTHS.search(q)
     if worked: facts['worked_months']=int(worked.group(1))
     service=SERVICE_YEARS.search(q)
@@ -212,6 +221,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if any(term in q for term in ('không thuộc ngành nghề đặc thù','không thuộc ngành, nghề, công việc đặc thù','không thuộc công việc đặc thù',
       'không làm ngành nghề đặc thù','không làm ngành, nghề, công việc đặc thù','không làm công việc đặc thù')): facts['special_occupation']=False
     elif any(term in q for term in ('ngành nghề đặc thù','ngành, nghề, công việc đặc thù')): facts['special_occupation']=True
+    if any(term in q for term in ('không có chi phí đào tạo','không phải hoàn trả chi phí đào tạo')): facts['training_costs']=False
+    elif any(term in q for term in ('có chi phí đào tạo','phải hoàn trả chi phí đào tạo')): facts['training_costs']=True
     if any(term in q for term in ('trả lương không đúng thời hạn','trả lương chậm','trả lương trễ','trả lương cho tôi trễ')):
         facts['termination_basis']='LATE_WAGE'
         if any(term in q for term in ('không có sự kiện bất khả kháng','không có lý do bất khả kháng','không có sự kiện bất khả kháng hay lý do thuộc trường hợp ngoại lệ')):
@@ -229,7 +240,6 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif any(term in q for term in ('bao nhiêu ngày nghỉ','bao nhiêu ngày phép','bao nhiêu ngày','số ngày nghỉ hằng năm','tính quyền nghỉ','tính:','cách tính này')) and any(term in q for term in ('nghỉ','phép','thâm niên','ngày cơ bản')):
         specific=bool(facts.get('service_years') or facts.get('work_category') or facts.get('minor') or facts.get('disabled') or re.search(r'\b(?:tôi|[a-e])\b',q))
         facts['query_intent']='ANNUAL_LEAVE_CALC' if specific else 'ANNUAL_LEAVE_OVERVIEW'
-        if facts.get('worked_months') is None and isinstance(facts.get('service_years'),int) and facts['service_years']>=1: facts['worked_months']=12
     return facts
 def _fact_present(field:str,q:str,query_date:str|None,facts:dict)->bool:
     if field in facts:

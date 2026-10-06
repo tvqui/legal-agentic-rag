@@ -33,11 +33,13 @@ export function ChatPage({ activeConversation, onMenu }) {
     const user = { id: crypto.randomUUID(), conversationId: activeConversation.id, role: 'user', content, createdAt: now }
     const assistantId = crypto.randomUUID()
     // Prior assistant answers contain long legal quotations and must not be fed
-    // back as if they were facts in the user's next question.
+    // back as if they were facts in the user's next question. Confirmed facts
+    // are carried only while the backend is explicitly collecting missing data.
     const context = conversationMessages
       .filter((message) => message.role === 'user')
       .slice(-4)
       .map((message) => message.content)
+    const continuingFactCollection = latestAssistant?.answerStatus === 'NEED_MORE_FACTS'
     setMessages((current) => [...current, user, {
       id: assistantId,
       conversationId: activeConversation.id,
@@ -55,17 +57,23 @@ export function ChatPage({ activeConversation, onMenu }) {
         conversationId: activeConversation.id,
         question: content,
         conversationContext: context,
-        facts: caseFacts[activeConversation.id] || {},
+        facts: continuingFactCollection ? (caseFacts[activeConversation.id] || {}) : {},
         signal: controller.signal,
       })
       setMessages((current) => current.map((item) => item.id === assistantId ? { ...answer, id: assistantId } : item))
-      setCaseFacts((current) => ({ ...current, [activeConversation.id]: answer.facts || current[activeConversation.id] || {} }))
+      setCaseFacts((current) => {
+        const next = { ...current }
+        if (answer.answerStatus === 'NEED_MORE_FACTS') next[activeConversation.id] = answer.facts || {}
+        else delete next[activeConversation.id]
+        return next
+      })
     } catch (error) {
       const stopped = error?.name === 'AbortError'
       setMessages((current) => current.map((item) => item.id === assistantId ? {
         ...item,
         content: stopped ? 'Yêu cầu đã được dừng.' : `Không thể kết nối với AI backend: ${error.message}`,
         status: 'error',
+        errorInfo: stopped ? null : { category: error.category, errorId: error.errorId, status: error.status },
       } : item))
     } finally {
       if (abortRef.current === controller) abortRef.current = null

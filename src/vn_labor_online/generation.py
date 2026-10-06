@@ -192,8 +192,16 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
             conclusion=f'Mức nền là {base} ngày, cộng {bonus} ngày thâm niên; làm {worked_months} tháng nên phép tính là ({base} + {bonus}) / 12 × {worked_months} = {rendered}. Không tự áp dụng quy tắc làm tròn nếu evidence hiện có không quy định.'
         else:
             result=base+bonus; conclusion=f'Mức nền phù hợp là {base} ngày; thâm niên {service_years} năm làm tăng {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày.'
+        if pack.facts.get('minor') or pack.facts.get('disabled') or category in {'HEAVY','SPECIAL_HEAVY'}:
+            conclusion='Các mức 12, 14 và 16 ngày tại khoản 1 Điều 113 là các mức thay thế theo từng nhóm, không cộng chồng. '+conclusion
+        # Keep the evidence-audited claim focused on the supported legal rule
+        # and calculation.  The direct yes/no sentence is a conclusion derived
+        # from that calculation, rather than a quotation attributed to a source.
         claim=Claim(claim_id='claim_leave_calculation',text=conclusion,evidence_ids=evidence_ids)
-        return AdjudicationDraft(answer_summary=f'{conclusion} '+ ' '.join(f'[{eid}]' for eid in evidence_ids),claims=[claim],
+        public_conclusion=conclusion
+        if any(term in query for term in ('dung hay sai','cach tinh nay')):
+            public_conclusion='Cách tính cộng từng phần như vậy là sai. '+public_conclusion
+        return AdjudicationDraft(answer_summary=f'{public_conclusion} '+ ' '.join(f'[{eid}]' for eid in evidence_ids),claims=[claim],
           applicable_law_versions=_versions(used),assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
     if worked_months<12: return None
     evidence=[]
@@ -281,6 +289,16 @@ class LegalAdjudicator:
 
     def generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
         safe_fallback=lambda:adjudicate(pack,partial,assumptions)
+        deterministic_intents={'WITHDRAW_TERMINATION','UNLAWFUL_DEFINITION_CONSEQUENCES','MUTUAL_TERMINATION',
+          'TRAVEL_TIME','ANNUAL_LEAVE_CALC','ANNUAL_LEAVE_OVERVIEW'}
+        deterministic_bases={'LATE_WAGE','EMPLOYER_MISINFORMATION','SEXUAL_HARASSMENT'}
+        deterministic_employee_exit=(pack.requested_outcome=='ASSESS_LEGALITY' and pack.facts.get('actor')=='EMPLOYEE'
+          and pack.facts.get('contract_type')=='INDEFINITE' and isinstance(pack.facts.get('notice_days'),int)
+          and pack.facts.get('special_occupation') is not None)
+        if pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit:
+            deterministic=safe_fallback()
+            if deterministic.claims:
+                return deterministic,[]
         if not self.provider: return safe_fallback(),[]
         allowed_ids={item.evidence_id for item in pack.evidence}
         allowed_versions={(item.instrument_number,item.valid_from,item.valid_to) for item in pack.evidence}

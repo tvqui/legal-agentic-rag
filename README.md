@@ -73,6 +73,15 @@ Applicability vẫn chạy deterministic và mọi câu trả lời vẫn phải
 - [Vận hành](docs/operations.md)
 - [Human review](docs/human-review.md)
 - [Kaggle](docs/kaggle.md)
+- [Kế hoạch hoàn thiện và phát hành](docs/project-completion.md)
+
+## Đánh giá chất lượng ONLINE
+
+```bat
+python scripts/evaluate_gold_set.py --config config/online.yaml --gold path\to\gold_queries.jsonl
+```
+
+Chỉ kết quả có `status=OFFICIAL` mới được dùng để báo cáo chất lượng. Trạng thái này yêu cầu Gold đã được người có chuyên môn duyệt và khớp chính xác build ID.
 
 ## Trạng thái dữ liệu
 

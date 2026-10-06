@@ -28,12 +28,17 @@ function ErrorState({ message, onRetry }) {
   return <div className={`message-state ${message.status}`}>
     <strong>{lowEvidence ? 'Chưa có đủ căn cứ pháp lý đã xác minh.' : 'Không thể hoàn thành yêu cầu.'}</strong>
     <p>{message.content}</p>
+    {message.errorInfo && <details className="error-diagnostics">
+      <summary>Thông tin chẩn đoán</summary>
+      <p>Mã lỗi: {message.errorInfo.errorId || 'không có'} · Loại: {message.errorInfo.category || 'không xác định'} · HTTP: {message.errorInfo.status || 'không có phản hồi'}</p>
+    </details>}
+    {message.questions?.map((question) => <p key={question}><strong>Cần bổ sung:</strong> {question}</p>)}
     <button className="text-action" onClick={onRetry}><RefreshCw size={14} /> Thử lại</button>
   </div>
 }
 
 function ReviewNotice({ message }) {
-  const notices = [...(message.limitations || []), ...(message.warnings || [])]
+  const notices = [...new Set([...(message.limitations || []), ...(message.warnings || [])])]
   if (!notices.length && !message.questions?.length) return null
   return <div className="response-notice">
     <AlertTriangle size={15} />

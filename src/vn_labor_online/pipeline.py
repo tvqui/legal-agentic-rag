@@ -131,8 +131,14 @@ class OnlinePipeline:
             except IndexUnavailable as exc:
                 warnings.append('NEURAL_RERANKER_UNAVAILABLE')
                 trace.events.append({'event':'neural_reranker','status':'DEGRADED','error':type(exc.__cause__ or exc).__name__})
-        items=rerank(items,self.cfg); audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
+        items=rerank(items,self.cfg)
+        trace.timings_ms['seed_retrieval']=round((time.perf_counter()-stage)*1000,2)
+        audit_started=time.perf_counter()
+        audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
+        trace.timings_ms['deterministic_audit']=round((time.perf_counter()-audit_started)*1000,2)
+        applicability_started=time.perf_counter()
         verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
+        trace.timings_ms['applicability_audit']=round((time.perf_counter()-applicability_started)*1000,2)
         warnings+=app_warnings
         extended_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
         if extended_plan.mandatory_slots!=plan.mandatory_slots:
@@ -188,8 +194,10 @@ class OnlinePipeline:
             graph_stats['nodes_visited']=len(visited); graph_stats['critical_edges_followed']=list(dict.fromkeys(graph_stats['critical_edges_followed']))
         trace.timings_ms['graph_retrieval']=round((time.perf_counter()-stage)*1000,2)
         route_limit=self.cfg.max_verified_units if analysis.route==Route.DIRECT and any(x.retrieval_method=='exact_hierarchy' for x in verified) else 1 if analysis.route==Route.DIRECT else min(self.cfg.max_verified_units,6) if analysis.route==Route.STANDARD else self.cfg.max_verified_units
+        selection_started=time.perf_counter()
         selected,state=select_for_plan(verified,plan,analysis.query_date,allow_fallback,route_limit)
         conflicts=detect_authoritative_conflicts(verified,analysis.query_date,analysis.query_date_end)
+        trace.timings_ms['selection']=round((time.perf_counter()-selection_started)*1000,2)
         if conflicts:
             conflict_ids={uid for pair in conflicts for uid in pair}
             selected=list({item.unit_id:item for item in selected+[x for x in verified if x.unit_id in conflict_ids]}.values())
@@ -209,6 +217,7 @@ class OnlinePipeline:
         status=Stop.CONFLICTING_EVIDENCE if conflicts else Stop.NEED_MORE_FACTS if followup_questions else Stop.SUFFICIENT if sufficient else Stop.PARTIAL_ALLOWED if partial else Stop.INSUFFICIENT_EVIDENCE
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome)
+        adjudication_started=time.perf_counter()
         if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS}:
             summary='Cần ngày chính xác để xác định phiên bản pháp luật áp dụng.' if status==Stop.NEED_MORE_FACTS else 'Không đủ bằng chứng đã xác minh để kết luận.'
             draft=AdjudicationDraft(answer_summary=summary,claims=[],applicable_law_versions=[],assumptions=assumptions,limitations=state.gaps)
@@ -220,6 +229,7 @@ class OnlinePipeline:
             selected_by_id={item.unit_id:item for item in selected}
             reference_items=[selected_by_id[evidence_id] for evidence_id in used_ids if evidence_id in selected_by_id] if used_ids else selected
             refs=citations(reference_items)
+        trace.timings_ms['adjudication']=round((time.perf_counter()-adjudication_started)*1000,2)
         warnings+=generation_warnings
         if conflicts:
             conflict_ids=list(dict.fromkeys(uid for pair in conflicts for uid in pair)); conflict_items=[x for x in selected if x.unit_id in conflict_ids]
@@ -229,6 +239,7 @@ class OnlinePipeline:
         # public answer surface, while retaining selected evidence in the trace.
         reference_items=[] if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS} else (
           [item for item in selected if item.unit_id in {citation.evidence_id for citation in refs}] if refs else selected)
+        reference_audit_started=time.perf_counter()
         ok,problems=reference_audit(answer,reference_items,refs,draft.claims)
         if not ok and draft.claims:
             repaired_answer,repaired_items,repaired_claims=_repair_references(selected,draft.claims)
@@ -253,6 +264,7 @@ class OnlinePipeline:
             answer='Không thể tạo câu trả lời có trích dẫn được xác minh.'; refs=[]; status=Stop.INSUFFICIENT_EVIDENCE; warnings+=problems
             state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['reference_audit']))})
             draft=draft.model_copy(update={'claims':[],'applicable_law_versions':[],'limitations':state.gaps})
+        trace.timings_ms['reference_audit']=round((time.perf_counter()-reference_audit_started)*1000,2)
         public_evidence_ids={citation.evidence_id for citation in refs}
         temporal_fallback_ids=[
           x.unit_id for x in selected

@@ -7,7 +7,7 @@ from .providers import HttpJsonProvider,OllamaProvider
 
 SAFE_FACT_FIELDS={'actor','contract_type','notice_days','worked_months','notice_exception',
   'special_occupation','protected_status','service_years','age','minor','disabled',
-  'work_category','termination_basis','force_majeure_exception','mutual_termination_agreement','travel_days'}
+  'work_category','termination_basis','force_majeure_exception','mutual_termination_agreement','travel_days','training_costs'}
 
 def _fold(value):
     normalized=unicodedata.normalize('NFD',str(value).lower()).replace('đ','d')
@@ -19,6 +19,8 @@ def _entailed(field,value,quote):
         return (value=='EMPLOYEE' and any(x in folded for x in ('toi ','nguoi lao dong'))) or (value=='EMPLOYER' and any(x in folded for x in ('cong ty','nguoi su dung lao dong')))
     if field=='contract_type':
         return (value=='INDEFINITE' and 'khong xac dinh thoi han' in folded) or (value=='FIXED_TERM' and 'xac dinh thoi han' in folded and 'khong xac dinh' not in folded) or (value=='PROBATION' and 'thu viec' in folded)
+    if field=='notice_days' and value==0:
+        return bool(re.search(r'\b(?:khong|chua)\s+(?:he\s+)?(?:bao|thong bao)\s+truoc|\bnghi\s+ngay\b',folded))
     if field in {'notice_days','worked_months','service_years','age','travel_days'}:
         try: return bool(re.search(r'(?<!\d)'+re.escape(str(int(value)))+r'(?!\d)',quote))
         except (TypeError,ValueError): return False
@@ -27,6 +29,7 @@ def _entailed(field,value,quote):
     if field=='special_occupation':
         return (value is False and 'khong thuoc' in folded and 'dac thu' in folded) or (value is True and 'dac thu' in folded and 'khong thuoc' not in folded)
     if field=='protected_status': return rendered in folded or value=='MATERNITY' and any(x in folded for x in ('mang thai','thai san','nuoi con'))
+    if field=='training_costs': return 'chi phi dao tao' in folded
     return False
 
 def _verified_candidate(candidate:FactCandidate,query:str)->FactCandidate|None:
