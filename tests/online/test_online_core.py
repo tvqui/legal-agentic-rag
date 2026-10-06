@@ -657,7 +657,7 @@ class AgentBoundaryTests(unittest.TestCase):
             def structured(self,*args): return {'decisions':[{'evidence_id':'invented','relevant':True,'supports_claim':True,
               'conditions_status':'SATISFIED','exception_status':'NOT_TRIGGERED','audit_status':'PASS','reasons':[]}]}
         item=Evidence(unit_id='real',retrieval_method='policy',document_id='doc',document_number='45/2019/QH14',
-          article_number='35',text='Quy định trực tiếp.',source_text='Quy định trực tiếp.')
+          article_number='36',text='Quy định trực tiếp.',source_text='Quy định trực tiếp.')
         auditor=LegalApplicabilityAuditor(ApplicabilityConfig(mode='hybrid'),Store()); auditor.provider=Provider()
         accepted,decisions,warnings=auditor.audit([item],'Có đúng luật không?',['TERMINATION'],{'actor':'EMPLOYER'},'ASSESS_LEGALITY')
         self.assertTrue(accepted); self.assertEqual(decisions[0].evidence_id,'real')

@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import date,timedelta
 from difflib import SequenceMatcher
 from .compression import compress_evidence
+from .taxonomy import requirement_evidence,locator_matches
 from .models import ApplicabilityDecision,Evidence,EvidencePlan,EvidenceState,EvidenceSlot,SlotStatus,VerifiedEvidenceItem,VerifiedEvidencePack
 
 DELEGATION_PHRASES=(
@@ -32,7 +33,9 @@ def state_for(items:list[Evidence],plan:EvidencePlan|list[str],query_date:str|No
     verified=[x for x in items if x.verified]; mapping={}
     for slot in [*mandatory,*conditional]:
         ids=[]; fallback_ids=[]
-        if slot=='governing_rule': ids=[x.unit_id for x in verified if x.provision_version_id and x.kind=='PROVISION']
+        if isinstance(plan,EvidencePlan) and slot in plan.slot_requirements:
+            ids=requirement_evidence(verified,plan.slot_requirements[slot])
+        elif slot=='governing_rule': ids=[x.unit_id for x in verified if x.provision_version_id and x.kind=='PROVISION']
         elif slot in {'authority','official_source'}:
             ids=[x.unit_id for x in verified if x.official_source and x.source_catalog_status=='VERIFIED']
             fallback_ids=[x.unit_id for x in verified if x.authority_rank>0 and x.source_url] if allow_document_temporal_fallback else []
@@ -88,7 +91,27 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
         if identity in seen_identity: continue
         seen_identity.add(identity); ordered.append(item)
     selected=[]; selected_ids=set()
-    for slot in plan.mandatory_slots:
+    # Allocate scarce room to explicit legal requirements first. These items
+    # often satisfy the generic source/version slots too, avoiding a redundant
+    # high-scoring item that crowds out the last required clause or point.
+    slot_order=([slot for slot in plan.mandatory_slots if slot in plan.slot_requirements]
+      +[slot for slot in plan.mandatory_slots if slot not in plan.slot_requirements])
+    for slot in slot_order:
+        if slot in plan.slot_requirements:
+            # Preserve each required group before filling remaining room by
+            # score. A one-item probe cannot satisfy a multi-clause requirement.
+            for alternatives in plan.slot_requirements[slot]:
+                if any(any(locator_matches(item,locator) for locator in alternatives) for item in selected):
+                    continue
+                matches=[item for item in ordered if item.verified and any(locator_matches(item,locator) for locator in alternatives)]
+                matches.sort(key=lambda item:(-item.score,-item.authority_rank,item.unit_id))
+                if matches and len(selected)<limit:
+                    chosen=matches[0]
+                    selected.append(chosen); selected_ids.add(chosen.unit_id)
+            continue
+        existing=state_for(selected,EvidencePlan(mandatory_slots=[slot]),query_date,allow_document_temporal_fallback).slots[slot]
+        if existing.status==SlotStatus.FOUND_VERIFIED:
+            continue
         if slot=='legal_consequences':
             probe=state_for(ordered,EvidencePlan(mandatory_slots=[slot]),query_date,allow_document_temporal_fallback).slots[slot]
             if probe.status in {SlotStatus.FOUND_VERIFIED,SlotStatus.FOUND}:

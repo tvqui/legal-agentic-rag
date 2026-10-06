@@ -75,9 +75,17 @@ class QueryAnalysis(BaseModel):
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
     fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)
+    legal_subissues:list[str]=Field(default_factory=list)
     in_scope:bool=True
+
+class LegalLocator(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    documents:list[str]=Field(min_length=1); article:str
+    clause:str|None=None; point:str|None=None
+
 class EvidencePlan(BaseModel):
     mandatory_slots:list[str]; conditional_slots:list[str]=Field(default_factory=list)
+    slot_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
 class Evidence(BaseModel):
     unit_id:str; score:float=0; retrieval_method:str; rank:int=0; component_scores:dict[str,float]=Field(default_factory=dict)
     document_id:str|None=None; instrument_id:str|None=None; provision_identity_id:str|None=None

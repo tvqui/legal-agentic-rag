@@ -2,6 +2,7 @@ from __future__ import annotations
 import json
 import unicodedata
 from .audit import applicability
+from .taxonomy import classify_subissues,taxonomy_exclusion
 from .config import ApplicabilityConfig
 from .errors import StructuredOutputError
 from .models import ApplicabilityBatch,ApplicabilityDecision,Evidence
@@ -117,6 +118,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
 
     def _deterministic(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str):
         relevant=applicability(items,query,issues); accepted_ids={x.unit_id for x in relevant}; decisions=[]
+        subissues=classify_subissues(query,facts,issues)
         for item in items:
             matched=item.unit_id in accepted_ids or item.retrieval_method=='policy' or 'policy' in item.component_scores
             text=' '.join(x for x in (item.source_text,item.text) if x).lower(); folded=_fold(text)
@@ -125,7 +127,12 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             unlawful_employee_exit=(facts.get('contract_type')=='INDEFINITE' and facts.get('notice_exception') is False
               and isinstance(facts.get('notice_days'),int) and facts['notice_days']<45)
             intent=facts.get('query_intent'); basis=facts.get('termination_basis')
-            if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36':
+            exclusion=taxonomy_exclusion(item,subissues,facts)
+            if exclusion:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
+                  conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
+                  reasons=[exclusion]+(['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'] if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36' else []))
+            elif employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36':
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'])
             elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='UNKNOWN',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['SPECIAL_OCCUPATION_NOT_ESTABLISHED'])

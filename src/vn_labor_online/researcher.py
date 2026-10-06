@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json,re,unicodedata
 from .analysis import ISSUES,missing_fact_questions
+from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION
 from .config import ResearcherConfig
 from .models import FactCandidate,QueryAnalysis,ResearcherResult
 from .providers import HttpJsonProvider,OllamaProvider
@@ -54,7 +55,7 @@ class LegalResearcher:
 
     def enrich(self,analysis:QueryAnalysis,query:str,context:list[str])->tuple[QueryAnalysis,list[str]]:
         if not self.provider: return analysis,[]
-        payload={'query':query,'recent_context':context[-4:],'deterministic_issues':analysis.legal_issues,
+        payload={'query':query,'recent_context':context[-4:],'deterministic_issues':analysis.legal_issues,'deterministic_subissues':analysis.legal_subissues,'taxonomy_version':TAXONOMY_VERSION,
           'confirmed_facts':analysis.facts,'requested_outcome':analysis.requested_outcome,
           'allowed_issue_labels':sorted(ISSUES),'allowed_fact_fields':sorted(SAFE_FACT_FIELDS)}
         system="""You are the Researcher of a Vietnamese labour-law retrieval system.
@@ -74,9 +75,11 @@ The result improves retrieval recall and never counts as legal evidence. Return 
                 normalized=' '.join(value.split()).strip()
                 if 3<=len(normalized)<=300 and normalized.casefold()!=query.casefold() and normalized not in queries:
                     queries.append(normalized)
+            subissues=classify_subissues(query,facts,issues)
+            issues=parent_issues(issues,subissues)
             missing=missing_fact_questions(issues,analysis.requested_outcome,facts,query.lower(),analysis.query_date)
             all_candidates=list({(item.field,item.char_start,item.char_end,str(item.value)):item for item in analysis.fact_candidates+candidates}.values())
-            updated=analysis.model_copy(update={'legal_issues':issues,'facts':facts,'missing_facts':missing,
+            updated=analysis.model_copy(update={'legal_issues':issues,'legal_subissues':subissues,'facts':facts,'missing_facts':missing,
               'retrieval_queries':queries[:self.cfg.max_queries],'ontology_features':result.ontology,
               'fact_candidates':all_candidates[:40]})
             return updated,[]

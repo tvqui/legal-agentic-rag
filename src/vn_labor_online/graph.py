@@ -21,6 +21,20 @@ GAP_RELATIONS={
   'transitional_rule':{'REFERENCES':{'IN','OUT'},'VERSION_OF':{'IN','OUT'},'PART_OF':{'IN','OUT'}},
 }
 
+# Profile-specific gaps guide traversal through the existing graph. No new
+# node/edge type is assumed, and the configured budgets still apply.
+PROFILE_SLOT_NAMES={
+  'employee_unilateral_rule','employer_unilateral_rule','employer_protection_rule',
+  'expiry_rule','dismissal_ground_rule','dismissal_procedure_rule','restructuring_ground_rule',
+  'employment_plan_rule','enterprise_transfer_rule','employer_legal_consequences',
+  'severance_rule','job_loss_allowance_rule','public_holiday_rule','personal_leave_rule',
+  'unpaid_leave_rule','unused_leave_payment_rule','agreement_rule','travel_time_rule',
+  'leave_base_rule','seniority_rule','proportional_leave_rule','leave_calculation_rule',
+  'legal_classification','legal_consequences','withdrawal_rule','special_notice_delegation','special_notice_rule',
+}
+for slot in PROFILE_SLOT_NAMES:
+    GAP_RELATIONS.setdefault(slot,{'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'IMPLEMENTS':{'IN'}})
+
 class GraphExplorer:
     def __init__(self,store:ArtifactStore,cfg:GraphConfig):
         self.store=store; self.cfg=cfg; self.adj=defaultdict(list); self.degree=defaultdict(int)

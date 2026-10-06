@@ -6,6 +6,7 @@ from datetime import date
 from .artifact_store import ArtifactStore
 from .config import OnlineConfig
 from .errors import IndexUnavailable
+from .taxonomy import locator_matches
 from .models import Evidence,ExplicitReference
 
 def _norm(value): return re.sub(r'[^0-9A-Z]','',str(value or '').upper().replace('Đ','D'))
@@ -154,7 +155,7 @@ class Retriever:
         unique.sort(key=lambda uid:(-int(self.store.units_by_id[uid].get('authority_rank') or 0),uid))
         limit=k or self.cfg.retrieval.issue_anchor_top_k
         return [as_evidence(self.store.units_by_id[uid],.5,'issue',i,{'issue':.5}) for i,uid in enumerate(unique[:limit],1)]
-    def policy_anchor(self,issues:list[str],facts:dict)->list[Evidence]:
+    def policy_anchor(self,issues:list[str],facts:dict,plan=None)->list[Evidence]:
         """Deterministic anchors for mandatory rule chains identified at intake.
 
         Semantic retrieval is still used, but it must not omit the governing
@@ -188,6 +189,10 @@ class Retriever:
                 if int(facts.get('service_years') or 0)>=5: locations.add(('114','',''))
                 if isinstance(facts.get('worked_months'),int) and facts['worked_months']<12:
                     locations|={('113','2',''),('66','1','')}
+        if plan is not None and plan.slot_requirements:
+            # Structured profiles carry code-family/date-aware locators. Do not
+            # mix legacy 2019 anchors into a historical or alternate mechanism.
+            return self.profile_anchors(plan)
         if not locations: return []
         matched=[]
         for unit in self.store.units:
@@ -209,6 +214,28 @@ class Retriever:
             by_location.setdefault(location,unit)
         return [as_evidence(unit,1.0-index*.01,'policy',index,{'policy':1.0})
           for index,unit in enumerate(by_location.values(),1)]
+    def profile_anchors(self,plan)->list[Evidence]:
+        chosen={}
+        for groups in plan.slot_requirements.values():
+            for alternatives in groups:
+                matches=[unit for unit in self.store.units if any(locator_matches(unit,locator) for locator in alternatives)]
+                # Keep versions from each instrument; temporal filtering chooses
+                # the applicable one later. Prefer exact locator granularity.
+                matches.sort(key=lambda unit:(sum(bool(unit.get(field)) for field in ('clause_number','point_number')),
+                  -int(unit.get('authority_rank') or 0),unit['unit_id']))
+                counts={}
+                for unit in matches:
+                    # Prefer the requested article/clause container, retaining
+                    # each instrument/version without flooding the seed list.
+                    key=(unit.get('document_number'),unit.get('valid_from') or unit.get('effective_from'),unit.get('valid_to') or unit.get('effective_to'))
+                    if key in counts: continue
+                    counts[key]=True; chosen.setdefault(unit['unit_id'],unit)
+        # One seed per structural location first, then the alternate documents.
+        ordered=sorted(chosen.values(),key=lambda unit:(unit.get('document_number')!='18/VBHN-VPQH',
+          int(unit.get('article_number')) if str(unit.get('article_number')).isdigit() else 1000,
+          str(unit.get('clause_number') or ''),str(unit.get('point_number') or ''),unit['unit_id']))
+        return [as_evidence(unit,1.0,'policy',index,{'policy':1.0}) for index,unit in enumerate(ordered,1)]
+
     def case_law(self,query:str,k:int|None=None)->list[Evidence]:
         """Dedicated judicial channel so case questions do not depend on a global top-k."""
         terms={term for term in re.findall(r'\w+',query.lower()) if len(term)>2}

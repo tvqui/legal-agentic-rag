@@ -14,6 +14,7 @@ from .models import QueryRequest,AnswerResponse,Trace,Stop,Route,SlotStatus,Adju
 from .retrieval import Retriever,authority_filter,temporal_filter,rerank
 from .researcher import LegalResearcher
 from .trace import persist
+from .taxonomy import TAXONOMY_VERSION
 
 def _actionable_gaps(gaps,items,provisional):
     result=[]
@@ -74,14 +75,14 @@ class OnlinePipeline:
         if analysis.query_date_precision in {'MONTH','YEAR'}:
             assumptions.append(f'Mốc thời gian chỉ chính xác theo {"tháng" if analysis.query_date_precision=="MONTH" else "năm"}; kiểm tra các phiên bản giao với khoảng {analysis.query_date} đến {analysis.query_date_end}.')
         trace.events.append({'event':'query_intake','raw_preserved':env.raw_query==request.question,'conversation_turns':len(env.conversation_context),'evidence_treated_as_data':True})
-        trace.events.append({'event':'analysis','issues':analysis.legal_issues,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
+        trace.events.append({'event':'analysis','issues':analysis.legal_issues,'subissues':analysis.legal_subissues,'taxonomy_version':TAXONOMY_VERSION,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
           'query_date_precision':analysis.query_date_precision,'query_date':analysis.query_date,'query_date_end':analysis.query_date_end,
           'fact_candidates':[candidate.model_dump(mode='json') for candidate in analysis.fact_candidates]})
         trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'issues':analysis.legal_issues,
           'retrieval_queries':analysis.retrieval_queries,'ontology':analysis.ontology_features.model_dump(mode='json'),
           'verified_fact_candidates':sum(candidate.verified for candidate in analysis.fact_candidates),'fallback':bool(research_warnings)})
         trace.events.append({'event':'freshness','corpus_snapshot_as_of':snapshot,'warning':freshness_relevant and 'CORPUS_MAY_BE_STALE' in warnings})
-        trace.events.append({'event':'evidence_plan','mandatory_slots':plan.mandatory_slots,'conditional_slots':plan.conditional_slots})
+        trace.events.append({'event':'evidence_plan','mandatory_slots':plan.mandatory_slots,'conditional_slots':plan.conditional_slots,'slot_requirements':{slot:[[locator.model_dump(mode='json') for locator in group] for group in groups] for slot,groups in plan.slot_requirements.items()}})
         if not analysis.in_scope:
             trace.stop_reason=Stop.ABSTAIN; trace.reference_audit='PASS'; trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2)
             trace.events.append({'event':'scope_gate','status':'ABSTAIN','reason':'OUT_OF_LABOR_LAW_SCOPE'}); persist(trace,self.cfg.trace_dir)
@@ -104,7 +105,7 @@ class OnlinePipeline:
             lists.append(exact+descendants)
         exact_only=bool(analysis.route==Route.DIRECT and lists and lists[0])
         if not exact_only:
-            policy=self.retriever.policy_anchor(analysis.legal_issues,analysis.facts)
+            policy=self.retriever.policy_anchor(analysis.legal_issues,analysis.facts,plan)
             if policy: lists.append(policy)
             retrieval_queries=[env.normalized_query]+analysis.retrieval_queries
             if self.cfg.retrieval.bm25_enabled:
