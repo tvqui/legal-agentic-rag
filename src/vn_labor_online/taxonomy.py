@@ -9,12 +9,18 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v1'
+TAXONOMY_VERSION = 'labor-subissues-v2'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
 # Mechanisms and remedies deliberately coexist rather than being exclusive siblings.
 SUBISSUES = {
+    'CONTRACT.PARTY_DEFINITIONS':'Định nghĩa người lao động và người sử dụng lao động',
+    'CONTRACT.RELATIONSHIP_QUALIFICATION':'Xác định quan hệ lao động theo nội dung thực tế',
+    'CONTRACT.EMPLOYER_INFORMATION':'Nghĩa vụ cung cấp thông tin khi giao kết',
+    'CONTRACT.PROHIBITED_ACTS':'Hành vi bị cấm khi giao kết và thực hiện hợp đồng',
+    'CONTRACT.CONTRACT_TYPES':'Phân loại hợp đồng lao động',
+    'CONTRACT.PROBATION_PAY':'Tiền lương trong thời gian thử việc',
     'TERMINATION.EMPLOYEE_UNILATERAL': 'Người lao động đơn phương chấm dứt',
     'TERMINATION.EMPLOYER_UNILATERAL': 'Người sử dụng lao động đơn phương chấm dứt',
     'TERMINATION.MUTUAL_AGREEMENT': 'Hai bên thỏa thuận chấm dứt',
@@ -46,6 +52,20 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         if label not in found: found.append(label)
     has = lambda *terms: any(term in q for term in terms)
     intent = facts.get('query_intent')
+    employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','nlđ','nsdlđ','công ty')
+    if has('người lao động','người sử dụng lao động') and has('thế nào là','định nghĩa','được hiểu','khái niệm'):
+        add('CONTRACT.PARTY_DEFINITIONS')
+    if employment and has('đặt cọc','giữ bản chính','giữ bằng','bảo đảm bằng tiền','bảo đảm bằng tài sản'):
+        add('CONTRACT.PROHIBITED_ACTS')
+    if employment and (has('thực tập sinh','hợp đồng dịch vụ','quan hệ lao động','không ký hợp đồng')
+      or has('tên gọi') and has('hợp đồng','thỏa thuận')):
+        add('CONTRACT.RELATIONSHIP_QUALIFICATION')
+    if employment and has('cung cấp thông tin','cung cấp sai','thông tin không trung thực'):
+        add('CONTRACT.EMPLOYER_INFORMATION')
+    if has('hợp đồng lao động','hđlđ') and has('những loại','các loại','loại hợp đồng','mấy loại') and has('hiện nay','phân loại','bao nhiêu','những loại','các loại','mấy loại'):
+        add('CONTRACT.CONTRACT_TYPES')
+    if has('thử việc') and has('lương','85%','phần trăm'):
+        add('CONTRACT.PROBATION_PAY')
     quantity = bool(re.search(r'bao nhiêu ngày|số ngày|tính ngày|\b\d+\s+ngày\b',q))
     special_mechanism = False
     for label, terms in (
@@ -125,7 +145,23 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
     def rule(slot, new_article, old_article, clause=None):
         require(slot, [loc(old_article if historical else new_article, clause)])
     for key in analysis.legal_subissues:
-        if key == 'TERMINATION.EMPLOYEE_UNILATERAL':
+        if key=='CONTRACT.PARTY_DEFINITIONS':
+            require('party_definitions',*[ [loc('3',str(i))] for i in (1,2)])
+        elif key=='CONTRACT.RELATIONSHIP_QUALIFICATION':
+            require('relationship_qualification',[loc('15' if historical else '13',None if historical else '1')])
+        elif key=='CONTRACT.PROHIBITED_ACTS':
+            q=getattr(analysis,'query_text','').lower()
+            deposit=any(term in q for term in ('đặt cọc','bảo đảm bằng tiền','bảo đảm bằng tài sản','phí bảo đảm'))
+            originals=any(term in q for term in ('giữ bản chính','giữ bằng'))
+            clauses=(2,) if deposit and not originals else (1,) if originals and not deposit else (1,2)
+            require('prohibited_contract_acts',*[[loc('20' if historical else '17',str(i))] for i in clauses])
+        elif key=='CONTRACT.EMPLOYER_INFORMATION':
+            require('employer_information',[loc('19' if historical else '16','1')])
+        elif key=='CONTRACT.CONTRACT_TYPES':
+            require('contract_types',*[[loc('22' if historical else '20','1',point)] for point in (('a','b','c') if historical else ('a','b'))])
+        elif key=='CONTRACT.PROBATION_PAY':
+            require('probation_pay',[loc('28' if historical else '26')])
+        elif key == 'TERMINATION.EMPLOYEE_UNILATERAL':
             basis = analysis.facts.get('termination_basis')
             if not historical and basis in {'LATE_WAGE', 'EMPLOYER_MISINFORMATION', 'SEXUAL_HARASSMENT'}:
                 point = {'LATE_WAGE':'b', 'EMPLOYER_MISINFORMATION':'g', 'SEXUAL_HARASSMENT':'d'}[basis]
@@ -142,6 +178,7 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             elif historical and analysis.facts.get('contract_type') == 'INDEFINITE':
                 require('employee_unilateral_rule', [loc('37', '3')])
                 require('notice_requirement', [loc('37', '3')])
+                require('historical_notice_exception', [loc('156')])
             else: rule('employee_unilateral_rule', '35', '37')
         elif key == 'TERMINATION.EMPLOYER_UNILATERAL':
             rule('employer_unilateral_rule', '36', '38')
@@ -240,6 +277,11 @@ def plan_with_profiles(analysis: QueryAnalysis, legacy_plan):
     mandatory = list(dict.fromkeys(mandatory + list(requirements)))
     if requirements:
         mandatory = [slot for slot in mandatory if slot != 'mandatory_reference']
+    if analysis.legal_subissues and all(key.startswith('CONTRACT.') for key in analysis.legal_subissues) and set(analysis.legal_issues)<={'CONTRACT','GENERAL'}:
+        # A rule explanation may state its conditions without pretending to
+        # establish the facts of a specific case. The dated locations replace
+        # broad keyword-based condition/reference slots.
+        mandatory=[slot for slot in mandatory if slot not in {'conditions','exceptions'}]
     return legacy_plan.model_copy(update={'mandatory_slots': mandatory, 'slot_requirements': requirements})
 
 

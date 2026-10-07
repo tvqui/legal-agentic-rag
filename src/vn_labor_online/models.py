@@ -77,6 +77,7 @@ class QueryAnalysis(BaseModel):
     fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)
     legal_subissues:list[str]=Field(default_factory=list)
     in_scope:bool=True
+    query_text:str=''
 
 class LegalLocator(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -139,6 +140,21 @@ class AdjudicationDraft(BaseModel):
     model_config=ConfigDict(extra='forbid')
     answer_summary:str; claims:list[Claim]; applicable_law_versions:list[ApplicableLawVersion]
     assumptions:list[str]=Field(default_factory=list); limitations:list[str]=Field(default_factory=list)
+class ProviderClaim(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    text:str=Field(min_length=1,max_length=1600)
+    evidence_ids:list[str]=Field(min_length=1,max_length=12)
+class ProviderClaims(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    claims:list[ProviderClaim]=Field(min_length=1,max_length=12)
+
+class ProviderApplicability(BaseModel):
+    """Model judges facts; code assigns IDs and derives the final audit status."""
+    model_config=ConfigDict(extra='forbid',strict=True)
+    relevant:bool
+    supports_claim:bool
+    conditions_status:Literal['SATISFIED','NOT_SATISFIED','UNKNOWN','NOT_APPLICABLE']
+    exception_status:Literal['TRIGGERED','NOT_TRIGGERED','UNKNOWN','NOT_APPLICABLE']
 class Trace(BaseModel):
     trace_id:str; query_id:str; build_id:str; route:Route; route_reason:str; retrieval_rounds:int=0
     nodes_visited:int=0; edges_visited:int=0; timings_ms:dict[str,float]=Field(default_factory=dict); events:list[dict[str,Any]]=Field(default_factory=list)

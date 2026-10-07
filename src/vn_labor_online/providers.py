@@ -7,7 +7,21 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 
-from .errors import LLMProviderError
+from .errors import LLMProviderError,StructuredOutputError
+
+def _unique_object(pairs):
+    result={}
+    for key,value in pairs:
+        if key in result: raise StructuredOutputError('DUPLICATE_JSON_KEY')
+        result[key]=value
+    return result
+
+def _decode_content(content):
+    if not isinstance(content,str): raise StructuredOutputError('NON_TEXT_STRUCTURED_OUTPUT')
+    try: value=json.loads(content,object_pairs_hook=_unique_object)
+    except json.JSONDecodeError as exc: raise StructuredOutputError('INVALID_JSON') from exc
+    if not isinstance(value,dict): raise StructuredOutputError('NON_OBJECT_STRUCTURED_OUTPUT')
+    return value
 
 
 class BaseProvider(ABC):
@@ -57,7 +71,9 @@ class HttpJsonProvider(BaseProvider):
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = json.loads(response.read())
             content = raw["choices"][0]["message"]["content"]
-            return json.loads(content) if isinstance(content, str) else content
+            return _decode_content(content)
+        except StructuredOutputError:
+            raise
         except Exception as exc:
             raise LLMProviderError(str(exc)) from exc
 
@@ -75,11 +91,12 @@ class HttpJsonProvider(BaseProvider):
 
 class OllamaProvider(BaseProvider):
     def __init__(self, url: str = "http://127.0.0.1:11434/api/chat", model: str = "qwen3:4b",
-                 timeout: float = 120, health_url: str | None = None):
+                 timeout: float = 120, health_url: str | None = None, max_output_tokens: int = 2048):
         self.url = url
         self.model = model
         self.timeout = timeout
         self.health_url = health_url or urllib.parse.urljoin(url, "/api/tags")
+        self.max_output_tokens=max_output_tokens
 
     def structured(self, system: str, user: str, schema: dict) -> dict:
         payload = {
@@ -87,7 +104,7 @@ class OllamaProvider(BaseProvider):
             "stream": False,
             "format": schema,
             "think": False,
-            "options": {"temperature": 0, "seed": 0},
+            "options": {"temperature": 0, "seed": 0,"num_predict":self.max_output_tokens},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         try:
@@ -97,7 +114,10 @@ class OllamaProvider(BaseProvider):
             )
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = json.loads(response.read())
-            return json.loads(raw["message"]["content"])
+            if raw.get('done_reason')=='length': raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
+            return _decode_content(raw['message']['content'])
+        except StructuredOutputError:
+            raise
         except Exception as exc:
             raise LLMProviderError(str(exc)) from exc
 

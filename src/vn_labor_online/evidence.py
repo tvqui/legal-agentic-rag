@@ -2,6 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date,timedelta
 from difflib import SequenceMatcher
+from .answer_quality import language_issues
 from .compression import compress_evidence
 from .taxonomy import requirement_evidence,locator_matches
 from .models import ApplicabilityDecision,Evidence,EvidencePlan,EvidenceState,EvidenceSlot,SlotStatus,VerifiedEvidenceItem,VerifiedEvidencePack
@@ -12,6 +13,12 @@ DELEGATION_PHRASES=(
     'theo quy định của chính phủ',
     'được thực hiện theo quy định của chính phủ',
 )
+
+def _source_penalty(item:Evidence)->int:
+    """Rank existing alternatives; never guess missing OCR words or edit bytes."""
+    text=item.source_text or item.text
+    suspect=('nguời','ngưòi','ngàỵ','sừ dụng','tố chức','phải có lực hành vi')
+    return len(language_issues(text,allow_admin=True))+sum(text.lower().count(term) for term in suspect)
 
 def extend_plan_for_evidence(plan:EvidencePlan,items:list[Evidence],facts:dict,query_date:str|None)->EvidencePlan:
     """Add only evidence-driven mandatory slots before graph expansion."""
@@ -83,13 +90,21 @@ def state_for(items:list[Evidence],plan:EvidencePlan|list[str],query_date:str|No
 
 def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,allow_document_temporal_fallback:bool,limit:int)->tuple[list[Evidence],EvidenceState]:
     """Greedily preserve evidence that fills mandatory slots before score-only fill."""
-    ordered=[]; seen_identity=set()
+    ordered=[]; seen_identity=set(); seen_content=set()
     for item in items:
         # Collapse duplicate retrieval hits, while retaining distinct legal
         # versions so the conflict detector can compare overlapping versions.
         identity=(item.provision_identity_id,item.provision_version_id or item.unit_id)
         if identity in seen_identity: continue
-        seen_identity.add(identity); ordered.append(item)
+        seen_identity.add(identity)
+        # Collapse only byte-equivalent normalized passages at the same legal
+        # location in the current code/consolidation family. Changed and old
+        # provisions remain distinct; all conflicts are checked on input items.
+        family='BLLD_2019' if item.document_number in {'45/2019/QH14','18/VBHN-VPQH'} else item.document_number or item.document_id or item.unit_id
+        content=(family,item.article_number,item.clause_number,item.point_number,
+          item.valid_from,item.valid_to,' '.join((item.source_text or item.text).split()))
+        if content in seen_content: continue
+        seen_content.add(content); ordered.append(item)
     selected=[]; selected_ids=set()
     # Allocate scarce room to explicit legal requirements first. These items
     # often satisfy the generic source/version slots too, avoiding a redundant
@@ -104,7 +119,9 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
                 if any(any(locator_matches(item,locator) for locator in alternatives) for item in selected):
                     continue
                 matches=[item for item in ordered if item.verified and any(locator_matches(item,locator) for locator in alternatives)]
-                matches.sort(key=lambda item:(-item.score,-item.authority_rank,item.unit_id))
+                matches.sort(key=lambda item:(not item.provision_temporal_verified,
+                  not (item.official_source and item.source_catalog_status=='VERIFIED'),
+                  -item.authority_rank,_source_penalty(item),-item.score,item.unit_id))
                 if matches and len(selected)<limit:
                     chosen=matches[0]
                     selected.append(chosen); selected_ids.add(chosen.unit_id)
@@ -128,7 +145,10 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
         ranked.sort(key=lambda row:(not row[0],-row[1],row[2].unit_id))
         if ranked and ranked[0][2].unit_id not in selected_ids and len(selected)<limit:
             selected.append(ranked[0][2]); selected_ids.add(ranked[0][2].unit_id)
-    for item in ordered:
+    # Profiles define the complete mandatory legal chain; don't pad that chain
+    # with unrelated high-ranked passages. Generic and exact-article searches
+    # retain their existing selection budget.
+    for item in ([] if plan.slot_requirements else ordered):
         if len(selected)>=limit: break
         if item.unit_id not in selected_ids:
             selected.append(item); selected_ids.add(item.unit_id)
@@ -141,7 +161,9 @@ def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceS
       clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),valid_from=x.valid_from,
       valid_to=x.valid_to,official_url=x.source_url,authority_rank=x.authority_rank,binding=x.binding,
       official_source=x.official_source,provenance_span=x.provenance_span,
-      applicability=by_decision.get(x.unit_id),warnings=x.audit_warnings) for x in items if x.verified]
+      applicability=by_decision.get(x.unit_id),warnings=x.audit_warnings) for x in items if x.verified
+      and (decisions is None or x.unit_id in by_decision and by_decision[x.unit_id].audit_status=='PASS'
+        and by_decision[x.unit_id].relevant and by_decision[x.unit_id].supports_claim)]
     return VerifiedEvidencePack(query=query,query_date=query_date,facts=facts,requested_outcome=requested_outcome,
       coverage_state=state,evidence=packed)
 

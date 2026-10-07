@@ -415,7 +415,7 @@ class OnlineTests(unittest.TestCase):
                   'applicable_law_versions':[],'assumptions':[],'limitations':[]}
         adjudicator.provider=Provider(item.unit_id)
         draft,warnings=adjudicator.generate(pack,False,[])
-        self.assertFalse(warnings); self.assertNotIn('Điều 999',draft.answer_summary); self.assertIn(f'[{item.unit_id}]',draft.answer_summary)
+        self.assertTrue(warnings); self.assertNotIn('Điều 999',draft.answer_summary); self.assertIn(f'[{item.unit_id}]',draft.answer_summary)
     def test_reference_audit_rejects_bad_citation(self):
         item=deterministic_audit(self.store,Retriever(self.store,self.cfg).bm25('lương',1),None); self.assertFalse(reference_audit('Sai [Article 999]',item,citations(item))[0])
     def test_reference_audit_ignores_bracketed_legal_formula(self):
@@ -660,7 +660,8 @@ class AgentBoundaryTests(unittest.TestCase):
           article_number='36',text='Quy định trực tiếp.',source_text='Quy định trực tiếp.')
         auditor=LegalApplicabilityAuditor(ApplicabilityConfig(mode='hybrid'),Store()); auditor.provider=Provider()
         accepted,decisions,warnings=auditor.audit([item],'Có đúng luật không?',['TERMINATION'],{'actor':'EMPLOYER'},'ASSESS_LEGALITY')
-        self.assertTrue(accepted); self.assertEqual(decisions[0].evidence_id,'real')
+        self.assertFalse(accepted); self.assertEqual(decisions[0].evidence_id,'real')
+        self.assertEqual(decisions[0].audit_status,'UNRESOLVED')
         self.assertTrue(any(x.startswith('APPLICABILITY_PROVIDER_ERROR:') for x in warnings))
 
 if __name__=='__main__': unittest.main()

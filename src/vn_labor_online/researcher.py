@@ -3,7 +3,7 @@ import json,re,unicodedata
 from .analysis import ISSUES,missing_fact_questions
 from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION
 from .config import ResearcherConfig
-from .models import FactCandidate,QueryAnalysis,ResearcherResult
+from .models import FactCandidate,QueryAnalysis,ResearcherResult,Route
 from .providers import HttpJsonProvider,OllamaProvider
 
 SAFE_FACT_FIELDS={'actor','contract_type','notice_days','worked_months','notice_exception',
@@ -48,13 +48,37 @@ class LegalResearcher:
     def __init__(self,cfg:ResearcherConfig):
         self.cfg=cfg; self.provider=None
         if cfg.mode=='ollama':
-            self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:8b',cfg.timeout_seconds,cfg.health_url)
+            self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:8b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens)
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP researcher mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
 
     def enrich(self,analysis:QueryAnalysis,query:str,context:list[str])->tuple[QueryAnalysis,list[str]]:
-        if not self.provider: return analysis,[]
+        if self.execution_path(analysis)!='MODEL_REQUESTED': return analysis,[]
+        return self._enrich_model(analysis,query,context)
+
+    def execution_path(self,analysis:QueryAnalysis)->str:
+        if not self.provider: return 'DETERMINISTIC'
+        if self.cfg.adaptive:
+            if not analysis.in_scope: return 'SKIPPED_SCOPE_GATE'
+            if analysis.missing_facts: return 'SKIPPED_FACT_GATE'
+            if analysis.route==Route.DIRECT and analysis.requested_outcome=='LOOKUP': return 'SKIPPED_EXACT_LOOKUP'
+            parents={key.split('.')[0] for key in analysis.legal_subissues}
+            allowed=parents|{'CONTRACT'}
+            if analysis.facts.get('termination_basis') or 'CONTRACT.PROBATION_PAY' in analysis.legal_subissues:
+                allowed.add('WAGE')
+            q=analysis.query_text.lower()
+            if 'CONTRACT.RELATIONSHIP_QUALIFICATION' in analysis.legal_subissues and any(
+              term in q for term in ('tên gọi','hđlđ','hợp đồng lao động','quan hệ lao động')) and not any(
+              term in q for term in ('mức lương','tiền lương','trả lương','lương tối thiểu','bao nhiêu','đòi lương')):
+                # "Thực tập sinh không lương" can be a relationship-label
+                # question, rather than an additional wage entitlement request.
+                allowed.add('WAGE')
+            if analysis.legal_subissues and not analysis.missing_facts and set(analysis.legal_issues)<=allowed and analysis.requested_outcome not in {'COMPARE','FIND_CASE'}:
+                return 'SKIPPED_KNOWN_PROFILE'
+        return 'MODEL_REQUESTED'
+
+    def _enrich_model(self,analysis,query,context):
         payload={'query':query,'recent_context':context[-4:],'deterministic_issues':analysis.legal_issues,'deterministic_subissues':analysis.legal_subissues,'taxonomy_version':TAXONOMY_VERSION,
           'confirmed_facts':analysis.facts,'requested_outcome':analysis.requested_outcome,
           'allowed_issue_labels':sorted(ISSUES),'allowed_fact_fields':sorted(SAFE_FACT_FIELDS)}

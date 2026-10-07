@@ -9,6 +9,7 @@ class StrictModel(BaseModel):
     model_config=ConfigDict(extra='forbid')
 
 class RetrievalConfig(StrictModel):
+    profile_fast_path:bool=True
     exact_lookup:bool=True; bm25_enabled:bool=True; bm25_top_k:int=Field(30,ge=1); dense_enabled:bool=True
     dense_top_k:int=Field(30,ge=1); issue_anchor_enabled:bool=True; issue_anchor_top_k:int=Field(20,ge=1)
     case_law_enabled:bool=True; case_law_top_k:int=Field(10,ge=1)
@@ -42,17 +43,21 @@ class GraphConfig(StrictModel):
         return list(dict.fromkeys(str(item).strip().upper() for item in value if str(item).strip()))
 
 class ResearcherConfig(StrictModel):
+    adaptive:bool=True
+    max_output_tokens:int=Field(1024,ge=256,le=8192)
     mode:Literal['deterministic','ollama','http']='deterministic'
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None
     timeout_seconds:float=120; max_queries:int=Field(2,ge=0,le=4)
 
 class ApplicabilityConfig(StrictModel):
+    max_output_tokens:int=Field(1536,ge=256,le=8192)
     mode:Literal['deterministic','ollama','http','hybrid']='deterministic'; fail_closed:bool=True
     provider:Literal['ollama','http']='ollama'
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None
     timeout_seconds:float=120; max_items:int=Field(10,ge=1,le=30)
 
 class AdjudicationConfig(StrictModel):
+    max_output_tokens:int=Field(2048,ge=256,le=8192)
     mode:Literal['deterministic','ollama','http']='deterministic'; fail_closed:bool=True
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None; timeout_seconds:float=120
 
@@ -90,7 +95,7 @@ def load_config(path:Path)->OnlineConfig:
         for key in ('mode','provider','url','model','api_key','health_url'):
             env_key=f'{prefix}_{key.upper()}'
             if os.getenv(env_key): configured[key]=os.environ[env_key]
-        for key in ('timeout_seconds','max_queries','max_items'):
+        for key in ('timeout_seconds','max_queries','max_items','max_output_tokens'):
             env_key=f'{prefix}_{key.upper()}'
             if os.getenv(env_key): configured[key]=float(os.environ[env_key]) if key=='timeout_seconds' else int(os.environ[env_key])
         if configured: values[section]=configured

@@ -97,7 +97,7 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     missing=missing_fact_questions(issues,outcome,facts,lower,query_date)
     if route==Route.DIRECT and refs and all(not ref.instrument_number for ref in refs):
         missing.append('Bạn đang hỏi Điều/Khoản/Điểm của văn bản pháp luật nào?')
-    return QueryAnalysis(legal_issues=issues,legal_subissues=subissues,facts=facts,explicit_references=refs,event_dates=dates+month_dates+years,query_date=query_date,query_date_end=query_date_end,
+    return QueryAnalysis(query_text=env.normalized_query,legal_issues=issues,legal_subissues=subissues,facts=facts,explicit_references=refs,event_dates=dates+month_dates+years,query_date=query_date,query_date_end=query_date_end,
       requested_outcome=outcome,temporal_intent=temporal,missing_facts=sorted(set(missing)),route=route,
       route_reason='explicit legal citation' if route==Route.DIRECT else 'multi-issue/change query' if route==Route.COMPLEX else 'single-issue query',query_date_precision=precision,fact_candidates=fact_candidates,
       in_scope=not _clearly_out_of_scope(lower,issues,refs))
@@ -171,7 +171,11 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             if facts.get('force_majeure_exception') is None:
                 missing.append('Việc trả lương chậm có do bất khả kháng, sau khi người sử dụng lao động đã tìm mọi biện pháp khắc phục, và có nằm trong giới hạn khoản 4 Điều 97 không?')
             return sorted(set(missing))
-        if basis in {'SEXUAL_HARASSMENT','EMPLOYER_MISINFORMATION'}: return sorted(set(missing))
+        if basis=='EMPLOYER_MISINFORMATION':
+            if facts.get('misinformation_material_effect') is not True:
+                missing.append('Thông tin không trung thực khi giao kết đã ảnh hưởng như thế nào đến việc thực hiện hợp đồng lao động?')
+            return sorted(set(missing))
+        if basis=='SEXUAL_HARASSMENT': return sorted(set(missing))
         required={'contract_type':'Loại hợp đồng là gì?',
           'notice_days':'Người lao động đã báo trước bao nhiêu ngày?',
           'notice_exception':'Lý do nghỉ có thuộc một trường hợp được chấm dứt không cần báo trước tại khoản 2 Điều 35 không?',
@@ -238,8 +242,11 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
             facts['force_majeure_exception']=False; facts['notice_exception']=True
     if 'quấy rối tình dục tại nơi làm việc' in q:
         facts['termination_basis']='SEXUAL_HARASSMENT'; facts['notice_exception']=True; facts['actor']='EMPLOYEE'
-    if any(term in q for term in ('cung cấp sai thông tin','cung cấp thông tin không trung thực','cung cấp khi giao kết là không trung thực')) and any(term in q for term in ('giao kết','ảnh hưởng trực tiếp','không thể thực hiện công việc')):
-        facts['termination_basis']='EMPLOYER_MISINFORMATION'; facts['notice_exception']=True; facts['actor']='EMPLOYEE'
+    if any(term in q for term in ('cung cấp sai thông tin','cung cấp thông tin sai','cung cấp sai địa điểm','cung cấp thông tin không trung thực','cung cấp khi giao kết là không trung thực')) and any(term in q for term in ('giao kết','tuyển dụng','ảnh hưởng trực tiếp','không thể thực hiện công việc')) and any(term in q for term in ('nghỉ','chấm dứt')):
+        facts['termination_basis']='EMPLOYER_MISINFORMATION'; facts['actor']='EMPLOYEE'
+        material_effect=re.search(r'(?<!không )ảnh hưởng(?: trực tiếp)? đến (?:việc )?thực hiện hợp đồng',q)
+        if material_effect and not re.search(r'không\s+ảnh hưởng',q):
+            facts['misinformation_material_effect']=True; facts['notice_exception']=True
     if any(term in q for term in ('công ty đồng ý cho','giám đốc trả lời bằng văn bản rằng công ty đồng ý','hai bên thỏa thuận chấm dứt')):
         facts['mutual_termination_agreement']=True
     if any(term in q for term in ('hủy bỏ việc đơn phương','đổi ý trước khi hết thời hạn báo trước')): facts['query_intent']='WITHDRAW_TERMINATION'

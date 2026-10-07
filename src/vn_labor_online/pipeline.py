@@ -5,7 +5,7 @@ from .analysis import intake,analyze,plan_evidence
 from .applicability import LegalApplicabilityAuditor
 from .artifact_store import ArtifactStore
 from .audit import deterministic_audit,citations,reference_audit
-from .config import OnlineConfig
+from .config import OnlineConfig,AdjudicationConfig
 from .evidence import state_for,build_verified_pack,detect_authoritative_conflicts,select_for_plan,extend_plan_for_evidence
 from .generation import LegalAdjudicator
 from .errors import IndexUnavailable
@@ -56,6 +56,7 @@ class OnlinePipeline:
             defaulted_query_date=True
         analysis_ms=round((time.perf_counter()-stage)*1000,2)
         researcher_started=time.perf_counter()
+        researcher_path=self.researcher.execution_path(analysis)
         analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
         plan=plan_evidence(analysis)
         trace=Trace(trace_id='trace_'+hashlib.sha256((env.query_id+str(time.time_ns())).encode()).hexdigest()[:16],query_id=env.query_id,
@@ -78,7 +79,7 @@ class OnlinePipeline:
         trace.events.append({'event':'analysis','issues':analysis.legal_issues,'subissues':analysis.legal_subissues,'taxonomy_version':TAXONOMY_VERSION,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
           'query_date_precision':analysis.query_date_precision,'query_date':analysis.query_date,'query_date_end':analysis.query_date_end,
           'fact_candidates':[candidate.model_dump(mode='json') for candidate in analysis.fact_candidates]})
-        trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'issues':analysis.legal_issues,
+        trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'execution':researcher_path,'issues':analysis.legal_issues,
           'retrieval_queries':analysis.retrieval_queries,'ontology':analysis.ontology_features.model_dump(mode='json'),
           'verified_fact_candidates':sum(candidate.verified for candidate in analysis.fact_candidates),'fallback':bool(research_warnings)})
         trace.events.append({'event':'freshness','corpus_snapshot_as_of':snapshot,'warning':freshness_relevant and 'CORPUS_MAY_BE_STALE' in warnings})
@@ -104,13 +105,42 @@ class OnlinePipeline:
             descendants=self.retriever.hierarchy_descendants(exact,max(0,self.cfg.max_verified_units-len(exact)))
             lists.append(exact+descendants)
         exact_only=bool(analysis.route==Route.DIRECT and lists and lists[0])
-        if not exact_only:
+        profile_only=False
+        policy=[]
+        if not exact_only and self.cfg.retrieval.profile_fast_path and plan.slot_requirements:
+            probe_started=time.perf_counter()
             policy=self.retriever.policy_anchor(analysis.legal_issues,analysis.facts,plan)
+            probe,_=temporal_filter(policy,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
+            probe,_=authority_filter(probe,strict=not self.cfg.provisional_mode)
+            probe=deterministic_audit(self.store,probe,analysis.query_date,allow_fallback,analysis.query_date_end)
+            proved,probe_decisions,_=self.applicability._deterministic([item for item in probe if item.verified],
+              env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
+            probe_plan=extend_plan_for_evidence(plan,proved,analysis.facts,analysis.query_date)
+            probe_state=state_for(proved,probe_plan,analysis.query_date,allow_fallback)
+            recognized={'DETERMINISTIC_PROFILE_RULE','DETERMINISTIC_RULE_MATCH','DETERMINISTIC_LEAVE_RULE_CHAIN',
+              'DETERMINISTIC_SPECIAL_OCCUPATION_RULE_MATCH','DETERMINISTIC_SPECIAL_OCCUPATION_DELEGATION_MATCH',
+              'DETERMINISTIC_LATE_WAGE_CHAIN','DETERMINISTIC_MISINFORMATION_CHAIN','DETERMINISTIC_HARASSMENT_EXCEPTION',
+              'DETERMINISTIC_WITHDRAWAL_RULE','DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN','DETERMINISTIC_MUTUAL_AGREEMENT_RULE',
+              'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN'}
+            proved_ids={item.unit_id for item in proved}
+            known=bool(proved) and all(recognized.intersection(d.reasons) for d in probe_decisions if d.evidence_id in proved_ids)
+            profile_only=known and not _actionable_gaps(probe_state.gaps,proved,self.cfg.provisional_mode)
+            trace.timings_ms['profile_probe']=round((time.perf_counter()-probe_started)*1000,2)
+            trace.events.append({'event':'profile_fast_path','used':profile_only,'missing':probe_state.gaps,
+              'proved_ids':sorted(proved_ids),'reason':'KNOWN_RULE_CHAIN_COMPLETE' if profile_only else 'FULL_RETRIEVAL_REQUIRED'})
+            if profile_only:
+                lists.append(proved); plan=probe_plan
+        if not exact_only:
+            policy=policy or self.retriever.policy_anchor(analysis.legal_issues,analysis.facts,plan)
+        if not exact_only and not profile_only:
             if policy: lists.append(policy)
             retrieval_queries=[env.normalized_query]+analysis.retrieval_queries
             if self.cfg.retrieval.bm25_enabled:
+                channel_started=time.perf_counter()
                 for retrieval_query in retrieval_queries: lists.append(self.retriever.bm25(retrieval_query))
+                trace.timings_ms['bm25']=round((time.perf_counter()-channel_started)*1000,2)
             if self.cfg.retrieval.dense_enabled:
+                channel_started=time.perf_counter()
                 for retrieval_query in retrieval_queries:
                     try:
                         lists.append(self.retriever.dense(retrieval_query))
@@ -119,19 +149,28 @@ class OnlinePipeline:
                         trace.events.append({'event':'dense_retrieval','status':'DEGRADED',
                           'error':type(exc.__cause__ or exc).__name__})
                         break
+                trace.timings_ms['dense']=round((time.perf_counter()-channel_started)*1000,2)
             if self.cfg.retrieval.issue_anchor_enabled: lists.append(self.retriever.issue_anchor(analysis.legal_issues))
             case_query=analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues
             if self.cfg.retrieval.case_law_enabled and case_query: lists.append(self.retriever.case_law(env.normalized_query))
             if self.cfg.retrieval.community_enabled and case_query: lists.append(self.retriever.community_cases(env.normalized_query))
+        fusion_started=time.perf_counter()
         nonempty=[x for x in lists if x]; items=nonempty[0] if len(nonempty)==1 else self.retriever.fusion(nonempty) if nonempty else []
+        trace.timings_ms['fusion']=round((time.perf_counter()-fusion_started)*1000,2)
         trace.seed_results=sum(len(x) for x in lists)
         items,removed=temporal_filter(items,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
         items,authority_removed=authority_filter(items,strict=not self.cfg.provisional_mode)
-        if self.cfg.reranker.enabled and not exact_only:
+        reranker_started=time.perf_counter()
+        if self.cfg.reranker.enabled and not exact_only and not profile_only:
             try: items=self.retriever.neural_rerank(items,env.normalized_query)
             except IndexUnavailable as exc:
                 warnings.append('NEURAL_RERANKER_UNAVAILABLE')
                 trace.events.append({'event':'neural_reranker','status':'DEGRADED','error':type(exc.__cause__ or exc).__name__})
+        trace.timings_ms['neural_reranker']=round((time.perf_counter()-reranker_started)*1000,2)
+        trace.events.append({'event':'retrieval_execution','path':'EXACT' if exact_only else 'PROFILE' if profile_only else 'HYBRID',
+          'bm25_requested':self.cfg.retrieval.bm25_enabled and not (exact_only or profile_only),
+          'dense_requested':self.cfg.retrieval.dense_enabled and not (exact_only or profile_only),
+          'reranker_requested':self.cfg.reranker.enabled and not (exact_only or profile_only)})
         items=rerank(items,self.cfg)
         trace.timings_ms['seed_retrieval']=round((time.perf_counter()-stage)*1000,2)
         audit_started=time.perf_counter()
@@ -225,6 +264,21 @@ class OnlinePipeline:
             generation_warnings=[]; answer=draft.answer_summary; refs=[]
         else:
             draft,generation_warnings=self.adjudicator.generate(pack,partial,assumptions)
+            # Retrieval completeness does not establish answer completeness.
+            # The public claims must actually cite every mandatory locator group.
+            def missing_answer_slots(candidate):
+                cited={uid for claim in candidate.claims for uid in claim.evidence_ids}
+                output_state=state_for([item for item in selected if item.unit_id in cited],plan,analysis.query_date,allow_fallback)
+                return _actionable_gaps(output_state.gaps,[item for item in selected if item.unit_id in cited],self.cfg.provisional_mode)
+            missing_claims=missing_answer_slots(draft)
+            if missing_claims and 'ANSWER_QUALITY_BLOCKED' not in generation_warnings:
+                # One bounded deterministic repair, with the same vetted pack;
+                # never fabricate a source or issue another inference request.
+                repaired,repair_warnings=LegalAdjudicator(AdjudicationConfig()).generate(pack,partial,assumptions)
+                if not missing_answer_slots(repaired) and 'ANSWER_QUALITY_BLOCKED' not in repair_warnings:
+                    draft=repaired; generation_warnings+=repair_warnings+['ANSWER_REQUIRED_EVIDENCE_REPAIRED']
+                else:
+                    generation_warnings+=['ANSWER_REQUIRED_EVIDENCE_MISSING:'+','.join(missing_claims),'ANSWER_QUALITY_BLOCKED']
             answer=draft.answer_summary
             if 'ANSWER_QUALITY_BLOCKED' in generation_warnings:
                 status=Stop.INSUFFICIENT_EVIDENCE
@@ -291,7 +345,8 @@ class OnlinePipeline:
           {'event':'applicability_audit','mode':self.cfg.applicability.mode,'passed':sum(x.audit_status=='PASS' for x in decisions),'total':len(decisions),
            'decisions':[{'evidence_id':x.evidence_id,'audit_status':x.audit_status,'relevant':x.relevant,
              'supports_claim':x.supports_claim,'reasons':x.reasons} for x in decisions]},
-          {'event':'selection','selected':len(selected),'deduplicated':max(0,len(verified)-len(selected))},
+          {'event':'selection','selected':len(selected),'deduplicated':max(0,len(verified)-len(selected)),
+            'evidence_ids':[item.unit_id for item in selected]},
           {'event':'evidence_state','coverage':state.coverage,'gaps':state.gaps},
           {'event':'verified_evidence_pack','count':len(pack.evidence),'characters':sum(len(x.text) for x in pack.evidence),
            'estimated_tokens':sum(len(x.text) for x in pack.evidence)/4},
