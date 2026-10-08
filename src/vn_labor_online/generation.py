@@ -3,6 +3,7 @@ import json
 import unicodedata
 from fractions import Fraction
 from .config import AdjudicationConfig
+from .claim_validation import semantic_issues
 from .answer_quality import clean_draft,clean_source_excerpt,draft_issues,guarded_language_edit,language_issues,render_claims
 from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
@@ -388,6 +389,11 @@ class LegalAdjudicator:
         historical_notice=_find(pack,'37','3',instrument='10/2012/QH13')
         if historical_notice and all(item.instrument_number=='10/2012/QH13' and item.article in {'37','156'} for item in pack.evidence):
             return safe_fallback(),[]
+        from .profile_generation import render_profile
+        profile_answer=render_profile(pack,partial,assumptions)
+        if profile_answer:
+            boundary_warning=['SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW'] if 'đoạn nguồn đang gộp khoản' in profile_answer.answer_summary else []
+            return profile_answer,boundary_warning
         contract_answer=_contract_rule_answer(pack,partial,assumptions)
         if contract_answer: return contract_answer,[]
         deterministic_intents={'WITHDRAW_TERMINATION','UNLAWFUL_DEFINITION_CONSEQUENCES','MUTUAL_TERMINATION',
@@ -396,7 +402,9 @@ class LegalAdjudicator:
         deterministic_employee_exit=(pack.requested_outcome=='ASSESS_LEGALITY' and pack.facts.get('actor')=='EMPLOYEE'
           and pack.facts.get('contract_type')=='INDEFINITE' and isinstance(pack.facts.get('notice_days'),int)
           and pack.facts.get('special_occupation') is not None)
-        if pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit:
+        mixed_training_exit=any(item.article=='62' for item in pack.evidence) and any(
+          item.article=='35' for item in pack.evidence)
+        if not mixed_training_exit and (pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit):
             deterministic=safe_fallback()
             if deterministic.claims:
                 return deterministic,[]
@@ -408,16 +416,25 @@ class LegalAdjudicator:
           'Do not invent an instrument, article, clause, point, date, URL, fact, assumption, or limitation. '
           'Return only claims with text and evidence_ids. The application supplies IDs, versions, limitations and rendering. '
           'Use clear Vietnamese sentences. Answer each requested issue; preserve conditions and exceptions. '
-          'Exclude greetings, boilerplate and technical labels. Do not guess OCR corruption or missing facts.')
+          'Exclude greetings, boilerplate and technical labels. Do not guess OCR corruption or missing facts. '
+          'A sanction for failing to do X does NOT prohibit doing X. Preserve every negation and exception. '
+          'Never invent a reason requirement or a training exception in Article 35. '
+          'Use supplied document_type, never guess it from a number. Avoid repeating claims.')
         payload={'query':pack.query,'query_date':pack.query_date,'confirmed_facts':pack.facts,
           'requested_outcome':pack.requested_outcome,'evidence':[{'evidence_id':item.evidence_id,
           'instrument':item.instrument_number,'article':item.article,'clause':item.clause,'point':item.point,
-          'text':item.text} for item in pack.evidence]}
+          'document_type':item.document_type,'document_title':item.document_title,'issuer':item.issuer,
+          'norm_role':item.norm_role,'text':item.text} for item in pack.evidence]}
         schema=ProviderClaims.model_json_schema()
         schema['$defs']['ProviderClaim']['properties']['evidence_ids']['items']={'type':'string','enum':sorted(allowed_ids)}
         try:
             raw=self.provider.structured(system,json.dumps(payload,ensure_ascii=False),schema)
             output=ProviderClaims.model_validate(raw)
+            by_evidence={item.evidence_id:item for item in pack.evidence}
+            for claim in output.claims:
+                attached=[by_evidence[uid] for uid in claim.evidence_ids if uid in by_evidence]
+                if semantic_issues(claim.text,attached):
+                    raise StructuredOutputError('SEMANTIC_CLAIM_REJECTED')
             draft=AdjudicationDraft(answer_summary='',claims=[Claim(claim_id=f'claim_{i:03d}',**claim.model_dump())
               for i,claim in enumerate(output.claims,1)],applicable_law_versions=[],assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
             if any(set(claim.evidence_ids)-allowed_ids for claim in draft.claims): raise StructuredOutputError('claim references evidence outside pack')
@@ -427,7 +444,7 @@ class LegalAdjudicator:
             # Do not expose free-form provider prose that was not checked claim by
             # claim. Render the public answer only from the structured claims; the
             # downstream Reference Audit then validates every claim and marker.
-            lines=['Kết luận dựa trên các căn cứ đã xác minh:']
+            lines=['Kết quả tra cứu dựa trên các căn cứ sau:']
             for claim in draft.claims:
                 markers=' '.join(f'[{evidence_id}]' for evidence_id in claim.evidence_ids)
                 lines.append(f'- {claim.text} {markers}')

@@ -9,7 +9,7 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v2'
+TAXONOMY_VERSION = 'labor-subissues-v3'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -21,6 +21,13 @@ SUBISSUES = {
     'CONTRACT.PROHIBITED_ACTS':'Hành vi bị cấm khi giao kết và thực hiện hợp đồng',
     'CONTRACT.CONTRACT_TYPES':'Phân loại hợp đồng lao động',
     'CONTRACT.PROBATION_PAY':'Tiền lương trong thời gian thử việc',
+    'CONTRACT.PROBATION_DURATION':'Các nhóm thời gian thử việc',
+    'TRAINING.APPRENTICESHIP':'Học nghề và tập nghề để làm việc',
+    'TRAINING.INTERN_PAY':'Phân loại thực tập trước khi xác định tiền lương',
+    'TRAINING.COST_REPAYMENT':'Hợp đồng và chi phí đào tạo',
+    'WORKING_TIME.OVERTIME_LIMITS':'Giới hạn làm thêm giờ',
+    'WAGE.OVERTIME_PAY':'Tiền lương làm thêm giờ',
+    'WAGE.NIGHT_PAY':'Tiền lương ban đêm',
     'TERMINATION.EMPLOYEE_UNILATERAL': 'Người lao động đơn phương chấm dứt',
     'TERMINATION.EMPLOYER_UNILATERAL': 'Người sử dụng lao động đơn phương chấm dứt',
     'TERMINATION.MUTUAL_AGREEMENT': 'Hai bên thỏa thuận chấm dứt',
@@ -53,7 +60,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     has = lambda *terms: any(term in q for term in terms)
     intent = facts.get('query_intent')
     employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','nlđ','nsdlđ','công ty')
-    if has('người lao động','người sử dụng lao động') and has('thế nào là','định nghĩa','được hiểu','khái niệm'):
+    if re.search(r'(?:thế nào là|định nghĩa|khái niệm|được hiểu[^.]{0,15})\s+(?:người lao động|người sử dụng lao động)',q):
         add('CONTRACT.PARTY_DEFINITIONS')
     if employment and has('đặt cọc','giữ bản chính','giữ bằng','bảo đảm bằng tiền','bảo đảm bằng tài sản'):
         add('CONTRACT.PROHIBITED_ACTS')
@@ -66,6 +73,22 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('CONTRACT.CONTRACT_TYPES')
     if has('thử việc') and has('lương','85%','phần trăm'):
         add('CONTRACT.PROBATION_PAY')
+    if has('thử việc') and has('thời gian','thời hạn','tối đa','bao lâu'):
+        add('CONTRACT.PROBATION_DURATION')
+    if has('học nghề','tập nghề') and not has('chi phí đào tạo','hoàn trả','bồi thường'):
+        add('TRAINING.APPRENTICESHIP')
+    if has('thực tập') and has('trả lương','tiền lương','có lương') and not has('thực tập sinh có phải'):
+        add('TRAINING.INTERN_PAY')
+    if has('chi phí đào tạo','hợp đồng đào tạo','cam kết sau đào tạo','cam kết đào tạo'):
+        add('TRAINING.COST_REPAYMENT')
+    overtime=has('làm thêm','làm ngoài giờ')
+    night=has('ban đêm','làm đêm')
+    if overtime and has('giới hạn','tối đa','bao nhiêu giờ'):
+        add('WORKING_TIME.OVERTIME_LIMITS')
+    if overtime and (has('tiền','lương','miễn trả','không nhận') or night):
+        add('WAGE.OVERTIME_PAY')
+    if night and (has('tiền','lương') or overtime):
+        add('WAGE.NIGHT_PAY')
     quantity = bool(re.search(r'bao nhiêu ngày|số ngày|tính ngày|\b\d+\s+ngày\b',q))
     special_mechanism = False
     for label, terms in (
@@ -81,9 +104,10 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('TERMINATION.WITHDRAWAL'); special_mechanism = True
     compare = has('so sánh', 'phân biệt', 'khác nhau')
     unilateral = has('đơn phương', 'báo trước', 'muốn nghỉ', 'nghỉ ngay', 'nghỉ sau', 'xin nghỉ việc', 'tôi nghỉ việc')
+    asks_exit_rule=bool(facts.get('termination_basis')) or has('thời hạn báo trước','báo trước bao nhiêu','có đúng quy định','có hợp pháp')
     if 'TERMINATION' in issues and (not special_mechanism or compare):
-        if facts.get('actor') == 'EMPLOYEE' or re.search(r'người lao động\s+(?:có quyền\s+)?đơn phương', q):
-            if unilateral or facts.get('termination_basis'): add('TERMINATION.EMPLOYEE_UNILATERAL')
+        if facts.get('actor') == 'EMPLOYEE' or re.search(r'(?:người lao động|nlđ)\s+(?:có quyền\s+)?đơn phương', q):
+            if (unilateral or facts.get('termination_basis')) and intent!='STIPULATED_EMPLOYEE_LIABILITY' and ('TRAINING.COST_REPAYMENT' not in found or asks_exit_rule): add('TERMINATION.EMPLOYEE_UNILATERAL')
         if facts.get('actor') == 'EMPLOYER' or re.search(r'(?:công ty|người sử dụng lao động)\s+(?:có quyền\s+)?đơn phương', q):
             add('TERMINATION.EMPLOYER_UNILATERAL')
     if has('trợ cấp thôi việc'): add('TERMINATION.SEVERANCE')
@@ -92,7 +116,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     suspected_short_notice = ('TERMINATION.EMPLOYEE_UNILATERAL' in found and facts.get('notice_exception') is False
         and facts.get('contract_type') == 'INDEFINITE' and isinstance(facts.get('notice_days'), int)
         and facts['notice_days'] < (120 if facts.get('special_occupation') is True else 45))
-    if 'TERMINATION' in issues and (illegal_question or suspected_short_notice):
+    repayment_only=('TRAINING.COST_REPAYMENT' in found and not asks_exit_rule and not has('trợ cấp','bồi thường','hậu quả khác','mọi hậu quả'))
+    if 'TERMINATION' in issues and (illegal_question or suspected_short_notice) and not repayment_only:
         add('TERMINATION.ILLEGAL_TERMINATION')
         if (facts.get('actor') == 'EMPLOYEE' and facts.get('notice_exception') is not True
             or intent == 'UNLAWFUL_DEFINITION_CONSEQUENCES'):
@@ -105,14 +130,16 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         unpaid = has('nghỉ không hưởng lương', 'nghỉ không lương')
         annual = has('nghỉ hằng năm', 'nghỉ hàng năm', 'nghỉ phép', 'phép năm', 'ngày phép', 'thâm niên', 'ngày cơ bản')
         payment = annual and has('chưa nghỉ', 'chưa sử dụng', 'còn dư') and has('thanh toán', 'trả tiền', 'tiền phép')
-        if annual and (not payment or quantity): add('LEAVE.ANNUAL_LEAVE')
+        travel_only=(intent=='TRAVEL_TIME' and not has('ngày cơ bản','thâm niên','12 ngày','14 ngày','16 ngày','tổng số ngày phép'))
+        if annual and (not payment or quantity) and not travel_only: add('LEAVE.ANNUAL_LEAVE')
         if has('thâm niên') or annual and int(facts.get('service_years') or 0) >= 5:
             add('LEAVE.SENIORITY_BONUS')
         if annual and (has('chưa đủ 12 tháng', 'theo tỷ lệ') or isinstance(facts.get('worked_months'), int) and facts['worked_months'] < 12):
             add('LEAVE.PRO_RATA_LEAVE')
         if intent == 'TRAVEL_TIME' or annual and has('đi đường', 'đi và về'):
             add('LEAVE.TRAVEL_DAYS')
-        if holiday: add('LEAVE.PUBLIC_HOLIDAY')
+        holiday_entitlement=has('nghỉ lễ','nghỉ tết','ngày tết','những ngày lễ','các ngày lễ','ngày lễ nào','được nghỉ')
+        if holiday and (not overtime and not night or holiday_entitlement): add('LEAVE.PUBLIC_HOLIDAY')
         if personal: add('LEAVE.PERSONAL_LEAVE')
         if unpaid: add('LEAVE.UNPAID_LEAVE')
         if payment:
@@ -138,14 +165,47 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
     """
     historical = legal_regime_for(analysis.query_date) == 'BLLD_2012'
     docs = OLD_CODE if historical else CURRENT_CODE
-    def loc(article, clause=None, point=None, documents=None):
-        return LegalLocator(documents=documents or docs, article=str(article), clause=clause, point=point)
+    def loc(article, clause=None, point=None, documents=None, exact=False, contains=None):
+        return LegalLocator(documents=documents or docs, article=str(article), clause=clause, point=point,
+          exact_level=exact,text_contains=contains or [])
     requirements = {}
     def require(slot, *groups): requirements[slot] = list(groups)
     def rule(slot, new_article, old_article, clause=None):
         require(slot, [loc(old_article if historical else new_article, clause)])
     for key in analysis.legal_subissues:
-        if key=='CONTRACT.PARTY_DEFINITIONS':
+        if key=='CONTRACT.PROBATION_DURATION':
+            article='27' if historical else '25'
+            require('probation_duration', *[[loc(article,str(i))] for i in ((1,2,3) if historical else (1,2,3,4))])
+        elif key=='TRAINING.APPRENTICESHIP':
+            # Never use the old wording of amended clause 3 as current law.
+            require('apprenticeship_rules', *[[loc('61',str(i),exact=True)] for i in (1,2,4,5,6)])
+            require('apprenticeship_fee', [loc('61','3',documents=['18/VBHN-VPQH'],exact=True,contains=['không được thu học phí']),
+              loc('61','2',documents=['18/VBHN-VPQH'],exact=True,contains=['không được thu học phí'])] if not historical
+              else [loc('61',exact=True)])
+        elif key=='TRAINING.COST_REPAYMENT':
+            require('training_contract', [loc('62','1')], [loc('62','2','d')], [loc('62','3')])
+            if analysis.facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY':
+                require('training_liability', [loc('43' if historical else '40','3')])
+        elif key=='WORKING_TIME.OVERTIME_LIMITS':
+            require('overtime_limits', *[[loc('106' if historical else '107','2',p)] for p in ('a','b','c')],
+              [loc('106' if historical else '107','3',exact=True)] if not historical else [loc('106','2','c')])
+            if not historical:
+                require('overtime_extended_conditions', *[[loc('107','3',p)] for p in ('a','b','c','d','đ')])
+        elif key=='WAGE.OVERTIME_PAY':
+            q=analysis.query_text.lower()
+            holiday_only=('WAGE.NIGHT_PAY' in analysis.legal_subissues and any(term in q for term in ('ngày lễ','nghỉ lễ','ngày tết'))
+              and not any(term in q for term in ('ngày thường','nghỉ hằng tuần','các loại ngày','mọi loại ngày')))
+            pay_points=('c',) if holiday_only else ('a','b','c')
+            require('overtime_pay',[loc('97' if historical else '98','1',exact=True)],
+              *[[loc('97' if historical else '98','1',p)] for p in pay_points])
+            if not historical and 'WAGE.NIGHT_PAY' in analysis.legal_subissues:
+                require('night_overtime_formula', [loc('57','1',documents=['145/2020/NĐ-CP'],exact=True)],
+                  [loc('57','1','b',documents=['145/2020/NĐ-CP'])], [loc('57','2',documents=['145/2020/NĐ-CP'],exact=True)])
+        elif key=='WAGE.NIGHT_PAY':
+            require('night_pay',[loc('97' if historical else '98','2')])
+            if 'WAGE.OVERTIME_PAY' in analysis.legal_subissues:
+                require('night_overtime_pay',[loc('97' if historical else '98','3')])
+        elif key=='CONTRACT.PARTY_DEFINITIONS':
             require('party_definitions',*[ [loc('3',str(i))] for i in (1,2)])
         elif key=='CONTRACT.RELATIONSHIP_QUALIFICATION':
             require('relationship_qualification',[loc('15' if historical else '13',None if historical else '1')])
@@ -242,7 +302,11 @@ def locator_matches(item, locator: LegalLocator) -> bool:
     return (get('kind') == 'PROVISION' and get('document_number') in locator.documents
         and str(get('article_number') or '') == locator.article
         and (locator.clause is None or str(get('clause_number') or '') == locator.clause)
-        and (locator.point is None or str(get('point_number') or '').lower() == locator.point))
+        and (locator.point is None or str(get('point_number') or '').lower() == locator.point)
+        and (not locator.exact_level or (str(get('clause_number') or '')==str(locator.clause or '')
+          and str(get('point_number') or '').lower()==str(locator.point or '')))
+        and all(term.lower() in ' '.join(str(get(field) or '') for field in ('source_text','text')).lower()
+          for term in locator.text_contains))
 
 
 def requirement_evidence(items, groups) -> list[str]:
@@ -273,6 +337,11 @@ def plan_with_profiles(analysis: QueryAnalysis, legacy_plan):
         # Never demand 2019-only exception/calculation locations for a 2012 query.
         mandatory = [slot for slot in mandatory if slot not in {
             'exception_rule', 'wage_delay_reference', 'disclosure_reference', 'leave_calculation_rule'}]
+    if analysis.facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY' or (
+      'TRAINING.COST_REPAYMENT' in analysis.legal_subissues and not unilateral.intersection(analysis.legal_subissues)):
+        mandatory=[slot for slot in mandatory if slot not in {'termination_conditions','notice_requirement','exceptions','mandatory_reference'}]
+    if requirements and all(key.startswith(('CONTRACT.','TRAINING.','WAGE.','WORKING_TIME.')) for key in analysis.legal_subissues):
+        mandatory=[slot for slot in mandatory if slot not in {'conditions','exceptions','mandatory_reference'}]
     # Don't let unrelated coarse branching discard one part of a multi-issue request.
     mandatory = list(dict.fromkeys(mandatory + list(requirements)))
     if requirements:

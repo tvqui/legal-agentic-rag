@@ -152,22 +152,30 @@ class AnswerQualityTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(any('SUSPECT_OCR_WORD' in issue for issue in issues))
 
-    def test_pipeline_blocks_bad_source_with_no_citations_and_trace(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory); build=fixture(root)
-            cfg=OnlineConfig(artifact_source=str(root),expected_build_id=build,trace_dir=str(root/'traces'),
-                retrieval=RetrievalConfig(dense_enabled=False),cache_dir=str(root/'cache'))
-            pipeline=OnlinePipeline(cfg)
-            bad=draft('Người 1ao động được nghỉ 12 ngày.')
-            with patch.object(pipeline.adjudicator,'generate',return_value=(bad,['ANSWER_QUALITY_BLOCKED'])):
-                result=pipeline.ask(QueryRequest(question='Điều 1 của Nghị định 145/2020/ND-CP quy định gì?'))
-            self.assertEqual(result.status,Stop.INSUFFICIENT_EVIDENCE)
-            self.assertEqual(result.citations,[])
-            self.assertEqual(result.claims,[])
-            self.assertIn('source_text_quality',result.limitations)
-            self.assertIn('đối chiếu bản gốc',result.answer)
-            self.assertEqual(result.trace.reference_audit,'PASS')
-            self.assertTrue(list((root/'traces').glob('*.json')))
+    def test_pipeline_classifies_quality_failures_without_fabricating_citations(self):
+        cases=[
+            (['SOURCE_TEXT_QUALITY:SUSPECT_OCR_WORD:prov_1','ANSWER_QUALITY_BLOCKED'],'source_text_quality','đối chiếu bản gốc'),
+            (['ANSWER_REQUIRED_EVIDENCE_MISSING:notice_requirement','ANSWER_QUALITY_BLOCKED'],'answer_completeness','thiếu nội dung'),
+            (['ANSWER_QUALITY_BLOCKED'],'answer_text_quality','kiểm tra câu chữ'),
+        ]
+        for warnings,gap,message in cases:
+            with self.subTest(gap=gap),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory); build=fixture(root)
+                cfg=OnlineConfig(artifact_source=str(root),expected_build_id=build,trace_dir=str(root/'traces'),
+                    retrieval=RetrievalConfig(dense_enabled=False),cache_dir=str(root/'cache'))
+                pipeline=OnlinePipeline(cfg)
+                bad=draft('Người 1ao động được nghỉ 12 ngày.')
+                with patch.object(pipeline.adjudicator,'generate',return_value=(bad,warnings)):
+                    result=pipeline.ask(QueryRequest(question='Điều 1 của Nghị định 145/2020/ND-CP quy định gì?'))
+                self.assertEqual(result.status,Stop.INSUFFICIENT_EVIDENCE)
+                self.assertEqual(result.citations,[])
+                self.assertEqual(result.claims,[])
+                self.assertIn(gap,result.limitations)
+                self.assertIn(message,result.answer)
+                if gap!='source_text_quality': self.assertNotIn('lỗi đọc chữ',result.answer)
+                self.assertEqual(result.trace.reference_audit,'PASS')
+                self.assertTrue(list((root/'traces').glob('*.json')))
+                pipeline.close()
 
 
 if __name__ == '__main__':

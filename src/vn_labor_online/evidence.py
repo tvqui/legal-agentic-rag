@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import date,timedelta
 from difflib import SequenceMatcher
 from .answer_quality import language_issues
+from .legal_metadata import document_type,norm_role
 from .compression import compress_evidence
 from .taxonomy import requirement_evidence,locator_matches
 from .models import ApplicabilityDecision,Evidence,EvidencePlan,EvidenceState,EvidenceSlot,SlotStatus,VerifiedEvidenceItem,VerifiedEvidencePack
@@ -121,7 +122,7 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
                 matches=[item for item in ordered if item.verified and any(locator_matches(item,locator) for locator in alternatives)]
                 matches.sort(key=lambda item:(not item.provision_temporal_verified,
                   not (item.official_source and item.source_catalog_status=='VERIFIED'),
-                  -item.authority_rank,_source_penalty(item),-item.score,item.unit_id))
+                  _source_penalty(item),item.document_number!='18/VBHN-VPQH',-item.authority_rank,-item.score,item.unit_id))
                 if matches and len(selected)<limit:
                     chosen=matches[0]
                     selected.append(chosen); selected_ids.add(chosen.unit_id)
@@ -158,6 +159,8 @@ def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceS
                         decisions:list[ApplicabilityDecision]|None=None,requested_outcome:str='OTHER')->VerifiedEvidencePack:
     by_decision={x.evidence_id:x for x in decisions or []}
     packed=[VerifiedEvidenceItem(evidence_id=x.unit_id,instrument_number=x.document_number,article=x.article_number,
+      document_type=document_type(x.document_number,x.document_title,x.document_type),document_title=x.document_title,issuer=x.issuer,
+      norm_role=norm_role(x.document_number,x.document_title,x.source_text or x.text),
       clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),valid_from=x.valid_from,
       valid_to=x.valid_to,official_url=x.source_url,authority_rank=x.authority_rank,binding=x.binding,
       official_source=x.official_source,provenance_span=x.provenance_span,

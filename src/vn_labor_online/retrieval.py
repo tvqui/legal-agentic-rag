@@ -7,6 +7,8 @@ from .artifact_store import ArtifactStore
 from .config import OnlineConfig
 from .errors import IndexUnavailable
 from .taxonomy import locator_matches
+from .issue_mapping import graph_issue_keys
+from .legal_metadata import document_type
 from .models import Evidence,ExplicitReference
 
 def _norm(value): return re.sub(r'[^0-9A-Z]','',str(value or '').upper().replace('Đ','D'))
@@ -22,11 +24,15 @@ def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evid
     for key in ('source_url','valid_from','valid_to'): data[key]=data.get(key) or None
     data['provenance']=data.get('provenance') or {}
     data['provenance_span']=data.get('provenance_span') or {}
+    data['document_type']=document_type(data.get('document_number'),data.get('document_title'),unit.get('document_type'))
     return Evidence.model_validate(data)
 
 class Retriever:
     def __init__(self,store:ArtifactStore,cfg:OnlineConfig):
         self.store=store; self.cfg=cfg; self._bm25=None; self._faiss=None; self._model=None; self._reranker=None; self._lock=threading.Lock()
+        self._profile_units=defaultdict(list)
+        for unit in store.units:
+            self._profile_units[(unit.get('document_number'),str(unit.get('article_number') or ''))].append(unit)
     def exact(self,refs:list[ExplicitReference])->list[Evidence]:
         result=[]
         for ref in refs:
@@ -139,11 +145,7 @@ class Retriever:
             raise IndexUnavailable(f'Neural reranker unavailable: {type(exc).__name__}') from exc
 
     def issue_anchor(self,issues:list[str],k:int|None=None)->list[Evidence]:
-        issue_keys={'TERMINATION':'Termination','CONTRACT':'LaborContract','WAGE':'Wage','LEAVE':'WorkingTime',
-          'SOCIAL_INSURANCE':'SocialInsurance','SAFETY':'OccupationalSafety','DISPUTE':'DisputeResolution',
-          'DISCIPLINE':'Discipline','MATERNITY':'FemaleWorker','WORKING_TIME':'WorkingTime','UNION':'TradeUnion',
-          'FOREIGN_WORKER':'ForeignWorker','UNEMPLOYMENT_INSURANCE':'UnemploymentInsurance'}
-        wanted={issue_keys[x] for x in issues if x in issue_keys}
+        wanted=graph_issue_keys(issues)
         if not wanted: return []
         anchors={n['id'] for n in self.store.nodes if n.get('label')=='LegalIssue' and (n.get('properties') or {}).get('issue_key') in wanted}
         unit_ids=[]
@@ -218,7 +220,9 @@ class Retriever:
         chosen={}
         for groups in plan.slot_requirements.values():
             for alternatives in groups:
-                matches=[unit for unit in self.store.units if any(locator_matches(unit,locator) for locator in alternatives)]
+                pool={unit['unit_id']:unit for locator in alternatives for doc in locator.documents
+                  for unit in self._profile_units.get((doc,locator.article),[])}
+                matches=[unit for unit in pool.values() if any(locator_matches(unit,locator) for locator in alternatives)]
                 # Keep versions from each instrument; temporal filtering chooses
                 # the applicable one later. Prefer exact locator granularity.
                 matches.sort(key=lambda unit:(sum(bool(unit.get(field)) for field in ('clause_number','point_number')),

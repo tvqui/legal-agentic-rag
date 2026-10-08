@@ -32,7 +32,9 @@ def evidence(article,clause='',point='',doc='18/VBHN-VPQH',text='Quy định v�
 
 class IssueTaxonomyTests(unittest.TestCase):
     def test_registry_has_no_entitlement_outcomes_as_independent_topics(self):
-        self.assertEqual(len(SUBISSUES),27)
+        self.assertIn('CONTRACT.PROBATION_DURATION',SUBISSUES)
+        self.assertIn('WORKING_TIME.OVERTIME_LIMITS',SUBISSUES)
+        self.assertIn('TRAINING.COST_REPAYMENT',SUBISSUES)
         self.assertNotIn('LEAVE.ANNUAL_LEAVE_12',SUBISSUES)
         self.assertNotIn('LEAVE.ANNUAL_LEAVE_14',SUBISSUES)
 

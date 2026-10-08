@@ -6,6 +6,7 @@ from .config import load_config
 from .errors import OnlineError
 from .models import AnswerResponse,QueryRequest
 from .pipeline import OnlinePipeline
+from .taxonomy import TAXONOMY_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,11 @@ def create_app(config_path:str|Path|None=None):
             eid=f"ERR_{uuid.uuid4().hex[:12].upper()}"
             state['error_id']=eid
             logger.error("[%s] ONLINE startup failed: %s",eid,exc,exc_info=True)
-        yield
+        try:
+            yield
+        finally:
+            pipeline=state['pipeline']
+            if pipeline is not None: pipeline.close()
     app=FastAPI(title='Vietnamese Labor Legal QA',version='0.3.0',lifespan=lifespan)
     origins=[value.strip() for value in os.getenv('VN_LABOR_CORS_ORIGINS','http://127.0.0.1:5173,http://localhost:5173').split(',') if value.strip()]
     if origins:
@@ -126,7 +131,7 @@ def create_app(config_path:str|Path|None=None):
           'adjudicator':_component(pipeline.adjudicator.provider,'adjudicator')}
         model_components=[components[x] for x in ('researcher','auditor','adjudicator')]
         degraded=any(x.get('status')=='DEGRADED' for x in model_components)
-        return {'ready':not degraded,'degraded':degraded,'components':components,
+        return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,'components':components,
           'compatibility':pipeline.store.report.model_dump(mode='json')}
     @app.post('/v1/answer',response_model=AnswerResponse,summary='Answer a Vietnamese labor-law question')
     def answer(request:QueryRequest)->AnswerResponse:

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import time
+from functools import cached_property
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,6 +32,26 @@ class BaseProvider(ABC):
 
     def readiness(self) -> dict:
         return {"status": "UNKNOWN"}
+
+    @cached_property
+    def client(self):
+        import httpx
+        local=urllib.parse.urlparse(self.url).hostname in {'localhost','127.0.0.1','::1'}
+        return httpx.Client(timeout=self.timeout,trust_env=not local,
+          limits=httpx.Limits(max_connections=4,max_keepalive_connections=2))
+
+    def _post(self,payload,headers):
+        for attempt in range(2):
+            response=self.client.post(self.url,json=payload,headers=headers)
+            if response.status_code in {429,502,503,504} and attempt==0:
+                time.sleep(.25); continue
+            response.raise_for_status()
+            return response.json()
+        raise LLMProviderError('HTTP_RETRY_EXHAUSTED')
+
+    def close(self):
+        client=self.__dict__.pop('client',None)
+        if client is not None: client.close()
 
 
 def _request_json(url: str, *, headers: dict | None = None, timeout: float = 5) -> dict:
@@ -65,11 +87,7 @@ class HttpJsonProvider(BaseProvider):
             "response_format": {"type": "json_schema", "json_schema": {"name": "result", "schema": schema}},
         }
         try:
-            request = urllib.request.Request(
-                self.url, data=json.dumps(payload).encode(), headers=self._headers(), method="POST"
-            )
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                raw = json.loads(response.read())
+            raw=self._post(payload,self._headers())
             content = raw["choices"][0]["message"]["content"]
             return _decode_content(content)
         except StructuredOutputError:
@@ -108,12 +126,7 @@ class OllamaProvider(BaseProvider):
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         try:
-            request = urllib.request.Request(
-                self.url, data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json", "Accept": "application/json"}, method="POST"
-            )
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                raw = json.loads(response.read())
+            raw=self._post(payload,{"Content-Type": "application/json", "Accept": "application/json"})
             if raw.get('done_reason')=='length': raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
             return _decode_content(raw['message']['content'])
         except StructuredOutputError:

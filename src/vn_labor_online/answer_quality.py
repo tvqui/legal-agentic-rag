@@ -80,12 +80,24 @@ def clean_draft(draft: AdjudicationDraft, query: str) -> AdjudicationDraft:
     allow_admin = bool(_ADMIN_QUERY.search(query))
     claims = [claim.model_copy(update={'text': clean_display(claim.text, allow_admin=allow_admin)})
               for claim in draft.claims]
+    unique=[]; by_text={}
+    for claim in claims:
+        key=' '.join(claim.text.lower().split())
+        if key in by_text:
+            index=by_text[key]; previous=unique[index]
+            unique[index]=previous.model_copy(update={'evidence_ids':list(dict.fromkeys(previous.evidence_ids+claim.evidence_ids))})
+        else:
+            by_text[key]=len(unique); unique.append(claim)
     answer = clean_display(draft.answer_summary, allow_admin=allow_admin)
     # Keep summary and public claim excerpts in sync.
     for old, new in zip(draft.claims, claims):
         if old.text != new.text and old.text in answer:
             answer = answer.replace(old.text, new.text)
-    return draft.model_copy(update={'claims': claims, 'answer_summary': answer})
+    result=draft.model_copy(update={'claims': unique, 'answer_summary': answer})
+    if len(unique)!=len(claims):
+        # Regenerate from the retained claims, keeping every supporting ID.
+        return render_claims(result, bool(draft.limitations))
+    return result
 
 
 def draft_issues(draft: AdjudicationDraft, query: str) -> list[str]:
@@ -122,7 +134,7 @@ The normal reference audit still runs on every accepted edit afterwards.
         len(original.claims) != len(edited.claims)):
         return False
     for before, after in zip(original.claims, edited.claims):
-        if before.claim_id != after.claim_id or before.evidence_ids != after.evidence_ids:
+        if before.claim_id != after.claim_id or before.evidence_ids != after.evidence_ids or before.proposition != after.proposition:
             return False
         if _invariants(before.text) != _invariants(after.text):
             return False

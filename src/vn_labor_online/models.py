@@ -80,6 +80,8 @@ class QueryAnalysis(BaseModel):
     query_text:str=''
 
 class LegalLocator(BaseModel):
+    exact_level:bool=False
+    text_contains:list[str]=Field(default_factory=list)
     model_config=ConfigDict(extra='forbid')
     documents:list[str]=Field(min_length=1); article:str
     clause:str|None=None; point:str|None=None
@@ -96,7 +98,7 @@ class Evidence(BaseModel):
     valid_from:str|None=None; valid_to:str|None=None; authority_rank:int=0; binding:bool=False
     temporal_verified:bool=False; provision_temporal_verified:bool=False; provenance:dict[str,Any]=Field(default_factory=dict)
     provenance_span:dict[str,Any]=Field(default_factory=dict); kind:str|None=None; level:str|None=None
-    issuer:str|None=None; official_source:bool=False; source_catalog_status:str|None=None
+    issuer:str|None=None; document_type:str|None=None; official_source:bool=False; source_catalog_status:str|None=None
     graph_path:list[str]=Field(default_factory=list); graph_relations:list[str]=Field(default_factory=list)
     graph_directions:list[str]=Field(default_factory=list); authority_verified:bool=False; verified:bool=False
     audit_issues:list[str]=Field(default_factory=list); audit_warnings:list[str]=Field(default_factory=list)
@@ -112,9 +114,18 @@ class Citation(BaseModel):
     evidence_id:str; title:str|None=None; document_number:str|None=None; article:str|None=None
     clause:str|None=None; point:str|None=None; law_version:str|None=None; official_url:str|None=None
     instrument_number:str|None=None; source_span:dict[str,Any]=Field(default_factory=dict)
+    document_type:str|None=None; issuer:str|None=None
+class RuleProposition(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    predicate:Literal['PROBATION_LIMIT']
+    value:int=Field(ge=1)
+    unit:Literal['ngày','ngày làm việc']
+    locator:LegalLocator
+
 class Claim(BaseModel):
     model_config=ConfigDict(extra='forbid')
     claim_id:str; text:str; evidence_ids:list[str]=Field(min_length=1)
+    proposition:RuleProposition|None=None
 class ApplicabilityDecision(BaseModel):
     model_config=ConfigDict(extra='forbid')
     evidence_id:str; relevant:bool; supports_claim:bool
@@ -128,6 +139,8 @@ class ApplicabilityBatch(BaseModel):
 class VerifiedEvidenceItem(BaseModel):
     evidence_id:str; instrument_number:str|None=None; article:str|None=None; clause:str|None=None
     point:str|None=None; text:str; valid_from:str|None=None; valid_to:str|None=None
+    document_type:str|None=None; document_title:str|None=None; issuer:str|None=None
+    norm_role:Literal['RULE','SANCTION']='RULE'
     official_url:str|None=None; authority_rank:int=0; binding:bool=False; official_source:bool=False
     provenance_span:dict[str,Any]=Field(default_factory=dict)
     applicability:ApplicabilityDecision|None=None

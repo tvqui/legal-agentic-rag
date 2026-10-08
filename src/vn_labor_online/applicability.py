@@ -60,8 +60,10 @@ class LegalApplicabilityAuditor:
           'DETERMINISTIC_MUTUAL_AGREEMENT_RULE','DETERMINISTIC_LEAVE_RULE_CHAIN','DETERMINISTIC_PROFILE_RULE',
           'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN'}
         locked={d.evidence_id:d for d in base_decisions if proven_reasons.intersection(d.reasons)}
-        eligible=[item for item in items if item.unit_id not in hard and item.unit_id not in locked][:self.cfg.max_items]
-        overflow=[item for item in items if item.unit_id not in hard and item.unit_id not in locked][self.cfg.max_items:]
+        candidates=[item for item in items if item.unit_id not in hard and item.unit_id not in locked]
+        candidates.sort(key=lambda item:('policy' not in item.component_scores and item.retrieval_method!='policy',-item.score,item.unit_id))
+        eligible=candidates[:self.cfg.max_items]
+        overflow=candidates[self.cfg.max_items:]
         if not eligible:
             accepted=[by_item[d.evidence_id] for d in base_decisions if self._passes(d)]
             return accepted,base_decisions,base_warnings
@@ -136,10 +138,9 @@ Do not infer missing facts, choose a different law version, create evidence, or 
     def _deterministic(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str):
         relevant=applicability(items,query,issues); accepted_ids={x.unit_id for x in relevant}; decisions=[]
         subissues=classify_subissues(query,facts,issues)
-        contract_profiles=[key for key in subissues if key.startswith('CONTRACT.')]
         profile_groups={}
         for regime_date in ('2020-01-01','2026-01-01'):
-            for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=contract_profiles,query_date=regime_date,facts=facts,query_text=query)).items():
+            for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,query_date=regime_date,facts=facts,query_text=query)).items():
                 profile_groups.setdefault(slot,[]).extend(groups)
         for item in items:
             matched=item.unit_id in accepted_ids or item.retrieval_method=='policy' or 'policy' in item.component_scores
@@ -154,6 +155,12 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
                   reasons=[exclusion]+(['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'] if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36' else []))
+            elif any(key in {'CONTRACT.PROBATION_DURATION','TRAINING.APPRENTICESHIP','TRAINING.COST_REPAYMENT',
+              'WAGE.OVERTIME_PAY','WAGE.NIGHT_PAY','WORKING_TIME.OVERTIME_LIMITS'} for key in subissues) and profile_groups and not any(
+              locator_matches(item,locator) for groups in profile_groups.values() for alternatives in groups for locator in alternatives):
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
+                  conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
+                  reasons=['PROFILE_LOCATION_MISMATCH'])
             elif employee_termination and document=='10/2012/QH13' and facts.get('contract_type')=='INDEFINITE' and requested_outcome!='ASSESS_LEGALITY' and (
               article=='37' and item.clause_number=='3' and '45 ngay' in folded or article=='156'):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
@@ -199,7 +206,10 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_RULE_MATCH'])
             elif 'LEAVE' in issues and (item.retrieval_method=='policy' or 'policy' in item.component_scores) and (article in {'113','114'} or document=='145/2020/NĐ-CP' and article=='66'):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_LEAVE_RULE_CHAIN'])
-            elif (requested_outcome!='ASSESS_LEGALITY' or set(issues)<={'CONTRACT','GENERAL','WAGE'}) and any(
+            elif (requested_outcome!='ASSESS_LEGALITY' or set(issues)<={'CONTRACT','GENERAL','WAGE'}
+              or facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY'
+              or 'WAGE.OVERTIME_PAY' in subissues and not facts.get('actor')
+              or set(subissues)=={'TRAINING.COST_REPAYMENT'}) and any(
               locator_matches(item,locator) for groups in profile_groups.values() for alternatives in groups for locator in alternatives):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_PROFILE_RULE'])

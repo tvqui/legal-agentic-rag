@@ -7,6 +7,8 @@ CRITICAL=('không','trừ','chỉ khi','điều kiện','ngoại lệ','báo tr�
 
 def compress_evidence(item:Evidence,query:str,max_chars:int=700)->str:
     text=' '.join(clean_source_excerpt(item.source_text or item.text,query).split())
+    if item.retrieval_method=='policy' or 'policy' in item.component_scores:
+        return text
     if len(text)<=max_chars: return text
     query_terms={x for x in re.findall(r'\w+',query.lower()) if len(x)>3}
     sentences=[x.strip() for x in re.split(r'(?<=[.;:!?])\s+',text) if x.strip()]

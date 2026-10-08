@@ -40,7 +40,7 @@ online:
     max_nodes: 15
     max_edges: 40
     max_hops: 2
-    allowed_relations: [AMENDS, REPEALS, REPLACES, IMPLEMENTS, REFERENCES, VERSION_OF, PART_OF, CITES]
+    allowed_relations: [AMENDS, REPEALS, REPLACES, IMPLEMENTS, REFERENCES, VERSION_OF, PART_OF, CITES, NEXT, RELATES_TO_ISSUE, HAS_ISSUE, SIMILAR_TO, BELONGS_TO]
     wall_clock_ms: 1500
     hub_penalty: 0.15
     novelty_weight: 0.10

@@ -29,7 +29,7 @@ class GraphConfig(StrictModel):
     relevance_weight:float=Field(.3,ge=0); authority_weight:float=Field(.15,ge=0); temporal_weight:float=Field(.1,ge=0)
     gap_weight:float=Field(.5,ge=0); novelty_weight:float=Field(.1,ge=0); redundancy_weight:float=Field(.1,ge=0); traversal_cost_weight:float=Field(.05,ge=0)
     edge_weights:dict[str,float]=Field(default_factory=lambda:{'AMENDS':1,'REPEALS':1,'REPLACES':1,'IMPLEMENTS':.9,'REFERENCES':.85,'PART_OF':.5,'NEXT':.3,'VERSION_OF':.7,'CITES':.5,'HAS_ISSUE':.4,'RELATES_TO_ISSUE':.4,'SIMILAR_TO':.1,'BELONGS_TO':.1})
-    allowed_relations:list[str]=Field(default_factory=lambda:['AMENDS','REPEALS','REPLACES','IMPLEMENTS','REFERENCES','VERSION_OF','PART_OF','CITES'])
+    allowed_relations:list[str]=Field(default_factory=lambda:['AMENDS','REPEALS','REPLACES','IMPLEMENTS','REFERENCES','VERSION_OF','PART_OF','CITES','NEXT','RELATES_TO_ISSUE','HAS_ISSUE','SIMILAR_TO','BELONGS_TO'])
     @field_validator('edge_weights')
     @classmethod
     def validate_edge_weights(cls,value):

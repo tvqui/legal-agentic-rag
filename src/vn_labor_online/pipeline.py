@@ -31,7 +31,7 @@ def _repair_references(selected,claims):
     used_ids=list(dict.fromkeys(evidence_id for claim in repaired_claims for evidence_id in claim.evidence_ids))
     by_id={item.unit_id:item for item in selected}
     repaired_items=[by_id[evidence_id] for evidence_id in used_ids]
-    lines=['Kết luận dựa trên các căn cứ đã xác minh:']
+    lines=['Kết quả tra cứu dựa trên các căn cứ sau:']
     for claim in repaired_claims:
         markers=' '.join(f'[{evidence_id}]' for evidence_id in claim.evidence_ids)
         lines.append(f'- {claim.text} {markers}')
@@ -43,6 +43,10 @@ class OnlinePipeline:
         self.graph=GraphExplorer(self.store,cfg.graph); self.researcher=LegalResearcher(cfg.researcher)
         self.applicability=LegalApplicabilityAuditor(cfg.applicability,self.store)
         self.adjudicator=LegalAdjudicator(cfg.adjudication)
+    def close(self):
+        for component in (self.researcher,self.applicability,self.adjudicator):
+            if component.provider is not None: component.provider.close()
+
     def ask(self,request:QueryRequest)->AnswerResponse:
         start=time.perf_counter(); stage=time.perf_counter()
         env=intake(request.question,request.conversation_context,request.query_date,request.facts)
@@ -234,6 +238,8 @@ class OnlinePipeline:
             graph_stats['nodes_visited']=len(visited); graph_stats['critical_edges_followed']=list(dict.fromkeys(graph_stats['critical_edges_followed']))
         trace.timings_ms['graph_retrieval']=round((time.perf_counter()-stage)*1000,2)
         route_limit=self.cfg.max_verified_units if analysis.route==Route.DIRECT and any(x.retrieval_method=='exact_hierarchy' for x in verified) else 1 if analysis.route==Route.DIRECT else min(self.cfg.max_verified_units,6) if analysis.route==Route.STANDARD else self.cfg.max_verified_units
+        if plan.slot_requirements:
+            route_limit=self.cfg.max_verified_units
         selection_started=time.perf_counter()
         selected,state=select_for_plan(verified,plan,analysis.query_date,allow_fallback,route_limit)
         conflicts=detect_authoritative_conflicts(verified,analysis.query_date,analysis.query_date_end)
@@ -282,8 +288,16 @@ class OnlinePipeline:
             answer=draft.answer_summary
             if 'ANSWER_QUALITY_BLOCKED' in generation_warnings:
                 status=Stop.INSUFFICIENT_EVIDENCE
-                state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['source_text_quality']))})
-                answer='Nội dung nguồn còn lỗi đọc chữ hoặc câu trả lời chưa đạt kiểm tra chất lượng. Chưa thể đưa ra kết luận đáng tin cậy; cần đối chiếu bản gốc.'
+                if any(warning.startswith('ANSWER_REQUIRED_EVIDENCE_MISSING:') for warning in generation_warnings):
+                    quality_gap='answer_completeness'
+                    answer='Câu trả lời còn thiếu nội dung pháp lý bắt buộc của câu hỏi. Cần bổ sung chuỗi căn cứ trước khi kết luận.'
+                elif any(warning.startswith('SOURCE_TEXT_QUALITY:') for warning in generation_warnings):
+                    quality_gap='source_text_quality'
+                    answer='Nội dung nguồn có lỗi đọc chữ đáng ngờ. Cần đối chiếu bản gốc trước khi kết luận.'
+                else:
+                    quality_gap='answer_text_quality'
+                    answer='Câu trả lời chưa đạt kiểm tra câu chữ. Chưa thể đưa ra kết luận đáng tin cậy.'
+                state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+[quality_gap]))})
                 draft=AdjudicationDraft(answer_summary=answer,claims=[],applicable_law_versions=[],assumptions=assumptions,limitations=state.gaps)
             used_ids=list(dict.fromkeys(evidence_id for claim in draft.claims for evidence_id in claim.evidence_ids))
             selected_by_id={item.unit_id:item for item in selected}

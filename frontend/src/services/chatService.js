@@ -16,15 +16,6 @@ export class ApiError extends Error {
   }
 }
 
-function documentType(number = '') {
-  number = String(number || '')
-  if (number.includes('/NĐ-CP')) return 'Nghị định'
-  if (number.includes('/TT-')) return 'Thông tư'
-  if (number.includes('/QH')) return number.startsWith('45/') ? 'Bộ luật' : 'Luật'
-  if (number.includes('/QĐ-')) return 'Quyết định'
-  return 'Văn bản pháp luật'
-}
-
 function claimExcerpt(payload, evidenceId) {
   return payload.claims
     ?.filter((claim) => claim.evidence_ids?.includes(evidenceId))
@@ -39,7 +30,8 @@ function mapCitation(citation, payload, index) {
     number: index + 1,
     documentId: citation.document_number || citation.evidence_id,
     documentTitle: citation.title || citation.document_number || 'Nguồn pháp lý',
-    documentType: documentType(citation.document_number),
+    documentType: citation.document_type || 'Chưa có loại văn bản trong metadata',
+    issuer: citation.issuer || null,
     article: citation.article ? `Điều ${citation.article}` : '',
     clause: citation.clause ? `Khoản ${citation.clause}` : '',
     point: citation.point ? `Điểm ${citation.point}` : '',
@@ -72,6 +64,9 @@ const NOTICE_LABELS = {
   PROVISION_TEMPORAL_REVIEW_INCOMPLETE: 'Hiệu lực ở cấp điều khoản đang chờ người có chuyên môn xác minh.',
   GOLD_NOT_APPROVED: 'Bộ câu hỏi đánh giá chất lượng chưa được duyệt.',
   source_text_quality: 'Nội dung nguồn còn lỗi đọc chữ, cần đối chiếu bản gốc.',
+  answer_completeness: 'Câu trả lời còn thiếu nội dung bắt buộc; cần kiểm tra chuỗi căn cứ.',
+  answer_text_quality: 'Câu trả lời chưa đạt kiểm tra câu chữ.',
+  SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW: 'Nguồn có đoạn đang gộp nhiều khoản; cần đối chiếu ranh giới khoản trong bản gốc.',
   ANSWER_QUALITY_BLOCKED: 'Câu trả lời chưa đạt kiểm tra chất lượng nội dung.',
   ANSWER_LANGUAGE_SAFE_FALLBACK: 'Hệ thống dùng cách trả lời dự phòng để giữ nguyên nội dung pháp lý.',
   CORPUS_MAY_BE_STALE: 'Bộ dữ liệu có thể chưa bao gồm thay đổi pháp luật sau ngày chốt.',

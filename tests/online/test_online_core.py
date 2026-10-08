@@ -527,6 +527,8 @@ class OnlineTests(unittest.TestCase):
                 ready=client.get('/ready',headers=headers)
                 self.assertEqual(ready.status_code,200); self.assertTrue(ready.json()['ready'])
                 self.assertIn('components',ready.json())
+                from vn_labor_online.taxonomy import TAXONOMY_VERSION
+                self.assertEqual(ready.json()['taxonomy_version'],TAXONOMY_VERSION)
                 response=client.post('/v1/answer',headers=headers,
                   json={'question':'Điều 1 của 145/2020/ND-CP quy định gì?'})
                 self.assertEqual(response.status_code,200)

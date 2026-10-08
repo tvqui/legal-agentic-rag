@@ -128,11 +128,12 @@ class OutputPrecisionTests(unittest.TestCase):
 
     def test_ollama_payload_has_schema_think_false_and_token_budget(self):
         provider=OllamaProvider(max_output_tokens=512)
-        response=Mock(); response.__enter__=Mock(return_value=response); response.__exit__=Mock(return_value=False)
-        response.read.return_value=b'{"message":{"content":"{\\"claims\\":[]}"},"done_reason":"stop"}'
-        with patch('urllib.request.urlopen',return_value=response) as request:
-            provider.structured('system','user',{'type':'object'})
-        payload=json.loads(request.call_args.args[0].data)
+        response=Mock(status_code=200)
+        response.json.return_value={'message':{'content':'{"claims":[]}'},'done_reason':'stop'}
+        provider.client=Mock()
+        provider.client.post.return_value=response
+        provider.structured('system','user',{'type':'object'})
+        payload=provider.client.post.call_args.kwargs['json']
         self.assertFalse(payload['think']); self.assertEqual(payload['format'],{'type':'object'})
         self.assertEqual(payload['options']['num_predict'],512)
 

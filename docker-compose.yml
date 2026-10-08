@@ -4,12 +4,11 @@ services:
     container_name: vn-labor-neo4j
     restart: unless-stopped
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/change_me
+      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}"
       NEO4J_PLUGINS: '["apoc"]'
-      NEO4J_dbms_security_procedures_unrestricted: apoc.*
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs

@@ -4,6 +4,8 @@ from datetime import date
 from .artifact_store import ArtifactStore
 from .models import Evidence,Citation,Claim
 from .answer_quality import language_issues
+from .legal_metadata import document_type
+from .claim_validation import semantic_issues,proposition_issues
 
 def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|None,allow_document_temporal_fallback:bool=False,query_date_end:str|None=None)->list[Evidence]:
     out=[]
@@ -90,7 +92,8 @@ def citations(items:list[Evidence])->list[Citation]:
     return [Citation(evidence_id=x.unit_id,title=x.document_title,document_number=x.document_number,
       article=x.article_number,clause=x.clause_number,point=x.point_number,
       law_version=' → '.join(v for v in (x.valid_from,x.valid_to) if v) or None,official_url=x.source_url,
-      instrument_number=x.document_number,source_span=x.provenance_span) for x in items]
+      instrument_number=x.document_number,source_span=x.provenance_span,
+      document_type=document_type(x.document_number,x.document_title,x.document_type),issuer=x.issuer) for x in items]
 def _norm_reference(value:str)->str:
     return re.sub(r'[^0-9A-ZĐ]','',value.upper())
 def _claim_supported(text:str,evidence:Evidence)->bool:
@@ -179,6 +182,7 @@ def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:l
         elif set(claim.evidence_ids)-ids: problems.append('CLAIM_UNSUPPORTED:'+claim.claim_id)
         else:
             claim_items=[by_id[evidence_id] for evidence_id in claim.evidence_ids]
+            problems.extend(f'{issue}:{claim.claim_id}' for issue in semantic_issues(claim.text,claim_items)+proposition_issues(claim,claim_items))
             if not any(_claim_supported(claim.text,item) for item in claim_items):
                 problems.append('CLAIM_CONTENT_UNSUPPORTED:'+claim.claim_id)
             problems.extend(f'{issue}:{claim.claim_id}' for issue in _claim_reference_supported(claim.text,claim_items))

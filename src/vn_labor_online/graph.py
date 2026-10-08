@@ -4,7 +4,7 @@ from collections import defaultdict
 from .artifact_store import ArtifactStore
 from .config import GraphConfig
 from .models import Evidence
-from .retrieval import as_evidence,authority_score
+from .retrieval import as_evidence,authority_score,_terms
 
 GAP_RELATIONS={
   'applicable_version':{'AMENDS':{'IN','OUT'},'REPEALS':{'IN','OUT'},'REPLACES':{'IN','OUT'},'VERSION_OF':{'IN','OUT'}},
@@ -24,6 +24,8 @@ GAP_RELATIONS={
 # Profile-specific gaps guide traversal through the existing graph. No new
 # node/edge type is assumed, and the configured budgets still apply.
 PROFILE_SLOT_NAMES={
+  'probation_duration','training_contract','training_liability','apprenticeship_rules','apprenticeship_fee',
+  'overtime_limits','overtime_extended_conditions','overtime_pay','night_pay','night_overtime_pay','night_overtime_formula',
   'employee_unilateral_rule','employer_unilateral_rule','employer_protection_rule',
   'expiry_rule','dismissal_ground_rule','dismissal_procedure_rule','restructuring_ground_rule',
   'employment_plan_rule','enterprise_transfer_rule','employer_legal_consequences',
@@ -105,8 +107,8 @@ class GraphExplorer:
         parent_unit=self.store.units_by_id.get(parent)
         parent_props=(self.store.nodes_by_id.get(parent) or {}).get('properties') or {}
         parent_text=(parent_unit or {}).get('text') or ' '.join(str(v) for v in parent_props.values() if isinstance(v,(str,int)))
-        query_terms={x for x in re.findall(r'\w+',query.lower()) if len(x)>3}; target_terms=set(re.findall(r'\w+',text.lower()))
-        parent_terms=set(re.findall(r'\w+',parent_text.lower()))
+        query_terms=_terms(query); target_terms=_terms(text)
+        parent_terms=_terms(parent_text)
         relevance=len(query_terms&target_terms)/max(1,len(query_terms)); authority=authority_score(as_evidence(target_unit,0,'graph',0)) if target_unit else 0
         temporal=float(bool(target_unit and (target_unit.get('provision_temporal_verified') or target_unit.get('temporal_verified'))))
         preferred={}

@@ -7,13 +7,17 @@ from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,Evidence
 
 ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ ngay","nghỉ sau","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương","trợ cấp mất việc","hết hạn hợp đồng","hợp đồng hết hạn","thay đổi cơ cấu","thay đổi công nghệ","lý do kinh tế","tái cơ cấu","cắt giảm nhân sự","sáp nhập"],"WAGE":["tiền lương","lương","làm thêm"],
  "SOCIAL_INSURANCE":["bảo hiểm xã hội","bhxh"],"SAFETY":["an toàn lao động","tai nạn lao động"],
- "CONTRACT":["hợp đồng lao động","giao kết hợp đồng"],"LEAVE":["nghỉ hằng năm","nghỉ hàng năm","nghỉ phép","phép năm","ngày phép","thâm niên làm việc","ngày thâm niên","ngày cơ bản","thời gian đi đường","nghỉ lễ","ngày lễ","nghỉ tết","quốc khánh","giỗ tổ","nghỉ việc riêng","nghỉ không hưởng lương","nghỉ không lương","kết hôn","đám cưới","cha mất","mẹ mất","bố mất"],
+ "CONTRACT":["hợp đồng lao động","hđlđ","giao kết hợp đồng","thử việc","hợp đồng cộng tác viên"],"LEAVE":["nghỉ hằng năm","nghỉ hàng năm","nghỉ phép","phép năm","ngày phép","thâm niên làm việc","ngày thâm niên","ngày cơ bản","thời gian đi đường","nghỉ lễ","ngày lễ","nghỉ tết","quốc khánh","giỗ tổ","nghỉ việc riêng","nghỉ không hưởng lương","nghỉ không lương","kết hôn","đám cưới","cha mất","mẹ mất","bố mất"],
  "DISPUTE":["tranh chấp","tòa án"],"HARASSMENT":["quấy rối tình dục","quấy rối tại nơi làm việc"],
  "DISCIPLINE":["kỷ luật lao động","khiển trách","kéo dài thời hạn nâng lương"],
  "MATERNITY":["thai sản","mang thai","nuôi con dưới 12 tháng"],
  "WORKING_TIME":["thời giờ làm việc","giờ làm việc","nghỉ giữa giờ","làm ban đêm","làm thêm giờ"],
  "UNION":["công đoàn","đoàn phí"],"FOREIGN_WORKER":["lao động nước ngoài","giấy phép lao động"],
- "UNEMPLOYMENT_INSURANCE":["bảo hiểm thất nghiệp","trợ cấp thất nghiệp"]}
+ "UNEMPLOYMENT_INSURANCE":["bảo hiểm thất nghiệp","trợ cấp thất nghiệp"],
+ "TRAINING":["học nghề","tập nghề","đào tạo","thực tập"],
+ "MINOR_WORKER":["lao động chưa thành niên","người chưa đủ 18 tuổi"],
+ "RETIREMENT":["nghỉ hưu","tuổi hưu"], "OVERSEAS_WORKER":["đi làm việc ở nước ngoài"],
+ "COLLECTIVE_RELATIONS":["thương lượng tập thể","thỏa ước lao động","đình công","đối thoại tại nơi làm việc"]}
 FACTS={"TERMINATION":{"termination_date":"Ngày chấm dứt là ngày nào?","contract_type":"Loại hợp đồng là gì?","termination_reason":"Lý do chấm dứt là gì?","notice_days":"Công ty đã báo trước bao nhiêu ngày?","protected_status":"Người lao động có đang mang thai, nghỉ thai sản, nuôi con nhỏ hoặc thuộc tình trạng được bảo vệ đặc biệt nào không?"},
  "WAGE":{"work_date":"Thời điểm phát sinh tiền lương là khi nào?"},
  "HARASSMENT":{"incident_date":"Sự việc xảy ra vào thời điểm nào?","workplace_context":"Sự việc xảy ra trong hoàn cảnh công việc nào?"},
@@ -157,6 +161,15 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             missing.append('Công việc thuộc điều kiện bình thường, nặng nhọc/độc hại/nguy hiểm hay đặc biệt nặng nhọc/độc hại/nguy hiểm; người lao động có chưa thành niên hoặc khuyết tật không?')
     if outcome!='ASSESS_LEGALITY': return sorted(set(missing))
     subissues=classify_subissues(query,facts,issues)
+    if 'TRAINING.INTERN_PAY' in subissues:
+        return sorted(set(missing+['Bạn thực tập theo chương trình của trường, học/tập nghề để làm việc cho công ty, thử việc, hay đang làm việc có trả công và chịu sự quản lý của công ty?']))
+    if facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY':
+        # A hypothetical premise is not a finding about a real dispute.
+        return sorted(set(missing))
+    if 'WAGE.OVERTIME_PAY' in subissues and not ('TERMINATION' in issues or 'MATERNITY' in issues):
+        # Explain mandatory remuneration, not an amount for an unstated event.
+        if not any(term in query for term in ('tính số tiền','bao nhiêu tiền','tính tiền cụ thể')):
+            return sorted(set(missing))
     alternate={'TERMINATION.EXPIRY','TERMINATION.DISMISSAL','TERMINATION.ECONOMIC_RESTRUCTURING',
       'TERMINATION.ENTERPRISE_TRANSFER','TERMINATION.SEVERANCE','TERMINATION.JOB_LOSS_ALLOWANCE'}
     unilateral={'TERMINATION.EMPLOYEE_UNILATERAL','TERMINATION.EMPLOYER_UNILATERAL'}
@@ -214,6 +227,10 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif any(term in q for term in ('nặng nhọc, độc hại, nguy hiểm','nghề nặng nhọc','công việc nặng nhọc')): facts['work_category']='HEAVY'
     elif any(term in q for term in ('điều kiện bình thường','công việc bình thường','nhân viên văn phòng','công việc văn phòng')): facts['work_category']='NORMAL'
     if 'khuyết tật' in q: facts['disabled']=True
+    premise=re.search(r'(?:khi|nếu)\s+(?:nlđ|người lao động)[^.]{0,100}đơn phương[^.]{0,100}trái pháp luật',q)
+    if premise and not re.search(r'có bị|có phải|bị coi|khi nào|(?:không|chưa)\s+(?:bị coi là\s+)?trái pháp luật',premise.group()):
+        facts['query_intent']='STIPULATED_EMPLOYEE_LIABILITY'
+        facts['actor']='EMPLOYEE'
     if 'không xác định thời hạn' in q: facts['contract_type']='INDEFINITE'
     elif 'xác định thời hạn' in q: facts['contract_type']='FIXED_TERM'
     elif 'thử việc' in q: facts['contract_type']='PROBATION'
