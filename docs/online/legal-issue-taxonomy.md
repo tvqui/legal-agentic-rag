@@ -12,7 +12,7 @@ Cần điều chỉnh ba điểm trong đề xuất ban đầu:
 
 ## Phạm vi hiện được triển khai
 
-Phiên bản `labor-subissues-v1` có 21 vấn đề cụ thể trong hai nhóm này. Các nhóm rộng khác vẫn dùng luồng hiện có; chưa triển khai toàn bộ taxonomy pháp luật lao động hoặc các lĩnh vực liên quan như bảo hiểm xã hội.
+Phiên bản hiện tại `labor-subissues-v4` có 37 subissues, gồm hợp đồng, đào tạo, thời giờ làm việc, tiền lương, chấm dứt và nghỉ. Bảng dưới mô tả 21 nhánh TERMINATION/LEAVE ban đầu; các nhánh và kiểm chứng mới được ghi trong [báo cáo V4](review-v3-corrections-20261009.md). Chưa triển khai toàn bộ taxonomy pháp luật lao động hoặc các lĩnh vực liên quan như bảo hiểm xã hội.
 
 | Nhóm | Mã vấn đề | Ý nghĩa |
 | --- | --- | --- |
@@ -73,7 +73,7 @@ Các profile dùng vị trí tương ứng của Bộ luật Lao động 2012 kh
 - Chuỗi dẫn chiếu riêng, ví dụ nghỉ ngay do chậm lương và ngoại lệ liên quan, vẫn giữ slot tương ứng.
 - Trùng số Điều nhưng khác văn bản không đáp ứng yêu cầu. Bằng chứng chưa qua kiểm tra không đáp ứng profile chỉ nhờ label hoặc điểm tìm kiếm cao.
 
-## Kiểm tra đã thực hiện
+## Kiểm tra ở phiên bản ban đầu
 
 - Toàn bộ regression suite: **294 test PASS**, thời gian chạy được ghi nhận **7,350 giây** trên môi trường kiểm thử local.
 - File `tests/online/test_issue_taxonomy.py`: **26 test PASS**. Bao gồm phân loại nhiều vấn đề, chủ thể, cơ chế chấm dứt, ngày lịch sử, giữ nhiều nhóm bằng chứng và thiếu ngân sách.

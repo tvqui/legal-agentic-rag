@@ -3,7 +3,7 @@ import json
 import unicodedata
 from types import SimpleNamespace
 from .audit import applicability
-from .taxonomy import classify_subissues,taxonomy_exclusion,profile_requirements,locator_matches
+from .taxonomy import classify_subissues,taxonomy_exclusion,profile_requirements,locator_matches,profile_covers_issues
 from .config import ApplicabilityConfig
 from .errors import StructuredOutputError
 from .models import ApplicabilityDecision,Evidence,ProviderApplicability
@@ -46,7 +46,7 @@ class LegalApplicabilityAuditor:
 
     def _hybrid(self,items,query,issues,facts,requested_outcome):
         base_accepted,base_decisions,base_warnings=self._deterministic(items,query,issues,facts,requested_outcome)
-        if requested_outcome!='ASSESS_LEGALITY' or not self.provider:
+        if not self.provider:
             return base_accepted,base_decisions,base_warnings
         by_item={item.unit_id:item for item in items}; hard={d.evidence_id:d for d in base_decisions if d.audit_status=='FAIL'}
         # Exact statutory chains proved from explicit facts are final.  A
@@ -58,7 +58,7 @@ class LegalApplicabilityAuditor:
           'DETERMINISTIC_MISINFORMATION_CHAIN','DETERMINISTIC_HARASSMENT_EXCEPTION',
           'DETERMINISTIC_WITHDRAWAL_RULE','DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN',
           'DETERMINISTIC_MUTUAL_AGREEMENT_RULE','DETERMINISTIC_LEAVE_RULE_CHAIN','DETERMINISTIC_PROFILE_RULE',
-          'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN'}
+          'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN','DETERMINISTIC_EXACT_LOOKUP'}
         locked={d.evidence_id:d for d in base_decisions if proven_reasons.intersection(d.reasons)}
         candidates=[item for item in items if item.unit_id not in hard and item.unit_id not in locked]
         candidates.sort(key=lambda item:('policy' not in item.component_scores and item.retrieval_method!='policy',-item.score,item.unit_id))
@@ -142,6 +142,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
         for regime_date in ('2020-01-01','2026-01-01'):
             for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,query_date=regime_date,facts=facts,query_text=query)).items():
                 profile_groups.setdefault(slot,[]).extend(groups)
+        covered=profile_covers_issues(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,facts=facts,query_text=query))
         for item in items:
             matched=item.unit_id in accepted_ids or item.retrieval_method=='policy' or 'policy' in item.component_scores
             text=' '.join(x for x in (item.source_text,item.text) if x).lower(); folded=_fold(text)
@@ -155,8 +156,13 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
                   reasons=[exclusion]+(['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'] if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36' else []))
-            elif any(key in {'CONTRACT.PROBATION_DURATION','TRAINING.APPRENTICESHIP','TRAINING.COST_REPAYMENT',
-              'WAGE.OVERTIME_PAY','WAGE.NIGHT_PAY','WORKING_TIME.OVERTIME_LIMITS'} for key in subissues) and profile_groups and not any(
+            elif facts.get('worked_months') is not None and int(facts['worked_months'])>=12 and 'chua du 12 thang' in folded:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_UNDER_12_MONTH_RULE'])
+            elif facts.get('worked_months') is not None and int(facts['worked_months'])<12 and 'du 12 thang' in folded and 'chua du 12 thang' not in folded:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_FULL_12_MONTH_RULE'])
+            elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='UNKNOWN',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['SPECIAL_OCCUPATION_NOT_ESTABLISHED'])
+            elif requested_outcome!='LOOKUP' and covered and profile_groups and not any(
               locator_matches(item,locator) for groups in profile_groups.values() for alternatives in groups for locator in alternatives):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
@@ -168,8 +174,6 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                   reasons=['DETERMINISTIC_HISTORICAL_NOTICE_CHAIN'])
             elif employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36':
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'])
-            elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='UNKNOWN',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['SPECIAL_OCCUPATION_NOT_ESTABLISHED'])
             elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is True and item.clause_number=='2' and item.point_number=='a' and '120 ngay' in folded:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_SPECIAL_OCCUPATION_RULE_MATCH'])
             elif employee_termination and article=='35' and item.clause_number=='1' and item.point_number=='d' and facts.get('special_occupation') is True:
@@ -215,20 +219,15 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_PROFILE_RULE'])
             elif not matched:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['ISSUE_OR_QUERY_MISMATCH'])
-            elif facts.get('worked_months') is not None and int(facts['worked_months'])>=12 and 'chua du 12 thang' in folded:
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_UNDER_12_MONTH_RULE'])
-            elif facts.get('worked_months') is not None and int(facts['worked_months'])<12 and 'du 12 thang' in folded and 'chua du 12 thang' not in folded:
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_FULL_12_MONTH_RULE'])
-            elif requested_outcome!='ASSESS_LEGALITY':
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_RELEVANCE_MATCH'])
+            elif requested_outcome=='LOOKUP' and (item.retrieval_method in {'exact','exact_hierarchy'} or any(key in item.component_scores for key in ('exact','exact_hierarchy'))):
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_EXACT_LOOKUP'])
             else:
                 conditional=any(term in text for term in ('nếu ','khi ','trường hợp','điều kiện','với điều kiện'))
                 exceptional=any(term in text for term in ('trừ trường hợp','không áp dụng','ngoại lệ'))
                 conditions='UNKNOWN' if conditional else 'NOT_APPLICABLE'; exceptions='UNKNOWN' if exceptional else 'NOT_APPLICABLE'
-                unresolved=conditions=='UNKNOWN' or exceptions=='UNKNOWN'
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status=conditions,
-                  exception_status=exceptions,audit_status='UNRESOLVED' if unresolved else 'PASS',
-                  reasons=['CONDITIONS_OR_EXCEPTIONS_REQUIRE_REVIEW'] if unresolved else ['DETERMINISTIC_NONCONDITIONAL_MATCH'])
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=False,conditions_status=conditions,
+                  exception_status=exceptions,audit_status='UNRESOLVED',
+                  reasons=['SEMANTIC_SUPPORT_REQUIRES_AUDIT'])
             decisions.append(decision)
         accepted=[item for item in items if next(x for x in decisions if x.evidence_id==item.unit_id).audit_status=='PASS']
         warnings=['APPLICABILITY_UNRESOLVED:'+x.evidence_id for x in decisions if x.audit_status=='UNRESOLVED']

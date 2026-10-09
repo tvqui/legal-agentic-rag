@@ -368,6 +368,10 @@ class OnlinePipeline:
           {'event':'reference_audit','passed':ok,'issues':problems}]
         trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2); persist(trace,self.cfg.trace_dir)
         evidence_status='CONFLICTING' if status==Stop.CONFLICTING_EVIDENCE else 'NEED_MORE_FACTS' if status==Stop.NEED_MORE_FACTS else 'SUFFICIENT' if status==Stop.SUFFICIENT else 'PARTIAL' if status==Stop.PARTIAL_ALLOWED else 'INSUFFICIENT'
+        if status in {Stop.SUFFICIENT,Stop.PARTIAL_ALLOWED} and 'CONTRACT.PROBATION_DURATION' in analysis.legal_subissues:
+            import re
+            if not analysis.facts.get('probation_work_group') and re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',env.normalized_query.lower()):
+                followup_questions.append('Công việc thuộc nhóm quản lý doanh nghiệp, cần trình độ từ cao đẳng, trung cấp/công nhân kỹ thuật/nhân viên nghiệp vụ, hay công việc khác?')
         return AnswerResponse(query_id=env.query_id,status=status,answer=answer,citations=refs,evidence_status=evidence_status,
           applicable_date=analysis.query_date,query_date=analysis.query_date,applicable_law_versions=draft.applicable_law_versions,
           claims=draft.claims,assumptions=draft.assumptions,limitations=state.gaps,questions=followup_questions,warnings=list(dict.fromkeys(warnings)),

@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json
+import json,re
 import unicodedata
 from fractions import Fraction
 from .config import AdjudicationConfig
@@ -7,12 +7,21 @@ from .claim_validation import semantic_issues
 from .answer_quality import clean_draft,clean_source_excerpt,draft_issues,guarded_language_edit,language_issues,render_claims
 from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
-from .taxonomy import classify_subissues
+from .taxonomy import classify_subissues,original_documents,profile_covers_issues
 from .providers import HttpJsonProvider,OllamaProvider
 
 def _fold(value:str)->str:
     value=unicodedata.normalize('NFD',value.lower()).replace('đ','d')
     return ' '.join(''.join(char for char in value if unicodedata.category(char)!='Mn').split())
+
+def probation_pay_application(query):
+    """Compare only the stated salary base; never silently substitute region minima."""
+    q=query.lower()
+    match=re.search(r'(?:trả|nhận|hưởng|bằng)[^.]{0,35}?(\d{1,3})\s*%',q)
+    if not match or not any(term in q for term in ('lương của công việc','lương công việc','lương chính thức')): return ''
+    value=int(match.group(1))
+    qualifier='Nếu mức lương chính thức bạn nói là mức lương của công việc đó, thì ' if 'lương chính thức' in q else 'Với mức lương của công việc đó như bạn nêu, '
+    return qualifier+f'tỷ lệ {value}% '+('thấp hơn tối thiểu 85%, nên không đáp ứng quy định về tiền lương thử việc.' if value<85 else 'đáp ứng mức tối thiểu 85%; điều này không xác nhận các điều kiện thử việc khác.')
 
 def _find(pack,article,clause=None,point=None,instrument=None):
     candidates=[item for item in pack.evidence if str(item.article or '')==str(article)
@@ -75,6 +84,8 @@ def _chain_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|N
           or basis=='EMPLOYER_MISINFORMATION' and pack.facts.get('misinformation_material_effect') is True)
         lines=['Người lao động có quyền nghỉ không cần báo trước theo dữ kiện đã cung cấp.' if conclusive else 'Quy định trực tiếp và ngoại lệ cần kiểm tra là:']
         lines += [f'- {claim.text} '+ ' '.join(f'[{eid}]' for eid in claim.evidence_ids) for claim in claims]
+        if conclusive:
+            lines.append('Nếu các dữ kiện này được xác nhận và thỏa mãn điều kiện của ngoại lệ, chỉ riêng việc không báo trước không đủ để coi việc chấm dứt là trái pháp luật hoặc buộc bồi thường vì thiếu báo trước. Cần kiểm tra bằng chứng thực tế của ngoại lệ.')
     else:
         return None
     if partial: lines.append('Kết quả còn giới hạn vì metadata nguồn hoặc hiệu lực ở cấp điều khoản đang chờ người có chuyên môn duyệt.')
@@ -306,7 +317,10 @@ def _contract_rule_answer(pack,partial,assumptions):
     elif key=='CONTRACT.PROBATION_PAY':
         rule=_find(pack,'26')
         if not rule or '85%' not in rule.text: return None
-        add(rule,'Điều 26: tiền lương trong thời gian thử việc do hai bên thỏa thuận nhưng ít nhất phải bằng 85% mức lương của công việc đó.')
+        text='Điều 26: tiền lương trong thời gian thử việc do hai bên thỏa thuận nhưng ít nhất phải bằng 85% mức lương của công việc đó.'
+        application=probation_pay_application(pack.query)
+        if application: text+=' '+application
+        add(rule,text)
     else:
         locations={'CONTRACT.PARTY_DEFINITIONS':('3',('1','2')),
           'CONTRACT.EMPLOYER_INFORMATION':('16',('1',)),
@@ -317,13 +331,15 @@ def _contract_rule_answer(pack,partial,assumptions):
         q=_fold(pack.query)
         if key=='CONTRACT.PROHIBITED_ACTS':
             deposit=any(term in q for term in ('dat coc','bao dam bang tien','bao dam bang tai san'))
-            originals=any(term in q for term in ('giu ban chinh','giu bang'))
+            originals=original_documents(pack.query)
             if deposit and not originals: relevant_clauses=('2',)
             elif originals and not deposit: relevant_clauses=('1',)
         for clause in relevant_clauses:
             rule=_find(pack,article,clause)
             if not rule: return None
             add(rule,f'Khoản {clause} Điều {article}: {rule.text}')
+        if key=='CONTRACT.PROHIBITED_ACTS' and '1' in relevant_clauses:
+            add(_find(pack,'17','1'),'Việc người sử dụng lao động giữ bản chính giấy tờ tùy thân, văn bằng, chứng chỉ để ràng buộc người lao động là hành vi bị cấm tại khoản 1 Điều 17; cần phân biệt với việc xuất trình để đối chiếu rồi trả lại.')
         if key=='CONTRACT.PROHIBITED_ACTS' and '2' in relevant_clauses:
             rule=_find(pack,'17','2')
             add(rule,'Nếu khoản tiền hoặc tài sản thực chất là biện pháp bảo đảm cho việc thực hiện hợp đồng lao động thì thuộc hành vi bị cấm tại khoản 2 Điều 17. Đổi tên thành “phí bảo đảm uy tín” không làm thay đổi bản chất; cần kiểm tra mục đích và điều kiện nộp, hoàn trả thực tế.')
@@ -426,10 +442,22 @@ class LegalAdjudicator:
           'document_type':item.document_type,'document_title':item.document_title,'issuer':item.issuer,
           'norm_role':item.norm_role,'text':item.text} for item in pack.evidence]}
         schema=ProviderClaims.model_json_schema()
+        from .analysis import analyze,intake,plan_evidence
+        analysis=analyze(intake(pack.query,[],pack.query_date,pack.facts),pack.query_date,pack.facts)
+        plan=plan_evidence(analysis)
+        required_groups=sum(len(groups) for groups in plan.slot_requirements.values())
+        simple=profile_covers_issues(analysis) and len(analysis.legal_subissues)==1 and required_groups<=2
+        if simple:
+            schema['properties']['claims']['maxItems']=4
+            schema['$defs']['ProviderClaim']['properties']['text']['maxLength']=1000
+        payload['required_evidence_groups']={slot:[[{ 'instrument':loc.documents,'article':loc.article,'clause':loc.clause,'point':loc.point} for loc in group] for group in groups] for slot,groups in plan.slot_requirements.items()}
+        system+=' Distinguish a general rule from its application to the stated facts. State the supported direct answer first. Do not substitute an employer termination rule for an employee rule. Every required evidence group must be addressed; unrelated evidence is not a substitute.'
         schema['$defs']['ProviderClaim']['properties']['evidence_ids']['items']={'type':'string','enum':sorted(allowed_ids)}
         try:
             raw=self.provider.structured(system,json.dumps(payload,ensure_ascii=False),schema)
             output=ProviderClaims.model_validate(raw)
+            if simple and (len(output.claims)>4 or any(len(c.text)>1000 for c in output.claims)):
+                raise StructuredOutputError('ADAPTIVE_CLAIM_LIMIT_EXCEEDED')
             by_evidence={item.evidence_id:item for item in pack.evidence}
             for claim in output.claims:
                 attached=[by_evidence[uid] for uid in claim.evidence_ids if uid in by_evidence]

@@ -2,7 +2,7 @@ from __future__ import annotations
 import calendar,hashlib,json,re,unicodedata
 from datetime import date
 from .temporal import legal_regime_for
-from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions
+from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison
 from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan,FactCandidate
 
 ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ ngay","nghỉ sau","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương","trợ cấp mất việc","hết hạn hợp đồng","hợp đồng hết hạn","thay đổi cơ cấu","thay đổi công nghệ","lý do kinh tế","tái cơ cấu","cắt giảm nhân sự","sáp nhập"],"WAGE":["tiền lương","lương","làm thêm"],
@@ -86,8 +86,12 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
         query_date=facts['termination_date']; query_date_end=query_date; precision='DAY'
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
     subissues=classify_subissues(q,facts,issues)
+    # A retention deadline is not a request to assess an employee's resignation.
+    if original_documents(lower) and not re.search(r'(?:tôi|người lao động|nlđ)\s+(?:muốn|xin|sẽ|đơn phương|chỉ báo|báo trước)|thời hạn báo trước|hậu quả.*(?:nghỉ|chấm dứt)',lower):
+        issues=[issue for issue in issues if issue!='TERMINATION']
+        subissues=classify_subissues(q,facts,issues)
     issues=parent_issues(issues,subissues)
-    outcome='LOOKUP' if refs and any(w in lower for w in ('quy định gì','nội dung','tra cứu')) else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường bao nhiêu','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
+    outcome='LOOKUP' if refs and any(w in lower for w in ('quy định gì','nội dung','tra cứu')) else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có hợp pháp','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường bao nhiêu','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
     historical=legal_regime_for(query_date)=='BLLD_2012' if query_date else False
     temporal='HISTORICAL' if historical else 'EXPLICIT_DATE' if query_date else 'CURRENT' if any(w in lower for w in ('hiện nay','bây giờ','mới nhất')) else 'NONE'
     # A date constraint alone does not make a lookup or a single-issue question complex.
@@ -142,7 +146,9 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
       'mutual_termination_agreement':('đồng ý cho','hai bên thỏa thuận','công ty đồng ý'),
       'work_category':('đặc biệt nặng nhọc','nặng nhọc','điều kiện bình thường','công việc văn phòng'),
       'disabled':('người khuyết tật','khuyết tật'),
-      'training_costs':('không có chi phí đào tạo','có chi phí đào tạo','chi phí đào tạo')}
+      'probation_work_group':('công việc quản lý doanh nghiệp','công việc của người quản lý doanh nghiệp','cần trình độ cao đẳng','yêu cầu trình độ cao đẳng','cần trình độ trung cấp','yêu cầu trình độ trung cấp','công nhân kỹ thuật','nhân viên nghiệp vụ','công việc khác','công việc không yêu cầu trình độ'),
+      'training_costs':('không có chi phí đào tạo','có chi phí đào tạo','chi phí đào tạo'),
+      'misinformation_material_effect':('ảnh hưởng trực tiếp đến việc thực hiện hđlđ','ảnh hưởng đến việc thực hiện hđlđ','ảnh hưởng trực tiếp đến việc thực hiện hợp đồng','ảnh hưởng tới thực hiện hợp đồng')}
     result=[]
     for field,value in facts.items():
         if field=='notice_days':
@@ -159,10 +165,12 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             missing.append('Trong năm đang xét, người lao động đã làm việc thực tế bao nhiêu tháng?')
         if not facts.get('work_category') and not facts.get('minor') and not facts.get('disabled'):
             missing.append('Công việc thuộc điều kiện bình thường, nặng nhọc/độc hại/nguy hiểm hay đặc biệt nặng nhọc/độc hại/nguy hiểm; người lao động có chưa thành niên hoặc khuyết tật không?')
-    if outcome!='ASSESS_LEGALITY': return sorted(set(missing))
     subissues=classify_subissues(query,facts,issues)
+    if 'TRAINING.INTERN_PAY' not in subissues and outcome!='ASSESS_LEGALITY': return sorted(set(missing))
     if 'TRAINING.INTERN_PAY' in subissues:
         return sorted(set(missing+['Bạn thực tập theo chương trình của trường, học/tập nghề để làm việc cho công ty, thử việc, hay đang làm việc có trả công và chịu sự quản lý của công ty?']))
+    if subissues and all(key.startswith('CONTRACT.') for key in subissues) and set(issues)<={'CONTRACT','WAGE','GENERAL'}:
+        return sorted(set(missing))
     if facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY':
         # A hypothetical premise is not a finding about a real dispute.
         return sorted(set(missing))
@@ -227,13 +235,23 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif any(term in q for term in ('nặng nhọc, độc hại, nguy hiểm','nghề nặng nhọc','công việc nặng nhọc')): facts['work_category']='HEAVY'
     elif any(term in q for term in ('điều kiện bình thường','công việc bình thường','nhân viên văn phòng','công việc văn phòng')): facts['work_category']='NORMAL'
     if 'khuyết tật' in q: facts['disabled']=True
+    if 'thử việc' in q and not relationship_comparison(q):
+        # The required qualification of the job, not the applicant's diploma.
+        for group,pattern in (
+          ('MANAGER',r'công việc (?:của người )?quản lý doanh nghiệp'),
+          ('COLLEGE',r'(?:công việc|chức danh) (?:(?:nghề nghiệp|này|của tôi) )?(?:cần|yêu cầu) (?:trình độ )?(?:chuyên môn,? kỹ thuật )?(?:từ )?cao đẳng(?: trở lên)?'),
+          ('INTERMEDIATE',r'(?:công việc|chức danh) (?:(?:nghề nghiệp|này|của tôi) )?(?:cần|yêu cầu) (?:trình độ )?trung cấp|công nhân kỹ thuật|nhân viên nghiệp vụ'),
+          ('OTHER',r'công việc khác')):
+            match=re.search(pattern,q)
+            if match and not re.search(r'không(?:\s+(?:làm|là|thuộc|phải)){0,2}\s*$',q[max(0,match.start()-30):match.start()]):
+                facts['probation_work_group']=group; break
     premise=re.search(r'(?:khi|nếu)\s+(?:nlđ|người lao động)[^.]{0,100}đơn phương[^.]{0,100}trái pháp luật',q)
     if premise and not re.search(r'có bị|có phải|bị coi|khi nào|(?:không|chưa)\s+(?:bị coi là\s+)?trái pháp luật',premise.group()):
         facts['query_intent']='STIPULATED_EMPLOYEE_LIABILITY'
         facts['actor']='EMPLOYEE'
     if 'không xác định thời hạn' in q: facts['contract_type']='INDEFINITE'
     elif 'xác định thời hạn' in q: facts['contract_type']='FIXED_TERM'
-    elif 'thử việc' in q: facts['contract_type']='PROBATION'
+    elif 'thử việc' in q and not relationship_comparison(q): facts['contract_type']='PROBATION'
     if any(x in q for x in ('mang thai','thai sản','nuôi con dưới 12 tháng')): facts['protected_status']='MATERNITY'
     notice_date=NOTICE_DATE_DMY.search(q)
     if notice_date: facts['notice_date']=f'{notice_date.group(3)}-{notice_date.group(2).zfill(2)}-{notice_date.group(1).zfill(2)}'
@@ -261,8 +279,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
         facts['termination_basis']='SEXUAL_HARASSMENT'; facts['notice_exception']=True; facts['actor']='EMPLOYEE'
     if any(term in q for term in ('cung cấp sai thông tin','cung cấp thông tin sai','cung cấp sai địa điểm','cung cấp thông tin không trung thực','cung cấp khi giao kết là không trung thực')) and any(term in q for term in ('giao kết','tuyển dụng','ảnh hưởng trực tiếp','không thể thực hiện công việc')) and any(term in q for term in ('nghỉ','chấm dứt')):
         facts['termination_basis']='EMPLOYER_MISINFORMATION'; facts['actor']='EMPLOYEE'
-        material_effect=re.search(r'(?<!không )ảnh hưởng(?: trực tiếp)? đến (?:việc )?thực hiện hợp đồng',q)
-        if material_effect and not re.search(r'không\s+ảnh hưởng',q):
+        material_effect=re.search(r'ảnh hưởng(?: trực tiếp)? (?:đến|tới) (?:việc )?thực hiện (?:hợp đồng(?: lao động)?|hđlđ)',q)
+        if material_effect and not re.search(r'(?:không|chưa)\s+ảnh hưởng|có\s+ảnh hưởng[^.?!]{0,100}không\s*\?',q):
             facts['misinformation_material_effect']=True; facts['notice_exception']=True
     if any(term in q for term in ('công ty đồng ý cho','giám đốc trả lời bằng văn bản rằng công ty đồng ý','hai bên thỏa thuận chấm dứt')):
         facts['mutual_termination_agreement']=True

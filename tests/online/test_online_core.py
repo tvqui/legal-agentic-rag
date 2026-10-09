@@ -257,9 +257,9 @@ class OnlineTests(unittest.TestCase):
         self.assertEqual([x.unit_id for x in got],['leave'])
     def test_applicability_rejects_under_12_month_rule_for_12_month_fact(self):
         base=deterministic_audit(self.store,Retriever(self.store,self.cfg).bm25('tiền lương',1),None)[0]
-        full=base.model_copy(update={'unit_id':'full','text':'Người lao động làm việc đủ 12 tháng được nghỉ hằng năm 12 ngày làm việc.',
+        full=base.model_copy(update={'unit_id':'full','document_number':'45/2019/QH14','article_number':'113','clause_number':'1','point_number':'a','retrieval_method':'policy','text':'Người lao động làm việc đủ 12 tháng được nghỉ hằng năm 12 ngày làm việc.',
           'source_text':'Người lao động làm việc đủ 12 tháng được nghỉ hằng năm 12 ngày làm việc.'})
-        proportional=base.model_copy(update={'unit_id':'proportional','text':'Người lao động làm việc chưa đủ 12 tháng được nghỉ hằng năm theo tỷ lệ.',
+        proportional=base.model_copy(update={'unit_id':'proportional','document_number':'45/2019/QH14','article_number':'113','clause_number':'2','point_number':'','retrieval_method':'policy','text':'Người lao động làm việc chưa đủ 12 tháng được nghỉ hằng năm theo tỷ lệ.',
           'source_text':'Người lao động làm việc chưa đủ 12 tháng được nghỉ hằng năm theo tỷ lệ.'})
         auditor=LegalApplicabilityAuditor(ApplicabilityConfig())
         accepted,decisions,_=auditor.audit([full,proportional],'làm việc 12 tháng nghỉ phép năm',['LEAVE'],{'worked_months':12},'EXPLAIN')
@@ -493,8 +493,9 @@ class OnlineTests(unittest.TestCase):
         self.assertFalse(out.claims); self.assertIn('AUTHORITATIVE_EVIDENCE_CONFLICT',out.warnings)
     def test_pipeline_standard(self):
         out=OnlinePipeline(self.cfg).ask(QueryRequest(question='Giải thích quy định tiền lương.'))
-        self.assertIn(out.status,{Stop.SUFFICIENT,Stop.PARTIAL_ALLOWED}); self.assertTrue(out.citations)
-        self.assertLessEqual(len(out.citations),6)
+        # Deterministic-only mode cannot certify an unknown generic rule from lexical relevance.
+        self.assertEqual(out.status,Stop.INSUFFICIENT_EVIDENCE)
+        self.assertFalse(out.citations)
     def test_pipeline_complex_is_bounded(self):
         out=OnlinePipeline(self.cfg).ask(QueryRequest(question='So sánh tiền lương và hợp đồng lao động.'))
         self.assertEqual(out.trace.route,Route.COMPLEX); self.assertLessEqual(out.trace.nodes_visited,self.cfg.graph.max_nodes)
@@ -661,7 +662,7 @@ class AgentBoundaryTests(unittest.TestCase):
         item=Evidence(unit_id='real',retrieval_method='policy',document_id='doc',document_number='45/2019/QH14',
           article_number='36',text='Quy định trực tiếp.',source_text='Quy định trực tiếp.')
         auditor=LegalApplicabilityAuditor(ApplicabilityConfig(mode='hybrid'),Store()); auditor.provider=Provider()
-        accepted,decisions,warnings=auditor.audit([item],'Có đúng luật không?',['TERMINATION'],{'actor':'EMPLOYER'},'ASSESS_LEGALITY')
+        accepted,decisions,warnings=auditor.audit([item],'Tiền lương có đúng luật không?',['WAGE'],{},'ASSESS_LEGALITY')
         self.assertFalse(accepted); self.assertEqual(decisions[0].evidence_id,'real')
         self.assertEqual(decisions[0].audit_status,'UNRESOLVED')
         self.assertTrue(any(x.startswith('APPLICABILITY_PROVIDER_ERROR:') for x in warnings))

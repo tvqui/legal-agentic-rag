@@ -42,6 +42,15 @@ def semantic_issues(text, items):
             for days in (180,60,30):
                 if re.search(rf'\b{days}\s+ngay lam viec\b',q) and not re.search(rf'\b{days}\s+ngay lam viec\b',source):
                     problems.append('CLAIM_PROBATION_DAY_UNIT_MISMATCH')
+    # A citation to an unrelated clause cannot justify this universal negative.
+    # Keep conditional descriptions of genuinely different work or situations.
+    for sentence in re.split(r'[.!?;\n]+',q):
+        repeated=bool(re.search(r'thu viec[^.]{0,80}(?:hai lan|2 lan|nhieu lan|lan thu hai)',sentence))
+        same_work=any(term in sentence for term in ('cung mot cong viec','cung cong viec','mot cong viec'))
+        permits=(bool(re.search(r'khong co[^.]{0,80}(?:cam|han che)|duoc phep[^.]{0,50}thu viec',sentence)) or
+          'la hop phap' in sentence or 'van hop phap' in sentence)
+        if repeated and same_work and permits and not any(term in sentence for term in ('khong hop phap','khong duoc phep','khong dung')):
+            problems.append('CLAIM_PROBATION_REPEAT_NOT_SUPPORTED')
     return list(dict.fromkeys(problems))
 
 def proposition_issues(claim, items):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json,re,unicodedata
 from .analysis import ISSUES,missing_fact_questions
-from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION
+from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION,profile_covers_issues,relationship_comparison
 from .config import ResearcherConfig
 from .models import FactCandidate,QueryAnalysis,ResearcherResult,Route
 from .providers import HttpJsonProvider,OllamaProvider
@@ -63,30 +63,9 @@ class LegalResearcher:
             if not analysis.in_scope: return 'SKIPPED_SCOPE_GATE'
             if analysis.missing_facts: return 'SKIPPED_FACT_GATE'
             if analysis.route==Route.DIRECT and analysis.requested_outcome=='LOOKUP': return 'SKIPPED_EXACT_LOOKUP'
-            parents={key.split('.')[0] for key in analysis.legal_subissues}
-            allowed=parents|{'CONTRACT'}
-            if analysis.facts.get('termination_basis') or 'CONTRACT.PROBATION_PAY' in analysis.legal_subissues:
-                allowed.add('WAGE')
-            q=analysis.query_text.lower()
-            if 'CONTRACT.RELATIONSHIP_QUALIFICATION' in analysis.legal_subissues and any(
-              term in q for term in ('tên gọi','hđlđ','hợp đồng lao động','quan hệ lao động')) and not any(
-              term in q for term in ('mức lương','tiền lương','trả lương','lương tối thiểu','bao nhiêu','đòi lương')):
-                # "Thực tập sinh không lương" can be a relationship-label
-                # question, rather than an additional wage entitlement request.
-                allowed.update({'WAGE','TRAINING'})
-            keys=set(analysis.legal_subissues)
-            # These are contextual parent hits already explained by the known
-            # rule chain, not additional questions needing ontology inference.
-            if 'TRAINING.COST_REPAYMENT' in keys: allowed.add('TERMINATION')
-            if 'WORKING_TIME.OVERTIME_LIMITS' in keys and not any(term in q for term in ('tiền lương','trả lương','tiền làm thêm')):
-                allowed.add('WAGE')
-            if 'WAGE.NIGHT_PAY' in keys and not any(term in q for term in ('nghỉ giữa giờ','lịch làm việc','thời giờ nghỉ')):
-                allowed.add('WORKING_TIME')
-                if 'LEAVE.PUBLIC_HOLIDAY' not in keys and any(term in q for term in ('ngày lễ','nghỉ lễ','ngày tết')):
-                    allowed.add('LEAVE')
-            known_comparison=analysis.facts.get('query_intent')=='UNLAWFUL_DEFINITION_CONSEQUENCES'
-            if analysis.legal_subissues and not analysis.missing_facts and set(analysis.legal_issues)<=allowed and (
-              analysis.requested_outcome not in {'COMPARE','FIND_CASE'} or known_comparison):
+            comparison=(analysis.facts.get('query_intent')=='UNLAWFUL_DEFINITION_CONSEQUENCES' or
+              relationship_comparison(analysis.query_text))
+            if profile_covers_issues(analysis) and (analysis.requested_outcome not in {'COMPARE','FIND_CASE'} or comparison):
                 return 'SKIPPED_KNOWN_PROFILE'
         return 'MODEL_REQUESTED'
 
@@ -105,6 +84,7 @@ The result improves retrieval recall and never counts as legal evidence. Return 
             issues=list(dict.fromkeys(analysis.legal_issues+[item for item in result.legal_issues if item in ISSUES]))
             candidates=[candidate for proposed in result.fact_candidates if (candidate:=_verified_candidate(proposed,query)) is not None]
             facts=dict(analysis.facts)
+            if relationship_comparison(query): candidates=[c for c in candidates if c.field not in {'contract_type','actor'}]
             for candidate in candidates: facts.setdefault(candidate.field,candidate.value)
             queries=[]
             for value in result.retrieval_queries:
