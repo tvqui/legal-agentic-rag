@@ -59,8 +59,16 @@ class FactCandidate(BaseModel):
     span_source:Literal['NORMALIZED_QUERY']='NORMALIZED_QUERY'
     origin:Literal['DETERMINISTIC','RESEARCHER']='DETERMINISTIC'; verified:bool=False
 
+class AnswerTask(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    task_id:str=Field(min_length=1,max_length=64)
+    request_quote:str=Field(min_length=2,max_length=10000)
+    description:str=Field(min_length=2,max_length=10000)
+    retrieval_query:str=Field(min_length=2,max_length=10000)
+
 class ResearcherResult(BaseModel):
     model_config=ConfigDict(extra='forbid')
+    answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
     legal_issues:list[str]=Field(default_factory=list,max_length=8)
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
@@ -78,6 +86,7 @@ class QueryAnalysis(BaseModel):
     legal_subissues:list[str]=Field(default_factory=list)
     in_scope:bool=True
     query_text:str=''
+    answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
 
 class LegalLocator(BaseModel):
     exact_level:bool=False
@@ -94,6 +103,7 @@ class Evidence(BaseModel):
     document_id:str|None=None; instrument_id:str|None=None; provision_identity_id:str|None=None
     provision_version_id:str|None=None; document_number:str|None=None; document_title:str|None=None
     article_number:str|None=None; clause_number:str|None=None; point_number:str|None=None
+    ancestor_context:str=''
     source_url:str|None=None; breadcrumb:str|None=None; text:str; source_text:str|None=None
     valid_from:str|None=None; valid_to:str|None=None; authority_rank:int=0; binding:bool=False
     temporal_verified:bool=False; provision_temporal_verified:bool=False; provenance:dict[str,Any]=Field(default_factory=dict)
@@ -139,6 +149,8 @@ class ApplicabilityBatch(BaseModel):
 class VerifiedEvidenceItem(BaseModel):
     evidence_id:str; instrument_number:str|None=None; article:str|None=None; clause:str|None=None
     point:str|None=None; text:str; valid_from:str|None=None; valid_to:str|None=None
+    full_text:str=''
+    ancestor_context:str=''
     document_type:str|None=None; document_title:str|None=None; issuer:str|None=None
     norm_role:Literal['RULE','SANCTION']='RULE'
     official_url:str|None=None; authority_rank:int=0; binding:bool=False; official_source:bool=False
@@ -149,9 +161,11 @@ class VerifiedEvidencePack(BaseModel):
     query:str; query_date:str|None=None; facts:dict[str,Any]=Field(default_factory=dict)
     requested_outcome:Literal["LOOKUP","EXPLAIN","ASSESS_LEGALITY","COMPARE","FIND_CASE","OTHER"]="OTHER"
     coverage_state:EvidenceState; evidence:list[VerifiedEvidenceItem]
+    answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
 class AdjudicationDraft(BaseModel):
     model_config=ConfigDict(extra='forbid')
     answer_summary:str; claims:list[Claim]; applicable_law_versions:list[ApplicableLawVersion]
+    semantic_review:dict[str,Any]=Field(default_factory=dict)
     assumptions:list[str]=Field(default_factory=list); limitations:list[str]=Field(default_factory=list)
 class ProviderClaim(BaseModel):
     model_config=ConfigDict(extra='forbid')

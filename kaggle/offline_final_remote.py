@@ -29,7 +29,7 @@ def _write_json(path: Path, value: dict) -> None:
 
 def _state(stage: str, status: str = "RUNNING", **details) -> dict:
     previous = {}
-    if STATE.exists():
+    if STATE.exists() and stage != "starting":
         try:
             previous = json.loads(STATE.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -66,27 +66,38 @@ def _configure_ai(config: Path, max_provisions: int) -> None:
         "ai_provider": os.getenv("VN_LABOR_OFFLINE_AI_PROVIDER", "ollama"),
         "ai_url": os.getenv("VN_LABOR_OFFLINE_AI_URL", "http://127.0.0.1:11434/api/chat"),
         "ai_model": os.getenv("VN_LABOR_OFFLINE_AI_MODEL", "qwen3:8b"),
-        "ai_timeout_seconds": int(os.getenv("VN_LABOR_OFFLINE_AI_TIMEOUT_SECONDS", "120")),
+        "ai_timeout_seconds": int(os.getenv("VN_LABOR_OFFLINE_AI_TIMEOUT_SECONDS", "240")),
         "ai_cache_dir": "artifacts/04_knowledge/ai_cache",
         "ai_max_provisions": max_provisions,
+        "ai_context_tokens": 16384,
+        "ai_max_output_tokens": 2048,
+        "ai_max_consecutive_failures": 5,
+        "ai_chunk_bytes": 3500,
+        "ai_case_budget_seconds": 10800,
+        "ai_checklist_budget_seconds": 10800,
     })
     config.write_text(yaml.safe_dump(raw, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
-def _technical_audit() -> dict:
+def _technical_audit(config="config/kaggle.yaml") -> dict:
     # Without --neo4j the only expected failed construction check is the live
     # Neo4j check. All local registry/structure/graph/Dense/BM25 checks must pass.
-    _run(["scripts/validate_outputs.py", "--config", "config/kaggle.yaml"], check=False)
+    report_path = REPORTS / "final_outputs_validation.json"
+    report_path.unlink(missing_ok=True)
+    code=_run(["scripts/validate_outputs.py", "--config", str(config)], check=False)
+    if code not in (0,1): raise RuntimeError('Technical audit process crashed')
     report_path = REPORTS / "final_outputs_validation.json"
     if not report_path.is_file():
         raise RuntimeError("Audit did not create final_outputs_validation.json")
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    checks=report.get('checks',[])
+    if not isinstance(checks,list) or not checks: raise RuntimeError('Technical audit has no checks')
     failures = [
         row for row in report.get("checks", [])
         if not row.get("passed") and row.get("check") != "Neo4j live verification"
     ]
     local_stages = {
-        stage: all(row.get("passed") for row in report.get("checks", [])
+        stage: any(row.get('stage')==stage and row.get('check')!='Neo4j live verification' for row in checks) and all(row.get("passed") for row in report.get("checks", [])
                    if row.get("stage") == stage and row.get("check") != "Neo4j live verification")
         for stage in ("registry", "structure", "graph", "indexes")
     }
@@ -110,6 +121,11 @@ def main() -> int:
     parser.add_argument("--refresh-extraction", action="store_true",
                         help="Run page-v5 selective OCR and page-quality audit before rebuilding")
     args = parser.parse_args()
+    if os.name=='posix':
+        import signal
+        def terminate(signum,frame):
+            raise KeyboardInterrupt('Notebook requested shutdown')
+        signal.signal(signal.SIGTERM,terminate)
     if args.ai_max_provisions < 0:
         raise ValueError("--ai-max-provisions cannot be negative")
 
@@ -128,18 +144,31 @@ def main() -> int:
             _run(["-m", "vn_labor_offline.cli", "extract", "--config", str(config)])
         _state("technical_rebuild")
         _run(["-m", "vn_labor_offline.cli", "rebuild", "--config", str(config), "--mode", "heuristic"])
-        technical = _technical_audit()
+        technical = _technical_audit(config)
         _write_json(RUN, {"pipeline_exit_code": 0, "stage": "technical_checkpoint",
                           "started_at": started, "technical_validation": technical})
         _state("technical_checkpoint", technical_validation=technical)
         _export(technical_name)
+        _state('page_evidence_audit',technical_checkpoint=technical_name)
+        _run(['-m','vn_labor_offline.page_review','--archive',str(ROOT.parent/technical_name),
+              '--root',str(ROOT),'--output',str(ROOT/'artifacts/reviews/page_quality')])
 
         ai_enabled = not args.skip_ai and args.ai_max_provisions > 0
         if ai_enabled:
             _state("ai_enrichment", technical_checkpoint=technical_name)
             _configure_ai(config, args.ai_max_provisions)
-            _run(["-m", "vn_labor_offline.cli", "enrich", "--config", str(config), "--mode", "hybrid_ai"])
-            technical = _technical_audit()
+            if os.getenv("VN_LABOR_OFFLINE_AI_PROVIDER", "ollama") == "ollama":
+                from ollama_offline import session
+                _state("ollama_setup", technical_checkpoint=technical_name)
+                with session(REPORTS, os.getenv("VN_LABOR_OFFLINE_AI_MODEL", "qwen3:8b")):
+                    _state('ai_provider_preflight',technical_checkpoint=technical_name)
+                    _run(['-m','vn_labor_offline.ai_preflight','--config',str(config)])
+                    _state("ai_enrichment", technical_checkpoint=technical_name)
+                    _run(["-m", "vn_labor_offline.cli", "enrich", "--config", str(config), "--mode", "hybrid_ai"])
+            else:
+                _run(['-m','vn_labor_offline.ai_preflight','--config',str(config)])
+                _run(["-m", "vn_labor_offline.cli", "enrich", "--config", str(config), "--mode", "hybrid_ai"])
+            technical = _technical_audit(config)
             _state("ai_complete", technical_validation=technical)
         else:
             _state("ai_skipped", technical_validation=technical)
@@ -148,7 +177,7 @@ def main() -> int:
             _state("aura_load")
             _run(["kaggle/remote.py", "aura"])
         else:
-            _run(["kaggle/remote.py", "audit"], check=False)
+            technical = _technical_audit(config)
 
         validation_path = REPORTS / "final_outputs_validation.json"
         validation = json.loads(validation_path.read_text(encoding="utf-8"))
@@ -157,6 +186,14 @@ def main() -> int:
         if args.load_aura and (not validation.get("ready_for_offline_v1") or neo.get("passed") is not True):
             raise RuntimeError("Final four-output/Aura validation did not pass")
 
+        ai_quality={}
+        if ai_enabled:
+            for name in ('case_ai_quality','checklist_ai_quality'):
+                path=REPORTS/(name+'.json')
+                if not path.exists(): raise RuntimeError('Missing AI quality report: '+name)
+                ai_quality[name]=json.loads(path.read_text(encoding='utf-8'))
+            case_complete=all(row.get('complete') for row in ai_quality['case_ai_quality'].get('cases',[]))
+            ai_quality['complete']=case_complete and ai_quality['checklist_ai_quality'].get('complete') is True
         completed = datetime.now(timezone.utc).isoformat()
         run_report = {
             "pipeline_exit_code": 0,
@@ -167,11 +204,13 @@ def main() -> int:
             "ai_enabled": ai_enabled,
             "ai_max_provisions": args.ai_max_provisions if ai_enabled else 0,
             "aura_loaded": args.load_aura,
+            "ai_quality": ai_quality,
             "build_id": neo.get("build_id"),
         }
         _write_json(RUN, run_report)
         _state("complete", status="PASS", completed_at=completed,
-               final_archive=final_name, build_id=neo.get("build_id"))
+               final_archive=final_name, build_id=neo.get("build_id"), ai_quality=ai_quality,
+               quality_status="AI_COMPLETE" if ai_quality.get("complete") else "AI_DEGRADED" if ai_enabled else "HEURISTIC_ONLY")
         _export(final_name)
         return 0
     except BaseException as exc:

@@ -40,14 +40,23 @@ def saved_embeddings(out,units):
 def construct_from_extracted(cfg,extracted,checklist_mode=None,build_indexes=True):
     out=cfg['output_dir']; out.mkdir(parents=True,exist_ok=True)
     write_page_quality_artifacts(extracted,out)
+    from .page_content import write_notes
+    write_notes(extracted,out)
+    from .integrity import require_complete_extraction,report_progress,write_structure_coverage
+    require_complete_extraction(extracted,out)
+    report_progress(out,'registry',0,len(extracted))
     # A restored checkpoint may contain proof for an older graph build.
     (out/'reports/neo4j_validation.json').unlink(missing_ok=True)
     write_jsonl(out/'reports/build_issues.jsonl',[])
     if not (out/'00_manifest/source_catalog_resolved.jsonl').exists():
         resolve_source_catalog(extracted,cfg['project_root'],out)
     registry=build_registry(extracted,cfg,out)
+    report_progress(out,'structure',0,len(registry))
     provisions=parse_all(registry,extracted,out,cfg)
+    write_structure_coverage(registry,provisions,out)
     provisions=enrich_provenance(provisions,extracted,registry,out)
+    from .integrity import require_complete_provenance
+    require_complete_provenance(registry,extracted,provisions,out)
     segments=load_stage(out,'03_structure/segments.jsonl')
     build_hierarchy_headings(registry,extracted,segments,out)
     identities, provision_versions=materialize_provision_versions(registry,provisions,out,cfg['project_root'])
@@ -70,7 +79,9 @@ def construct_from_extracted(cfg,extracted,checklist_mode=None,build_indexes=Tru
     failures=[]
     if build_indexes:
         for name,operation in [('BM25',lambda:build_bm25_index(units,cfg,out)),('DENSE',lambda:dense_worker(cfg))]:
-            try: operation()
+            try:
+                report_progress(out,name.lower(),0,len(units))
+                operation()
             except Exception as exc: failures.append({'severity':'ERROR','type':name+'_BUILD_FAILED','message':str(exc)})
         try:
             communities=build_case_communities(cases,saved_embeddings(out,units),cfg)
@@ -126,6 +137,8 @@ def rerun_enrichment(cfg,mode='ollama'):
     provisions=load_stage(out,'03_structure/provisions.jsonl'); cases=load_stage(out,'03_structure/cases.jsonl'); registry=load_stage(out,'02_registry/documents.jsonl')
     extracted=load_stage(out,'01_extracted/documents.jsonl')
     provisions=enrich_provenance(provisions,extracted,registry,out)
+    from .integrity import require_complete_provenance
+    require_complete_provenance(registry,extracted,provisions,out)
     segments=load_stage(out,'03_structure/segments.jsonl')
     build_hierarchy_headings(registry,extracted,segments,out)
     identities, _=materialize_provision_versions(registry,provisions,out,cfg['project_root'])

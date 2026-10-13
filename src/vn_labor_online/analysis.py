@@ -7,7 +7,7 @@ from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,Evidence
 
 ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ ngay","nghỉ sau","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương","trợ cấp mất việc","hết hạn hợp đồng","hợp đồng hết hạn","thay đổi cơ cấu","thay đổi công nghệ","lý do kinh tế","tái cơ cấu","cắt giảm nhân sự","sáp nhập"],"WAGE":["tiền lương","lương","làm thêm"],
  "SOCIAL_INSURANCE":["bảo hiểm xã hội","bhxh"],"SAFETY":["an toàn lao động","tai nạn lao động"],
- "CONTRACT":["hợp đồng lao động","hđlđ","giao kết hợp đồng","thử việc","hợp đồng cộng tác viên"],"LEAVE":["nghỉ hằng năm","nghỉ hàng năm","nghỉ phép","phép năm","ngày phép","thâm niên làm việc","ngày thâm niên","ngày cơ bản","thời gian đi đường","nghỉ lễ","ngày lễ","nghỉ tết","quốc khánh","giỗ tổ","nghỉ việc riêng","nghỉ không hưởng lương","nghỉ không lương","kết hôn","đám cưới","cha mất","mẹ mất","bố mất"],
+ "CONTRACT":["hợp đồng lao động","hđlđ","giao kết hợp đồng","thử việc","hợp đồng cộng tác viên"],"LEAVE":["nghỉ tối thiểu","nghỉ 12","nghỉ hằng năm","nghỉ hàng năm","nghỉ phép","phép năm","ngày phép","thâm niên làm việc","ngày thâm niên","ngày cơ bản","thời gian đi đường","nghỉ lễ","ngày lễ","nghỉ tết","quốc khánh","giỗ tổ","nghỉ việc riêng","nghỉ không hưởng lương","nghỉ không lương","kết hôn","đám cưới","cha mất","mẹ mất","bố mất"],
  "DISPUTE":["tranh chấp","tòa án"],"HARASSMENT":["quấy rối tình dục","quấy rối tại nơi làm việc"],
  "DISCIPLINE":["kỷ luật lao động","khiển trách","kéo dài thời hạn nâng lương"],
  "MATERNITY":["thai sản","mang thai","nuôi con dưới 12 tháng"],
@@ -15,8 +15,8 @@ ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc"
  "UNION":["công đoàn","đoàn phí"],"FOREIGN_WORKER":["lao động nước ngoài","giấy phép lao động"],
  "UNEMPLOYMENT_INSURANCE":["bảo hiểm thất nghiệp","trợ cấp thất nghiệp"],
  "TRAINING":["học nghề","tập nghề","đào tạo","thực tập"],
- "MINOR_WORKER":["lao động chưa thành niên","người chưa đủ 18 tuổi"],
- "RETIREMENT":["nghỉ hưu","tuổi hưu"], "OVERSEAS_WORKER":["đi làm việc ở nước ngoài"],
+ "MINOR_WORKER":["lao động chưa thành niên","người chưa đủ 18 tuổi","nlđ chưa thành niên"],
+ "RETIREMENT":["nghỉ hưu","tuổi hưu","cao tuổi"], "OVERSEAS_WORKER":["đi làm việc ở nước ngoài"],
  "COLLECTIVE_RELATIONS":["thương lượng tập thể","thỏa ước lao động","đình công","đối thoại tại nơi làm việc"]}
 FACTS={"TERMINATION":{"termination_date":"Ngày chấm dứt là ngày nào?","contract_type":"Loại hợp đồng là gì?","termination_reason":"Lý do chấm dứt là gì?","notice_days":"Công ty đã báo trước bao nhiêu ngày?","protected_status":"Người lao động có đang mang thai, nghỉ thai sản, nuôi con nhỏ hoặc thuộc tình trạng được bảo vệ đặc biệt nào không?"},
  "WAGE":{"work_date":"Thời điểm phát sinh tiền lương là khi nào?"},
@@ -92,6 +92,8 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
         subissues=classify_subissues(q,facts,issues)
     issues=parent_issues(issues,subissues)
     outcome='LOOKUP' if refs and any(w in lower for w in ('quy định gì','nội dung','tra cứu')) else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có hợp pháp','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường bao nhiêu','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
+    if re.search(r'^(?:khi nào|thế nào là|định nghĩa|khái niệm|trường hợp nào)',lower):
+        outcome='EXPLAIN'
     historical=legal_regime_for(query_date)=='BLLD_2012' if query_date else False
     temporal='HISTORICAL' if historical else 'EXPLICIT_DATE' if query_date else 'CURRENT' if any(w in lower for w in ('hiện nay','bây giờ','mới nhất')) else 'NONE'
     # A date constraint alone does not make a lookup or a single-issue question complex.
@@ -115,7 +117,9 @@ def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference
     # The requested legal conclusion controls scope.  Incidental words such as
     # "công ty", "đồng nghiệp" or "giờ làm việc" must not turn a criminal or
     # land-law question into a labour-law question.
-    if any(term in query for term in CRIMINAL_QUESTION_TERMS+LAND_QUESTION_TERMS): return True
+    if any(term in query for term in LAND_QUESTION_TERMS): return True
+    if any(term in query for term in CRIMINAL_QUESTION_TERMS) and not any(
+      term in query for term in ('kỷ luật lao động','cuộc họp kỷ luật','xử lý kỷ luật','quyền của người lao động')): return True
     return any(term in query for term in OUT_OF_SCOPE_TERMS) and not any(term in query for term in LABOR_SCOPE_TERMS)
 
 def _fact_candidate(field,value,query,match):
@@ -146,6 +150,9 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
       'mutual_termination_agreement':('đồng ý cho','hai bên thỏa thuận','công ty đồng ý'),
       'work_category':('đặc biệt nặng nhọc','nặng nhọc','điều kiện bình thường','công việc văn phòng'),
       'disabled':('người khuyết tật','khuyết tật'),
+      'minor':('chưa thành niên','chưa đủ 18 tuổi'),
+      'employment_paid_work':('nhận lương cố định','làm việc có trả công','làm công việc có trả công'),
+      'employment_management':('chịu KPI','chịu sự quản lý','chịu sự điều hành','được quản lý như nhân viên'),
       'probation_work_group':('công việc quản lý doanh nghiệp','công việc của người quản lý doanh nghiệp','cần trình độ cao đẳng','yêu cầu trình độ cao đẳng','cần trình độ trung cấp','yêu cầu trình độ trung cấp','công nhân kỹ thuật','nhân viên nghiệp vụ','công việc khác','công việc không yêu cầu trình độ'),
       'training_costs':('không có chi phí đào tạo','có chi phí đào tạo','chi phí đào tạo'),
       'misinformation_material_effect':('ảnh hưởng trực tiếp đến việc thực hiện hđlđ','ảnh hưởng đến việc thực hiện hđlđ','ảnh hưởng trực tiếp đến việc thực hiện hợp đồng','ảnh hưởng tới thực hiện hợp đồng')}
@@ -155,6 +162,8 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
             match=NO_NOTICE.search(query) if value==0 else NOTICE_DAYS.search(query)
         else:
             match=patterns[field].search(query) if field in patterns else _needle_match(query,needles.get(field,()))
+        if field=='service_years' and match is None:
+            match=re.search(r'(?:làm|làm việc|cùng công ty|thâm niên)(?:\s+\w+){0,4}?\s+(một|hai|ba|bốn|năm|sáu|bảy|tám|chín|mười)\s+năm\b',query,re.I)
         if match: result.append(_fact_candidate(field,value,query,match))
     return result
 
@@ -167,7 +176,7 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             missing.append('Công việc thuộc điều kiện bình thường, nặng nhọc/độc hại/nguy hiểm hay đặc biệt nặng nhọc/độc hại/nguy hiểm; người lao động có chưa thành niên hoặc khuyết tật không?')
     subissues=classify_subissues(query,facts,issues)
     if 'TRAINING.INTERN_PAY' not in subissues and outcome!='ASSESS_LEGALITY': return sorted(set(missing))
-    if 'TRAINING.INTERN_PAY' in subissues:
+    if 'TRAINING.INTERN_PAY' in subissues and not (facts.get('employment_paid_work') and facts.get('employment_management')):
         return sorted(set(missing+['Bạn thực tập theo chương trình của trường, học/tập nghề để làm việc cho công ty, thử việc, hay đang làm việc có trả công và chịu sự quản lý của công ty?']))
     if subissues and all(key.startswith('CONTRACT.') for key in subissues) and set(issues)<={'CONTRACT','WAGE','GENERAL'}:
         return sorted(set(missing))
@@ -234,6 +243,12 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if 'đặc biệt nặng nhọc' in q: facts['work_category']='SPECIAL_HEAVY'
     elif any(term in q for term in ('nặng nhọc, độc hại, nguy hiểm','nghề nặng nhọc','công việc nặng nhọc')): facts['work_category']='HEAVY'
     elif any(term in q for term in ('điều kiện bình thường','công việc bình thường','nhân viên văn phòng','công việc văn phòng')): facts['work_category']='NORMAL'
+    if 'chưa thành niên' in q: facts['minor']=True
+    if 'service_years' not in facts:
+        word_years=re.search(r'(?:làm|làm việc|cùng công ty|thâm niên)(?:\s+\w+){0,4}?\s+(một|hai|ba|bốn|năm|sáu|bảy|tám|chín|mười)\s+năm\b',q)
+        if word_years: facts['service_years']={'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10}[word_years.group(1)]
+    if any(t in q for t in ('nhận lương cố định','làm việc có trả công','làm công việc có trả công')): facts['employment_paid_work']=True
+    if any(t in q for t in ('chịu kpi','chịu sự quản lý','chịu sự điều hành','được quản lý như nhân viên')): facts['employment_management']=True
     if 'khuyết tật' in q: facts['disabled']=True
     if 'thử việc' in q and not relationship_comparison(q):
         # The required qualification of the job, not the applicant's diploma.
@@ -288,9 +303,11 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif 'trái pháp luật' in q and 'nghĩa vụ' in q and ('hai điều luật khác nhau' in q or 'định nghĩa' in q): facts['query_intent']='UNLAWFUL_DEFINITION_CONSEQUENCES'
     elif facts.get('mutual_termination_agreement'): facts['query_intent']='MUTUAL_TERMINATION'
     elif 'thời gian đi và về' in q or 'thời gian đi đường' in q: facts['query_intent']='TRAVEL_TIME'
-    elif (any(term in q for term in ('bao nhiêu ngày nghỉ','bao nhiêu ngày phép','bao nhiêu ngày','số ngày nghỉ hằng năm','tính quyền nghỉ','tính:','cách tính này')) or bool(re.search(r'\b\d+\s+ngày\b',q)) and any(term in q for term in ('có đúng','đúng không','có được'))) and any(term in q for term in ('nghỉ hằng năm','nghỉ hàng năm','nghỉ phép','phép năm','ngày phép','thâm niên','ngày cơ bản')):
+    elif (any(term in q for term in ('bao nhiêu ngày nghỉ','bao nhiêu ngày phép','bao nhiêu ngày','số ngày nghỉ hằng năm','tính quyền nghỉ','tính:','cách tính này')) or bool(re.search(r'\b\d+\s+ngày\b',q)) and any(term in q for term in ('có đúng','đúng không','có được'))) and (any(term in q for term in ('nghỉ hằng năm','nghỉ hàng năm','nghỉ phép','phép năm','ngày phép','thâm niên','ngày cơ bản')) or 'service_years' in facts and 'số ngày nghỉ' in q):
         specific=bool(facts.get('service_years') or facts.get('work_category') or facts.get('minor') or facts.get('disabled') or re.search(r'\b(?:tôi|[a-e])\b',q))
         facts['query_intent']='ANNUAL_LEAVE_CALC' if specific else 'ANNUAL_LEAVE_OVERVIEW'
+    if re.search(r'\b(?:người lao động|nlđ|tôi)\s+phải báo trước',q): facts.setdefault('actor','EMPLOYEE')
+    if facts.get('termination_basis')=='LATE_WAGE': facts.setdefault('actor','EMPLOYEE')
     return facts
 def _fact_present(field:str,q:str,query_date:str|None,facts:dict)->bool:
     if field in facts:

@@ -44,7 +44,7 @@ def build_case_communities(cases: list[dict], embeddings: dict[str,np.ndarray], 
         ids=[c["case_id"] for c in usable]; pos={x:i for i,x in enumerate(ids)}
         g=ig.Graph(n=len(ids),edges=[(pos[a],pos[b]) for a,b,_ in knn],directed=False)
         weights=[max(w,0.0) for _,_,w in knn]
-        part=leidenalg.find_partition(g,leidenalg.RBConfigurationVertexPartition,weights=weights or None)
+        part=leidenalg.find_partition(g,leidenalg.RBConfigurationVertexPartition,weights=weights or None,seed=42)
         for ci,members in enumerate(part):
             for m in members: labels[ids[m]]=ci
     except Exception:

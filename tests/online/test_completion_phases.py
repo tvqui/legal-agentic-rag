@@ -38,8 +38,8 @@ class CompletionPhaseTests(unittest.TestCase):
         self.assertFalse(requires_transition_rule(2021,'2021-01-01'))
 
     def test_graph_hard_caps_are_schema_enforced(self):
-        with self.assertRaises(ValidationError): GraphConfig(max_hops=3)
-        with self.assertRaises(ValidationError): GraphConfig(max_nodes=16)
+        with self.assertRaises(ValidationError): GraphConfig(max_hops=7)
+        with self.assertRaises(ValidationError): GraphConfig(max_nodes=101)
 
     def test_graph_cycle_guard_and_relation_allowlist(self):
         units=[{'unit_id':'a','text':'quy định nghỉ việc','kind':'PROVISION'},

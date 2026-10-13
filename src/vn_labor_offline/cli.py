@@ -30,7 +30,10 @@ def main():
     elif args.cmd=='enrich':
         summary=rerun_enrichment(cfg,args.mode); print(json.dumps(summary,ensure_ascii=False,indent=2))
     elif args.cmd=='extract':
-        rows=refresh_extraction(cfg); print(json.dumps({'documents':len(rows),'status':'PASS'},ensure_ascii=False,indent=2))
+        rows=refresh_extraction(cfg)
+        from .integrity import require_complete_extraction
+        require_complete_extraction(rows,cfg['output_dir'])
+        print(json.dumps({'documents':len(rows),'status':'PASS'},ensure_ascii=False,indent=2))
     elif args.cmd=='load-neo4j':
         load_neo4j(cfg['output_dir'],int(cfg['neo4j'].get('load_batch_size',500)),replace_legacy=args.replace_legacy)
         print('Neo4j load complete.')

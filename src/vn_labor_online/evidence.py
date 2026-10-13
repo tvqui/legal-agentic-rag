@@ -161,7 +161,9 @@ def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceS
     packed=[VerifiedEvidenceItem(evidence_id=x.unit_id,instrument_number=x.document_number,article=x.article_number,
       document_type=document_type(x.document_number,x.document_title,x.document_type),document_title=x.document_title,issuer=x.issuer,
       norm_role=norm_role(x.document_number,x.document_title,x.source_text or x.text),
-      clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),valid_from=x.valid_from,
+      clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),
+      full_text=' '.join((x.ancestor_context+'\n'+(x.source_text or x.text)).split()),
+      ancestor_context=x.ancestor_context,valid_from=x.valid_from,
       valid_to=x.valid_to,official_url=x.source_url,authority_rank=x.authority_rank,binding=x.binding,
       official_source=x.official_source,provenance_span=x.provenance_span,
       applicability=by_decision.get(x.unit_id),warnings=x.audit_warnings) for x in items if x.verified

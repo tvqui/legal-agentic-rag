@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+import math
 import re
 import unicodedata
 from pathlib import Path
@@ -93,12 +94,73 @@ def initial_page_reasons(native_text: str, selected_text: str, *, used_ocr: bool
     return sorted(set(reasons)), native, agreement
 
 
+def page_number_only_evidence(native_text: str, selected_text: str, *, page_number: int,
+                              page_height: float, native_boxes: list, image_count: int,
+                              drawing_count: int) -> dict | None:
+    """Conservative proof that cleaning removed pagination, not body text.
+
+    Both extractors must identify exactly the physical page number, all native
+    text must sit in a margin, and the source must contain no raster/vector
+    content. A numeric body line or a scanned page cannot use this exception.
+    """
+    native = (native_text or '').strip()
+    selected = (selected_text or '').strip()
+    if (not re.fullmatch(r'[0-9]{1,6}', native) or native != selected
+            or native != str(page_number) or image_count != 0 or drawing_count != 0
+            or not math.isfinite(page_height) or page_height <= 0 or not native_boxes):
+        return None
+    boxes = []
+    for box in native_boxes:
+        if len(box) != 4 or not all(math.isfinite(value) for value in box):
+            return None
+        x0, y0, x1, y1 = box
+        if (x1 <= x0 or y1 <= y0 or y0 < 0 or y1 > page_height
+                or not (y1 <= .12 * page_height or y0 >= .88 * page_height)):
+            return None
+        boxes.append(list(box))
+    return {'schema': 'page-number-only-v1', 'kind': 'PAGE_NUMBER_ONLY',
+            'page_number': page_number, 'native_text': native, 'selected_text': selected,
+            'selected_text_sha256': hashlib.sha256(selected_text.encode('utf-8')).hexdigest(),
+            'selected_chars': len(selected_text),
+            'native_boxes': boxes, 'page_height': page_height,
+            'image_count': image_count, 'drawing_count': drawing_count}
+
+
+def _confirmed_page_number_only(page: dict, selected_text: str) -> bool:
+    evidence = page.get('non_body_text_evidence') or {}
+    if evidence.get('schema') != 'page-number-only-v1' or evidence.get('kind') != 'PAGE_NUMBER_ONLY':
+        return False
+    try:
+        confirmed = page_number_only_evidence(
+            evidence.get('native_text', ''), selected_text,
+            page_number=page.get('page'), page_height=evidence.get('page_height', 0),
+            native_boxes=evidence.get('native_boxes', []),
+            image_count=evidence.get('image_count', -1), drawing_count=evidence.get('drawing_count', -1))
+    except (TypeError, ValueError):
+        return False
+    return confirmed is not None and evidence.get('page_number') == page.get('page')
+
+
+def confirmed_removed_pagination(page: dict) -> bool:
+    """Revalidate the exception downstream, including the selected-text hash."""
+    evidence = page.get('non_body_text_evidence') or {}
+    return (page.get('cleaned_chars') == 0
+            and 'PAGE_NUMBER_ONLY_REMOVED' in page.get('quality_reason_codes', [])
+            and page.get('chars') == evidence.get('selected_chars')
+            and bool(page.get('selected_text_sha256'))
+            and page.get('selected_text_sha256') == evidence.get('selected_text_sha256')
+            and _confirmed_page_number_only(page, evidence.get('selected_text', '')))
+
+
 def finalize_page_quality(page: dict, cleaned_text: str, selected_text: str) -> None:
     reasons = set(page.get("quality_reason_codes", []))
     cleaned_chars = len(cleaned_text)
     selected_nonspace = len("".join((selected_text or "").split()))
     if not page.get("blank") and selected_nonspace and not cleaned_text.strip():
-        reasons.add("EMPTY_AFTER_CLEANING")
+        if _confirmed_page_number_only(page, selected_text):
+            reasons.add("PAGE_NUMBER_ONLY_REMOVED")
+        else:
+            reasons.add("EMPTY_AFTER_CLEANING")
     if (not page.get("blank") and selected_nonspace >= 80 and
             cleaned_chars / max(len(selected_text), 1) < .10):
         reasons.add("CONTENT_DROPPED_BY_CLEANING")
@@ -156,6 +218,7 @@ def write_page_quality_artifacts(extracted: list[dict], output_dir: Path) -> dic
                 "native_ocr_agreement": page.get("native_ocr_agreement"),
                 "preview_path": page.get("preview_path"),
                 "page_review": page.get("page_review"),
+                "non_body_text_evidence": page.get("non_body_text_evidence"),
             }
             audit.append(row)
             status_counts[status] += 1

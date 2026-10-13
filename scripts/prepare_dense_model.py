@@ -28,17 +28,20 @@ def main():
     MODEL.mkdir(parents=True, exist_ok=True)
     source_path = MODEL / 'source.json'
     if source_path.exists():
-        previous = json.loads(source_path.read_text(encoding='utf-8'))
-        entries = {entry['rfilename']: entry for entry in previous['siblings']}
-        if previous.get('sha') == REVISION and all(
-            (MODEL / name).is_file() and (MODEL / name).stat().st_size > 0
-            and (MODEL / name).stat().st_size == entries[name].get('size', entries[name].get('lfs', {}).get('size'))
-            and (not entries[name].get('lfs', {}).get('sha256') or
-                 digest(MODEL / name) == entries[name]['lfs']['sha256'])
-            for name in FILES
-        ):
-            print(f'Local model verified; no download needed: {MODEL}', flush=True)
-            return
+        try:
+            previous = json.loads(source_path.read_text(encoding='utf-8'))
+            entries = {entry['rfilename']: entry for entry in previous['siblings']}
+            if previous.get('sha') == REVISION and all(
+                (MODEL / name).is_file() and (MODEL / name).stat().st_size > 0
+                and (MODEL / name).stat().st_size == entries[name].get('size', entries[name].get('lfs', {}).get('size'))
+                and (not entries[name].get('lfs', {}).get('sha256') or
+                     digest(MODEL / name) == entries[name]['lfs']['sha256'])
+                for name in FILES
+            ):
+                print(f'Local model verified; no download needed: {MODEL}', flush=True)
+                return
+        except (OSError,ValueError,KeyError,TypeError):
+            print('Model metadata cache invalid; refreshing.',flush=True)
     session = requests.Session()
     session.mount('https://', HTTPAdapter(max_retries=Retry(
         total=8, connect=8, read=8, status=8, backoff_factor=0.5,
@@ -48,7 +51,9 @@ def main():
     response.raise_for_status()
     info = response.json()
     assert info['sha'] == REVISION
-    (MODEL / 'source.json').write_text(json.dumps(info, indent=2), encoding='utf-8')
+    source_temp=MODEL/'source.json.tmp'
+    source_temp.write_text(json.dumps(info,indent=2),encoding='utf-8')
+    os.replace(source_temp,source_path)
     entries = {entry['rfilename']: entry for entry in info['siblings']}
     cache = ROOT / '.cache/huggingface/hub/models--BAAI--bge-m3/snapshots' / REVISION
     for name in FILES:
@@ -71,6 +76,8 @@ def main():
         for attempt in range(1, 7):
             try:
                 offset = partial.stat().st_size if partial.exists() else 0
+                if size and offset >= size and not valid(partial):
+                    partial.unlink(missing_ok=True); offset=0
                 if size and offset == size and (sha is None or digest(partial) == sha):
                     os.replace(partial, target)
                     break
@@ -90,6 +97,7 @@ def main():
                                 print(f'{name}: {stream.tell() / 1024**2:.0f} MiB', flush=True)
                                 last = time.monotonic()
                 if not valid(partial):
+                    partial.unlink(missing_ok=True)
                     raise RuntimeError(f'File size/hash validation failed: {name}')
                 os.replace(partial, target)
                 print(f'Verified: {name} ({target.stat().st_size} bytes)', flush=True)

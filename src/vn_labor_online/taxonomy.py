@@ -9,7 +9,7 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v4'
+TAXONOMY_VERSION = 'labor-subissues-v5'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -103,7 +103,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     if employment and (has('thực tập sinh','hợp đồng dịch vụ','hợp đồng cộng tác viên','quan hệ lao động','không ký hợp đồng','không phải hợp đồng lao động')
       or has('tên gọi') and has('hợp đồng','thỏa thuận')):
         add('CONTRACT.RELATIONSHIP_QUALIFICATION')
-    if employment and has('cung cấp thông tin','cung cấp sai','thông tin không trung thực'):
+    if employment and has('cung cấp thông tin','cung cấp những thông tin','cung cấp sai','thông tin không trung thực'):
         add('CONTRACT.EMPLOYER_INFORMATION')
     if has('hợp đồng lao động','hđlđ') and has('những loại','các loại','loại hợp đồng','mấy loại') and has('hiện nay','phân loại','bao nhiêu','những loại','các loại','mấy loại'):
         add('CONTRACT.CONTRACT_TYPES')
@@ -171,7 +171,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         holiday = has('nghỉ lễ', 'ngày lễ', 'nghỉ tết', 'ngày tết', 'quốc khánh', 'giỗ tổ', 'tết nguyên đán')
         personal = has('nghỉ việc riêng', 'kết hôn', 'đám cưới', 'cha mất', 'mẹ mất', 'bố mất', 'tang lễ')
         unpaid = has('nghỉ không hưởng lương', 'nghỉ không lương')
-        annual = has('nghỉ hằng năm', 'nghỉ hàng năm', 'nghỉ phép', 'phép năm', 'ngày phép', 'thâm niên', 'ngày cơ bản')
+        annual = has('nghỉ hằng năm', 'nghỉ hàng năm', 'nghỉ phép', 'phép năm', 'ngày phép', 'thâm niên', 'ngày cơ bản') or bool(re.search(r'(?:12[^.]{0,25}14[^.]{0,25}16|12, 14 và 16)\s+ngày',q))
+        annual=annual or bool(facts.get('service_years') and has('số ngày nghỉ','nghỉ tối thiểu','bao nhiêu ngày nghỉ'))
         payment = annual and has('chưa nghỉ', 'chưa sử dụng', 'còn dư') and has('thanh toán', 'trả tiền', 'tiền phép')
         travel_only=(intent=='TRAVEL_TIME' and not has('ngày cơ bản','thâm niên','12 ngày','14 ngày','16 ngày','tổng số ngày phép'))
         if annual and (not payment or quantity) and not travel_only: add('LEAVE.ANNUAL_LEAVE')
@@ -307,6 +308,10 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
                 require('employee_unilateral_rule', [loc('37', '3')])
                 require('notice_requirement', [loc('37', '3')])
                 require('historical_notice_exception', [loc('156')])
+            elif not historical:
+                require('employee_unilateral_rule', *[[loc('35','1',p)] for p in ('a','b','c','d')])
+                require('notice_requirement', *[[loc('35','1',p)] for p in ('a','b','c')])
+                require('general_notice_exceptions', [loc('35','2',exact=True)])
             else: rule('employee_unilateral_rule', '35', '37')
         elif key == 'TERMINATION.EMPLOYER_UNILATERAL':
             rule('employer_unilateral_rule', '36', '38')
@@ -362,6 +367,8 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
                     [loc('116' if historical else '115', '3')])
         elif key == 'LEAVE.UNUSED_LEAVE_PAYMENT':
             require('unused_leave_payment_rule', [loc('114' if historical else '113', '1' if historical else '3')])
+    from .rule_catalog import extra_requirements
+    requirements.update(extra_requirements(analysis))
     return requirements
 
 
@@ -427,6 +434,9 @@ def plan_with_profiles(analysis: QueryAnalysis, legacy_plan):
         # establish the facts of a specific case. The dated locations replace
         # broad keyword-based condition/reference slots.
         mandatory=[slot for slot in mandatory if slot not in {'conditions','exceptions'}]
+    if requirements and (covered or not analysis.legal_subissues) and analysis.requested_outcome in {'EXPLAIN','COMPARE'}:
+        # Explicit dated rule groups replace word-presence heuristics, not facts.
+        mandatory=[s for s in mandatory if s in requirements or s not in {'conditions','exceptions','mandatory_reference','termination_conditions','notice_requirement'}]
     return legacy_plan.model_copy(update={'mandatory_slots': mandatory, 'slot_requirements': requirements})
 
 

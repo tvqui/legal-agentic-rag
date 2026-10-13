@@ -198,7 +198,10 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
         seniority=_find(pack,'114') if bonus else None
         if not base_rule or bonus and not seniority: return None
         used=[base_rule]+([seniority] if seniority else []); evidence_ids=[item.evidence_id for item in used]
-        if worked_months<12:
+        if worked_months<0:
+            conclusion=(f'Nếu làm đủ 12 tháng trong năm cho cùng người sử dụng lao động và thuộc nhóm đã nêu, mức nền là {base} ngày, '
+              f'cộng {bonus} ngày cho {service_years} năm thâm niên: {base+bonus} ngày. Chưa có số tháng làm việc trong năm nên không xác nhận số ngày thực tế của năm đó.')
+        elif worked_months<12:
             proportional=_find(pack,'113','2'); calculation=_find(pack,'66','1',instrument='145/2020/NĐ-CP')
             if not proportional or not calculation: return None
             used += [proportional,calculation]; evidence_ids += [proportional.evidence_id,calculation.evidence_id]
@@ -351,12 +354,28 @@ class LegalAdjudicator:
     """Generate only from a VerifiedEvidencePack, with deterministic fallback."""
     def __init__(self,cfg:AdjudicationConfig):
         self.cfg=cfg; self.provider=None
-        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens)
+        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,cfg.context_tokens)
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP adjudication mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
 
     def generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
+        draft,warnings=self._generate_with_layout(pack,partial,assumptions)
+        if self.cfg.semantic_review and self.cfg.mode!='deterministic' and self.provider and draft.claims and 'ANSWER_QUALITY_BLOCKED' not in warnings:
+            from .answer_review import review_answer
+            draft,review_warnings=review_answer(self.provider,draft,pack,self.cfg.semantic_repair_attempts)
+            warnings+=review_warnings
+            if draft.claims:
+                draft=render_claims(draft,partial or draft.semantic_review.get('status')!='PASS')
+                missing=draft.semantic_review.get('missing',[])
+                if missing: draft=draft.model_copy(update={'answer_summary':draft.answer_summary+'\nChưa có đủ căn cứ để trả lời toàn bộ các phần của câu hỏi; phần còn thiếu được ghi trong limitations.'})
+                used={uid for c in draft.claims for uid in c.evidence_ids}
+                draft=draft.model_copy(update={'applicable_law_versions':_versions([e for e in pack.evidence if e.evidence_id in used])})
+            else:
+                draft=draft.model_copy(update={'answer_summary':'Chưa xác minh được kết luận phù hợp với nội dung nguồn và toàn bộ câu hỏi.','applicable_law_versions':[]})
+        return draft,list(dict.fromkeys(warnings))
+
+    def _generate_with_layout(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
         # Work on display copies; never rewrite artifacts or their source spans.
         display=pack.model_copy(update={'evidence':[item.model_copy(update={
           'text':clean_source_excerpt(item.text,pack.query)}) for item in pack.evidence]})
@@ -407,7 +426,7 @@ class LegalAdjudicator:
             return safe_fallback(),[]
         from .profile_generation import render_profile
         profile_answer=render_profile(pack,partial,assumptions)
-        if profile_answer:
+        if profile_answer and len(set(classify_subissues(pack.query,pack.facts,[])))<=1:
             boundary_warning=['SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW'] if 'đoạn nguồn đang gộp khoản' in profile_answer.answer_summary else []
             return profile_answer,boundary_warning
         contract_answer=_contract_rule_answer(pack,partial,assumptions)
@@ -420,7 +439,7 @@ class LegalAdjudicator:
           and pack.facts.get('special_occupation') is not None)
         mixed_training_exit=any(item.article=='62' for item in pack.evidence) and any(
           item.article=='35' for item in pack.evidence)
-        if not mixed_training_exit and (pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit):
+        if not mixed_training_exit and len(set(classify_subissues(pack.query,pack.facts,[])))<=2 and (pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit):
             deterministic=safe_fallback()
             if deterministic.claims:
                 return deterministic,[]

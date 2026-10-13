@@ -43,6 +43,23 @@ def preflight():
             raise RuntimeError(f'Empty converted DOC: {row["output_name"]}')
     # Download/warm models before the per-document timeout begins.
     subprocess.run([sys.executable, str(ROOT / 'scripts/prepare_dense_model.py')], check=True)
+    # Exercise the actual embedding API before spending hours on extraction.
+    # Import/download success alone cannot prove Transformers/BGE compatibility.
+    import gc
+    import numpy as np
+    model=BGEM3FlagModel(str(ROOT/'.cache/models/bge-m3'),use_fp16=True,devices='cuda:0')
+    vectors=np.asarray(model.encode(['thời hạn báo trước khi nghỉ việc','nghỉ hằng năm'],
+        batch_size=2,max_length=128,return_dense=True,return_sparse=False,
+        return_colbert_vecs=False)['dense_vecs'],dtype='float32')
+    if vectors.ndim!=2 or len(vectors)!=2 or not np.isfinite(vectors).all() or np.any(np.linalg.norm(vectors,axis=1)==0):
+        raise RuntimeError('Dense preflight produced invalid embeddings')
+    faiss.normalize_L2(vectors)
+    probe_index=faiss.IndexFlatIP(vectors.shape[1]);probe_index.add(vectors)
+    scores,_=probe_index.search(vectors,1)
+    if not (scores[:,0]>.99).all(): raise RuntimeError('Dense preflight FAISS query failed')
+    print('Dense model/encode/FAISS preflight: PASS',flush=True)
+    del model,probe_index,vectors
+    gc.collect();torch.cuda.empty_cache()
     pdf = next((ROOT / 'data').rglob('*.pdf'))
     text = extract_pdf_docling(pdf, ['vi', 'en'], True, 1)
     if not text.strip():
@@ -82,7 +99,12 @@ def export(archive_name='vn_labor_results.zip'):
     reports.mkdir(parents=True, exist_ok=True)
     def read(name):
         p = reports / name
-        return json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
+        try:
+            value=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
+            return value if isinstance(value,dict) else {}
+        except (OSError,ValueError):
+            print('RECOVERY_WARNING unreadable report: '+name,flush=True)
+            return {}
     summary = read('summary.json')
     validation = read('final_outputs_validation.json')
     run = read('kaggle_run.json')
@@ -95,6 +117,10 @@ def export(archive_name='vn_labor_results.zip'):
              '| Đầu ra | Trạng thái |', '|---|---|']
     for stage in ('registry', 'structure', 'graph', 'indexes'):
         lines.append(f'| {stage} | {"PASS" if validation.get("stages", {}).get(stage) else "FAIL / chưa kiểm tra"} |')
+    ai=run.get('ai_quality',{})
+    if run.get('ai_enabled'):
+        lines += ['', 'AI enrichment: **'+('COMPLETE' if ai.get('complete') else 'DEGRADED')+'**',
+                  'Technical PASS does not certify AI enrichment. See case_ai_quality.json and checklist_ai_quality.json.']
     lines += ['', '## Số lượng', '']
     for key in ('documents', 'provisions', 'cases', 'diagnostic_items', 'graph_nodes', 'graph_edges'):
         lines.append(f'- {key}: {summary.get(key, "chưa có")}')
@@ -108,9 +134,16 @@ def export(archive_name='vn_labor_results.zip'):
     temporary = archive.with_suffix('.tmp')
     with zipfile.ZipFile(temporary, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=1) as z:
         for p in sorted(OUT.rglob('*')):
-            if p.is_file() and not p.is_symlink() and not any(part.startswith('tmp') for part in p.relative_to(OUT).parts):
+            if archive_name=='vn_labor_results.zip' and p.name=='vectors.partial.npy':
+                complete=OUT/'06_indexes/dense/vectors.npy'
+                if complete.exists() and validation.get('stages',{}).get('indexes'):
+                    continue
+            if p.is_file() and not p.is_symlink() and p.suffix!='.tmp' and not any(part.startswith('tmp') for part in p.relative_to(OUT).parts):
                 z.write(p, p.relative_to(ROOT).as_posix())
     os.replace(temporary, archive)
+    import hashlib
+    with archive.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
+    Path(str(archive)+'.sha256').write_text(f'{digest}  {archive.name}\n',encoding='ascii')
     print(f'Download: {archive}; {archive.stat().st_size / 1024**2:.1f} MiB', flush=True)
 
 

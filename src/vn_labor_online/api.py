@@ -131,7 +131,9 @@ def create_app(config_path:str|Path|None=None):
           'adjudicator':_component(pipeline.adjudicator.provider,'adjudicator')}
         model_components=[components[x] for x in ('researcher','auditor','adjudicator')]
         degraded=any(x.get('status')=='DEGRADED' for x in model_components)
-        return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,'components':components,
+        return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
+          'semantic_repair_attempts':pipeline.cfg.adjudication.semantic_repair_attempts,'answer_while_clarifying':pipeline.cfg.answer_while_clarifying,
+          'applicability_batch_size':pipeline.cfg.applicability.max_items,'applicability_max_batches':pipeline.cfg.applicability.max_batches},'components':components,
           'compatibility':pipeline.store.report.model_dump(mode='json')}
     @app.post('/v1/answer',response_model=AnswerResponse,summary='Answer a Vietnamese labor-law question')
     def answer(request:QueryRequest)->AnswerResponse:

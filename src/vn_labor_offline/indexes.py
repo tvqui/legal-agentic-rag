@@ -38,14 +38,15 @@ def build_retrieval_units(provisions: list[dict], cases: list[dict], registry: l
         section=next((a.get('section') for a in ancestors if a.get('section')),'')
         breadcrumb=' > '.join([str(d.get('title','')),str(d.get('instrument_number') or d.get('document_number',''))]+([f'Chương {chapter}'] if chapter else [])+([f'Mục {section}'] if section else [])+
             [f"{labels.get(a['level'],a['level'])} {a['number']}"+(f" — {a['heading']}" if a.get('heading') else '') for a in ancestors])
-        ancestor_text='\n'.join(a.get('text','')[:1500] for a in ancestors[:-1])
+        ancestor_text='\n'.join(a.get('text','') for a in ancestors[:-1])
         units.append({
             **metadata(d),"unit_id":p["provision_id"], "kind":"PROVISION", "text":breadcrumb+'\n'+ancestor_text+'\n'+p.get("text",""),
             'ancestor_context':ancestor_text,
             'source_text':p.get('text',''),'breadcrumb':breadcrumb,'segment_type':p.get('segment_type','MAIN_BODY'),
             'provenance_span':{k:p.get(k) for k in ('segment_id','char_start','char_end','line_start','line_end',
                 'span_scope','coordinate_space','segment_char_start','segment_char_end',
-                'document_char_start','document_char_end','page_start','page_end','page_status','source_unit_type')},
+                'document_char_start','document_char_end','page_start','page_end','page_status','source_unit_type',
+                'excluded_annotation_spans')},
             'chapter':chapter,'section':section,
             'article_number':p.get('article_number',''),'clause_number':p.get('clause_number',''),'point_number':p.get('point_number',''),
             "document_id":p["document_id"], "level":p["level"], "number":p["number"],
@@ -66,7 +67,7 @@ def build_retrieval_units(provisions: list[dict], cases: list[dict], registry: l
         document_text=source.get('text','')
         page_count=len(source.get('page_provenance',[]))
         units.append({
-            **metadata(d),"unit_id":c["case_id"], "kind":"CASE", "text":c.get("search_text","")[:30000],
+            **metadata(d),"unit_id":c["case_id"], "kind":"CASE", "text":c.get("search_text",""),
             'breadcrumb':c.get('case_number') or c['case_id'],'segment_type':'JUDICIAL',
             "document_id":c["document_id"], "case_number":c.get("case_number",""),
             "case_type":c.get("case_type",""), "decision_date":c.get("decision_date",""),
@@ -97,7 +98,9 @@ def build_retrieval_units(provisions: list[dict], cases: list[dict], registry: l
             'text':breadcrumb+'\n'+s['text'],'source_text':s['text'],'breadcrumb':breadcrumb,'segment_type':s['segment_type'],
             'provenance_span':span,'provenance_status':'RESOLVED' if document_start is not None and
                 span['page_status']!='UNRESOLVED' else 'UNRESOLVED'})
-    units=[u for u in units if len(u.get('source_text',u.get('text','')).strip())>=20]
+    # Accepted legal locators remain retrievable even for short rules such as
+    # a discipline measure or a mandatory training-contract field.
+    units=[u for u in units if u.get('source_text',u.get('text','')).strip()]
     if len({u['unit_id'] for u in units})!=len(units): raise ValueError('Duplicate retrieval unit IDs')
     return units
 
@@ -143,12 +146,15 @@ def build_dense_index(units: list[dict], cfg: dict, output_dir: Path) -> dict[st
     partial_path=idir/'vectors.partial.npy'
     completed=0; vec=None
     if state_path.exists() and partial_path.exists():
-        state=json.loads(state_path.read_text(encoding='utf-8'))
-        if state.get('fingerprint') == fingerprint:
-            candidate=np.load(partial_path,mmap_mode='r+',allow_pickle=False)
-            if candidate.ndim == 2 and candidate.shape[0] == len(units) and 0 <= state.get('completed',-1) <= len(units):
-                completed=state['completed']; vec=candidate
-                print(f'Resuming Dense from {completed}/{len(units)} units',flush=True)
+        try:
+            state=json.loads(state_path.read_text(encoding='utf-8'))
+            if state.get('fingerprint') == fingerprint:
+                candidate=np.load(partial_path,mmap_mode='r+',allow_pickle=False)
+                if candidate.ndim == 2 and candidate.shape[0] == len(units) and 0 <= state.get('completed',-1) <= len(units):
+                    completed=state['completed']; vec=candidate
+                    print(f'Resuming Dense from {completed}/{len(units)} units',flush=True)
+        except (OSError,ValueError,TypeError):
+            print('Dense checkpoint corrupt; regenerating embeddings.',flush=True)
     for start in range(completed,len(units),chunk_size):
         end=min(start+chunk_size,len(units))
         result=model.encode([u['text'] for u in units[start:end]],batch_size=batch_size,
@@ -162,6 +168,8 @@ def build_dense_index(units: list[dict], cfg: dict, output_dir: Path) -> dict[st
         temporary=state_path.with_suffix('.tmp')
         temporary.write_text(json.dumps({'fingerprint':fingerprint,'completed':end}),encoding='utf-8')
         os.replace(temporary,state_path)
+        from .integrity import report_progress
+        report_progress(output_dir,'dense',end,len(units))
         print(f'Dense checkpoint: {end}/{len(units)} units ({time.monotonic()-started:.1f}s)',flush=True)
     # BGE-M3 dense vectors are normalized; normalize again defensively for cosine/IP.
     if vec is None or not np.isfinite(vec).all() or np.any(np.linalg.norm(vec,axis=1) == 0):

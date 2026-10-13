@@ -17,8 +17,9 @@ def _terms(value):
     folded=''.join(char for char in normalized if unicodedata.category(char)!='Mn')
     return {term for term in re.findall(r'\w+',folded) if len(term)>2}
 def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evidence:
-    keys={'unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status'}
+    keys={'ancestor_context','unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status'}
     data={k:unit.get(k) for k in keys}; data.update(score=float(score),retrieval_method=method,rank=rank,component_scores=components or {})
+    data['ancestor_context']=str(data.get('ancestor_context') or '')
     data['authority_rank']=int(data.get('authority_rank') or 0)
     for key in ('binding','temporal_verified','provision_temporal_verified','official_source'): data[key]=bool(data.get(key))
     for key in ('source_url','valid_from','valid_to'): data[key]=data.get(key) or None

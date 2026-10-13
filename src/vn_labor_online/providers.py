@@ -109,20 +109,24 @@ class HttpJsonProvider(BaseProvider):
 
 class OllamaProvider(BaseProvider):
     def __init__(self, url: str = "http://127.0.0.1:11434/api/chat", model: str = "qwen3:4b",
-                 timeout: float = 120, health_url: str | None = None, max_output_tokens: int = 2048):
+                 timeout: float = 120, health_url: str | None = None, max_output_tokens: int = 2048, context_tokens: int = 16384):
         self.url = url
         self.model = model
         self.timeout = timeout
         self.health_url = health_url or urllib.parse.urljoin(url, "/api/tags")
         self.max_output_tokens=max_output_tokens
+        self.context_tokens=context_tokens
 
     def structured(self, system: str, user: str, schema: dict) -> dict:
+        input_bound=len((system+user).encode("utf-8"))+256
+        if input_bound+self.max_output_tokens>self.context_tokens:
+            raise StructuredOutputError("PROMPT_CONTEXT_BUDGET_EXCEEDED")
         payload = {
             "model": self.model,
             "stream": False,
             "format": schema,
             "think": False,
-            "options": {"temperature": 0, "seed": 0,"num_predict":self.max_output_tokens},
+            "options": {"temperature": 0, "seed": 0,"num_predict":self.max_output_tokens,"num_ctx":self.context_tokens},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         try:

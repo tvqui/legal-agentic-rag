@@ -4,6 +4,70 @@ from collections import Counter
 from datetime import date
 from .util import read_jsonl
 from .temporal import instrument_key
+from .page_quality import confirmed_removed_pagination
+
+
+def provision_provenance_issues(registry,extracted,provisions,out):
+    """Strict source-span audit shared by pre-model and final validation."""
+    from .page_content import validated_notes,mask_segment_notes,segment_note_spans
+    issues=[];by_file={row['file_id']:row for row in extracted};docs={row['document_id']:row for row in registry}
+    segments={row['segment_id']:row for row in read_jsonl(out/'03_structure/segments.jsonl')}
+    masks={};notes_by_file={}
+    def error(kind,**details): issues.append({'severity':'ERROR','type':kind,**details})
+    for p in provisions:
+        if p.get('segment_type')!='MAIN_BODY': error('NON_MAIN_BODY_PROVISION',provision_id=p['provision_id'])
+        if not p.get('canonical_path'): error('MISSING_CANONICAL_PATH',provision_id=p['provision_id'])
+        if p.get('source_unit_type') == 'PDF_PAGE' and p.get('page_status') != 'RESOLVED':
+            error('MISSING_PAGE_SPAN',provision_id=p['provision_id'])
+        if p.get('source_unit_type') != 'PDF_PAGE' and p.get('page_status') != 'NOT_APPLICABLE':
+            error('INVALID_NONPAGINATED_PAGE_STATUS',provision_id=p['provision_id'])
+        if p.get('char_start') is None or p.get('char_end') is None or p.get('line_start') is None or p.get('line_end') is None or not p.get('segment_id'):
+            error('MISSING_PROVISION_PROVENANCE',provision_id=p['provision_id'])
+            continue
+        segment=segments.get(p['segment_id'])
+        start=p['char_start']; end=p['char_end']; line_start=p['line_start']; line_end=p['line_end']
+        valid_span=(segment is not None and p.get('span_scope')=='SEGMENT_TEXT' and
+                    isinstance(start,int) and isinstance(end,int) and 0<=start<end<=len(segment.get('text','')) and
+                    isinstance(line_start,int) and isinstance(line_end,int) and
+                    segment.get('line_start',0)<=line_start<=line_end<=segment.get('line_end',0))
+        source=by_file.get(docs.get(p['document_id'],{}).get('file_id'),{})
+        if valid_span:
+            source_lines=[x.strip() for x in segment['text'][start:end].splitlines() if x.strip()]
+            provision_lines=[x.strip() for x in p.get('text','').splitlines() if x.strip()]
+            if p['segment_id'] not in masks:
+                file_id=docs.get(p['document_id'],{}).get('file_id')
+                if file_id not in notes_by_file: notes_by_file[file_id]=validated_notes(source)
+                notes=notes_by_file[file_id]
+                masks[p['segment_id']]=(mask_segment_notes(segment['text'],notes),segment_note_spans(segment['text'],notes))
+            masked,annotations=masks[p['segment_id']]
+            expected=[n for n in annotations if n['segment_char_start']<end and n['segment_char_end']>start]
+            declared=p.get('excluded_annotation_spans',[])
+            valid_span=declared==expected
+            if valid_span and expected:
+                # Exclusions must be complete annotations at their exact document offsets.
+                valid_span=all(start<=n['segment_char_start']<n['segment_char_end']<=end and
+                    isinstance(p.get('document_char_start'),int) and
+                    n['document_char_start']==p['document_char_start']+n['segment_char_start']-start and
+                    n['document_char_end']==p['document_char_start']+n['segment_char_end']-start for n in expected)
+                source_lines=[line.strip() for line in masked[start:end].splitlines() if line.strip()]
+            valid_span=valid_span and source_lines==provision_lines
+        if not valid_span:
+            error('INVALID_PROVISION_PROVENANCE',provision_id=p['provision_id'],segment_id=p.get('segment_id'))
+            continue
+        document_text=by_file.get(docs.get(p['document_id'],{}).get('file_id'),{}).get('text','')
+        document_start,document_end=p.get('document_char_start'),p.get('document_char_end')
+        if not (isinstance(document_start,int) and isinstance(document_end,int) and
+                0<=document_start<document_end<=len(document_text) and
+                document_text[document_start:document_end]==segment['text'][start:end]):
+            error('INVALID_DOCUMENT_PROVENANCE',provision_id=p['provision_id'])
+            continue
+        source=by_file.get(docs.get(p['document_id'],{}).get('file_id'),{})
+        pages=[row['page'] for row in source.get('page_provenance',[]) if
+               row.get('text_start',0)<document_end and row.get('text_end',0)>document_start]
+        if source.get('page_provenance') and (not pages or p.get('page_start')!=min(pages) or
+            p.get('page_end')!=max(pages)):
+            error('INVALID_PROVISION_PAGE_PROVENANCE',provision_id=p['provision_id'])
+    return issues
 
 
 def quality_issues(registry,extracted,provisions,nodes,edges,out,cfg=None):
@@ -41,47 +105,13 @@ def quality_issues(registry,extracted,provisions,nodes,edges,out,cfg=None):
             if any(p.get('ocr_status') in {'FAILED','DISABLED'} or
                    (not p.get('blank') and p.get('chars',0)==0) or
                    p.get('page_quality_status')=='ERROR' or
-                   (not p.get('blank') and p.get('chars',0)>0 and p.get('cleaned_chars',p.get('chars',0))==0)
+                   (not p.get('blank') and p.get('chars',0)>0 and p.get('cleaned_chars',p.get('chars',0))==0
+                    and not confirmed_removed_pagination(p))
                    for p in pages):
                 error('INCOMPLETE_PAGE_EXTRACTION',document_id=d['document_id'])
         if 0<x.get('text_chars',0)<1200 and not d.get('short_document_verified'):
             error('SHORT_LEGAL_DOCUMENT_REVIEW',document_id=d['document_id'])
-    for p in provisions:
-        if p.get('segment_type')!='MAIN_BODY': error('NON_MAIN_BODY_PROVISION',provision_id=p['provision_id'])
-        if not p.get('canonical_path'): error('MISSING_CANONICAL_PATH',provision_id=p['provision_id'])
-        if p.get('source_unit_type') == 'PDF_PAGE' and p.get('page_status') != 'RESOLVED':
-            error('MISSING_PAGE_SPAN',provision_id=p['provision_id'])
-        if p.get('source_unit_type') != 'PDF_PAGE' and p.get('page_status') != 'NOT_APPLICABLE':
-            error('INVALID_NONPAGINATED_PAGE_STATUS',provision_id=p['provision_id'])
-        if p.get('char_start') is None or p.get('char_end') is None or p.get('line_start') is None or p.get('line_end') is None or not p.get('segment_id'):
-            error('MISSING_PROVISION_PROVENANCE',provision_id=p['provision_id'])
-            continue
-        segment=segments.get(p['segment_id'])
-        start=p['char_start']; end=p['char_end']; line_start=p['line_start']; line_end=p['line_end']
-        valid_span=(segment is not None and p.get('span_scope')=='SEGMENT_TEXT' and
-                    isinstance(start,int) and isinstance(end,int) and 0<=start<end<=len(segment.get('text','')) and
-                    isinstance(line_start,int) and isinstance(line_end,int) and
-                    segment.get('line_start',0)<=line_start<=line_end<=segment.get('line_end',0))
-        if valid_span:
-            source_lines=[x.strip() for x in segment['text'][start:end].splitlines() if x.strip()]
-            provision_lines=[x.strip() for x in p.get('text','').splitlines() if x.strip()]
-            valid_span=source_lines==provision_lines
-        if not valid_span:
-            error('INVALID_PROVISION_PROVENANCE',provision_id=p['provision_id'],segment_id=p.get('segment_id'))
-            continue
-        document_text=by_file.get(docs.get(p['document_id'],{}).get('file_id'),{}).get('text','')
-        document_start,document_end=p.get('document_char_start'),p.get('document_char_end')
-        if not (isinstance(document_start,int) and isinstance(document_end,int) and
-                0<=document_start<document_end<=len(document_text) and
-                document_text[document_start:document_end]==segment['text'][start:end]):
-            error('INVALID_DOCUMENT_PROVENANCE',provision_id=p['provision_id'])
-            continue
-        source=by_file.get(docs.get(p['document_id'],{}).get('file_id'),{})
-        pages=[row['page'] for row in source.get('page_provenance',[]) if
-               row.get('text_start',0)<document_end and row.get('text_end',0)>document_start]
-        if source.get('page_provenance') and (not pages or p.get('page_start')!=min(pages) or
-            p.get('page_end')!=max(pages)):
-            error('INVALID_PROVISION_PAGE_PROVENANCE',provision_id=p['provision_id'])
+    issues.extend(provision_provenance_issues(registry,extracted,provisions,out))
     page_quality_path=out/'reports/page_extraction_quality.json'
     if page_quality_path.exists():
         page_quality=json.loads(page_quality_path.read_text(encoding='utf-8'))

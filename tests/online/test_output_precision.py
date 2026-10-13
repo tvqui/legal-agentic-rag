@@ -221,4 +221,50 @@ class OutputPrecisionTests(unittest.TestCase):
             self.assertEqual({c.evidence_id for c in response.citations},{'g','info'})
             engine.retriever.dense.assert_not_called(); engine.retriever.neural_rerank.assert_not_called()
 
+class SemanticPipelineGuards(unittest.TestCase):
+    def run_checked_answer(self, include_exit, force_reference_repair=False):
+        from types import SimpleNamespace
+        from vn_labor_online.config import OnlineConfig,RetrievalConfig,RerankerConfig
+        from vn_labor_online.pipeline import OnlinePipeline
+        from vn_labor_online.models import AdjudicationDraft,Claim,QueryRequest
+        items=[rule('g','35','2','g',text='Người sử dụng lao động cung cấp thông tin không trung thực theo khoản 1 Điều 16 ảnh hưởng đến việc thực hiện hợp đồng, được chấm dứt hợp đồng không cần báo trước.'),
+          rule('info','16','1',text='Người sử dụng lao động phải cung cấp trung thực thông tin khi giao kết hợp đồng.')]
+        claims=[Claim(claim_id='info_claim',text='Khoản 1 Điều 16 yêu cầu cung cấp trung thực thông tin khi giao kết.',evidence_ids=['info'])]
+        if include_exit: claims.append(Claim(claim_id='exit_claim',text=items[0].text,evidence_ids=['g']))
+        with tempfile.TemporaryDirectory() as tmp:
+            engine=object.__new__(OnlinePipeline)
+            engine.cfg=OnlineConfig(artifact_source='unused',corpus_snapshot_as_of='2025-01-01',trace_dir=tmp,
+              retrieval=RetrievalConfig(dense_enabled=True),reranker=RerankerConfig(enabled=True))
+            engine.store=SimpleNamespace(report=SimpleNamespace(build_id='test',provisional_reasons=[]))
+            engine.researcher=LegalResearcher(ResearcherConfig())
+            engine.retriever=Mock(); engine.retriever.policy_anchor.return_value=items
+            engine.applicability=LegalApplicabilityAuditor(ApplicabilityConfig())
+            engine.adjudicator=Mock(); engine.graph=Mock()
+            from vn_labor_online.answer_quality import render_claims
+            draft=AdjudicationDraft(answer_summary='',claims=claims,applicable_law_versions=[],semantic_review={'status':'PARTIAL' if include_exit else 'PASS'})
+            draft=render_claims(draft,include_exit)
+            engine.adjudicator.generate.return_value=(draft,['ANSWER_SEMANTIC_REVIEW_INCOMPLETE'] if include_exit else [])
+            query='Công ty cung cấp sai địa điểm làm việc khi tuyển dụng khiến NLĐ muốn nghỉ ngay. Những điều luật nào phải được nối với nhau?'
+            from vn_labor_online.audit import reference_audit
+            calls=0
+            def audit(*args):
+                nonlocal calls
+                calls+=1
+                if force_reference_repair and calls==1: return False,['FORCED_REPAIR_FIXTURE']
+                return reference_audit(*args)
+            with patch('vn_labor_online.pipeline.deterministic_audit',side_effect=lambda _,values,*args:values),patch('vn_labor_online.pipeline.reference_audit',side_effect=audit):
+                return engine.ask(QueryRequest(question=query,query_date='2025-01-01'))
+
+    def test_structural_repair_cannot_add_unchecked_claim_after_semantic_audit(self):
+        response=self.run_checked_answer(False)
+        self.assertEqual(response.status.value,'PARTIAL_ALLOWED')
+        self.assertNotIn('ANSWER_REQUIRED_EVIDENCE_REPAIRED',response.warnings)
+        self.assertEqual({c.evidence_id for c in response.citations},{'info'})
+
+    def test_reference_repair_cannot_promote_semantically_incomplete_answer(self):
+        response=self.run_checked_answer(True,True)
+        self.assertIn('REFERENCE_AUDIT_REPAIRED',response.warnings)
+        self.assertEqual(response.status.value,'PARTIAL_ALLOWED')
+        self.assertIn('answer_coverage',response.limitations)
+
 if __name__=='__main__': unittest.main()

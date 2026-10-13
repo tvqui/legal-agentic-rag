@@ -38,14 +38,20 @@ online:
     hub_penalty: 0.15
     novelty_weight: 0.10
     redundancy_weight: 0.10
-  max_verified_units: 12
+  max_verified_units: 32
+  answer_while_clarifying: true
   minimum_coverage: 0.5
   allow_partial: true
   allow_document_temporal_fallback: true
+  researcher:
+    adaptive: false
+    max_queries: 4
   applicability:
     mode: deterministic
     fail_closed: true
   adjudication:
+    semantic_review: true
+    semantic_repair_attempts: 1
     mode: deterministic
     fail_closed: true
   trace_dir: "artifacts/online_traces"

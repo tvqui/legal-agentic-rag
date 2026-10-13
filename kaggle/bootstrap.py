@@ -47,6 +47,11 @@ def restore_artifacts(archive, root):
         shutil.copytree(source, out, dirs_exist_ok=True)
         return
     with zipfile.ZipFile(archive) as z:
+        names=[member.filename for member in z.infolist()]
+        if len(set(names))!=len(names): raise ValueError('Duplicate checkpoint archive paths')
+        expanded=sum(member.file_size for member in z.infolist())
+        if expanded>20*1024**3 or expanded+1024**3>shutil.disk_usage(root).free:
+            raise ValueError('Not enough disk space for checkpoint archive')
         for member in z.infolist():
             p = safe_relative(member.filename)
             if not p.parts or p.parts[0] != 'artifacts':
@@ -122,11 +127,11 @@ def install(root, extras='ocr,retrieval,graph,community'):
     # Kaggle's system Python may not provide a working ensurepip. Recreate the
     # venv metadata even after a partial setup; preserve already installed files.
     subprocess.run([sys.executable, '-m', 'venv', '--system-site-packages',
-                    '--without-pip', str(env_dir)], check=True)
+                    '--without-pip', str(env_dir)], check=True, timeout=120)
     # Host pip manages the target interpreter without bootstrapping pip there.
     # This also avoids treating an existing bin/python as proof of a complete env.
     subprocess.run([sys.executable, '-m', 'pip', '--python', str(python),
                     'install', '--disable-pip-version-check',
                     '-c', str(constraint_path), '-e', str(root) + '[' + ','.join(selected) + ']',
-                    'setuptools==81.0.0'], check=True)
+                    'setuptools==81.0.0'], check=True, timeout=1800)
     return python

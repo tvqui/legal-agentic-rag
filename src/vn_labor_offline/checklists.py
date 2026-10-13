@@ -125,31 +125,50 @@ Nguồn:
     return out
 
 
-AI_CHECKLIST_SCHEMA={"type":"object","additionalProperties":False,"properties":{"items":{"type":"array","items":{"type":"object","additionalProperties":False,"properties":{
+AI_CHECKLIST_SCHEMA={"type":"object","additionalProperties":False,"properties":{"items":{"type":"array","maxItems":12,"items":{"type":"object","additionalProperties":False,"properties":{
   "type":{"type":"string","enum":["REQUIRED","CONDITION","EXCEPTION","PROHIBITION","PERMISSION","DEADLINE"]},
   "question":{"type":"string"},"source_text":{"type":"string"},"fact_slots":{"type":"array","items":{"type":"string"}}
 },"required":["type","question","source_text","fact_slots"]}}},"required":["items"]}
 
-def ai_checklist(provision,provider,cache,segment_text='',document_text='',pages=None):
-    payload={'provision_id':provision['provision_id'],'level':provision.get('level'),'source':provision.get('text','')[:12000]}
-    system="""Create atomic Diagnostic Checklist questions for Vietnamese labour law.
-Use only the quoted source. Every source_text must be a short exact quote from the source. Do not add a legal condition or exception.
-Return at most 20 items and only JSON matching the schema."""
-    data=cached_structured(provider,system,payload,AI_CHECKLIST_SCHEMA,cache,provision['provision_id'])
-    normalized_source=' '.join(provision.get('text','').split()); out=[]
-    for index,item in enumerate(data.get('items',[])[:20],1):
-        quote=' '.join(str(item.get('source_text','')).split())
-        if not quote or quote not in normalized_source: continue
-        evidence_text,evidence_span,status=locate_evidence(provision,quote,segment_text,document_text,pages)
-        if status!='RESOLVED': continue
-        out.append({'checklist_id':checklist_identity(provision['provision_id'],item.get('type'),quote),
-          'provision_id':provision['provision_id'],'source_provision_id':provision['provision_id'],
-          'provenance_status':'VERIFIED','evidence_span':evidence_span,'type':item.get('type','CONDITION'),
-          'question':item.get('question',''),'source_text':quote,'evidence_text':evidence_text,
-          'fact_slots':item.get('fact_slots',[]),'generator':'structured-ai:'+str(getattr(provider,'model','unknown')),'confidence':.85})
-    return out
+class AIItems(list):
+    def __init__(self,values,errors,planned,completed):
+        super().__init__(values); self.errors=errors; self.planned=planned; self.completed=completed
+        self.complete=completed==planned and not errors and bool(values)
 
-def select_hybrid_ai_ids(prepared,max_records):
+
+def ai_checklist(provision,provider,cache,segment_text='',document_text='',pages=None,requests=None):
+    from .ai_requests import AIRequests
+    if requests is None:
+        requests=AIRequests(provider,{'project_root':cache.parent,'knowledge':{'ai_cache_dir':str(cache.resolve())}},
+            cache.parent,'checklists')
+    payload={'provision_id':provision['provision_id'],'level':provision.get('level'),'source':provision.get('text',''),
+        'ancestor_context':provision.get('ancestor_context','')}
+    system="""Create atomic Vietnamese labour-law checklist questions from this fragment.
+Preserve scope, actor, prohibitions and exceptions inherited from ancestor_context.
+Do not turn prohibition into permission. Use only the source; each source_text is a short exact quote.
+Do not invent missing conditions. Use concise questions. Return at most 12 items, only schema JSON."""
+    responses,errors,planned=requests.generate(system,payload,AI_CHECKLIST_SCHEMA,provision['provision_id'])
+    out=[]
+    for response in responses:
+        normalized_source=' '.join(response['source'].split()); grounded=[]
+        for item in response['data'].get('items',[]):
+            quote=' '.join(str(item.get('source_text','')).split())
+            if not quote or quote not in normalized_source: continue
+            evidence_text,evidence_span,status=locate_evidence(provision,quote,segment_text,document_text,pages)
+            if status!='RESOLVED': continue
+            grounded.append({'checklist_id':checklist_identity(provision['provision_id'],item.get('type'),quote),
+                'provision_id':provision['provision_id'],'source_provision_id':provision['provision_id'],
+                'provenance_status':'VERIFIED','evidence_span':evidence_span,'type':item['type'],
+                'question':item['question'],'source_text':quote,'evidence_text':evidence_text,
+                'fact_slots':item['fact_slots'],'generator':'structured-ai:'+str(getattr(provider,'model','unknown')),'confidence':.85})
+        if len(grounded)!=len(response['data']['items']):
+            errors.append({'reason':'NO_GROUNDED_AI_ITEMS','source_start':response['source_offset'],
+                'source_end':response['source_offset']+len(response['source'])})
+        out.extend(grounded)
+    return AIItems(finalize_checklists(out),errors,planned,len(responses))
+
+
+def select_hybrid_ai_ids(prepared,max_records,byte_budget=None):
     """Select a deterministic, bounded set of provisions that already show legal-rule signals.
 
     AI refines provisions for which the deterministic parser found at least one grounded
@@ -157,7 +176,9 @@ def select_hybrid_ai_ids(prepared,max_records):
     sequential requests and did not improve coverage reliably.
     """
     limit=max(0,int(max_records))
-    candidates=[(provision,heuristic) for provision,heuristic,_ in prepared if heuristic]
+    candidates=[(provision,heuristic) for provision,heuristic,_ in prepared if heuristic and
+        (byte_budget is None or len(json.dumps({'source':provision.get('text',''),
+        'ancestor_context':provision.get('ancestor_context','')},ensure_ascii=False).encode('utf-8'))<=byte_budget)]
     candidates.sort(key=lambda row:(
       -len(row[1]),LEVEL_PRIORITY.get(str(row[0].get('level','')).upper(),9),
       -min(len(row[0].get('text','')),12000),row[0]['provision_id']))
@@ -175,7 +196,12 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
     rows=[]; provider=None
     if mode in {'ai','hybrid_ai'}: provider=provider_from_config(cfg)
     prepared=[]
-    for p in provisions:
+    by_id={p['provision_id']:p for p in provisions}
+    for original in provisions:
+        p=dict(original); ancestors=[]; parent=by_id.get(p.get('parent_id')); seen=set()
+        while parent and parent['provision_id'] not in seen:
+            seen.add(parent['provision_id']); ancestors.append(parent.get('text','')); parent=by_id.get(parent.get('parent_id'))
+        p['ancestor_context']='\n'.join(reversed(ancestors))
         # Parser stores each level's own text; ancestor introductions can contain rules too.
         if len(p.get("text", "")) < 40: continue
         source = source_by_file.get(registry.get(p["document_id"], {}).get("file_id"), {})
@@ -185,31 +211,60 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
         prepared.append((p,heuristic,evidence_args))
     ai_limit=int(cfg['knowledge'].get('ai_max_provisions',2000))
     hybrid_ids=select_hybrid_ai_ids(prepared,ai_limit) if mode=='hybrid_ai' else set()
+    from .ai_requests import AIRequests
+    requests=AIRequests(provider,cfg,output_dir,'checklists') if provider else None
     planned=len(prepared) if mode=='ai' else len(hybrid_ids) if mode=='hybrid_ai' else 0
     report_ai_progress(output_dir,'checklists',0,len(prepared),mode=mode,ai_planned=planned,
                        ai_attempted=0,ai_succeeded=0,ai_fallback=0)
-    ai_attempted=ai_succeeded=ai_fallback=0
-    for index,(p,heuristic,evidence_args) in enumerate(prepared,1):
-        if mode == "ollama":
-            try: rows.extend(ollama_checklist(p, model, *evidence_args))
-            except Exception: rows.extend(heuristic)
-        elif mode=='ai' or p['provision_id'] in hybrid_ids:
-            ai_attempted+=1
-            try:
-                generated=ai_checklist(p,provider,cache_dir(cfg),*evidence_args)
-                if generated:
-                    if mode=='hybrid_ai': rows.extend(heuristic)
-                    rows.extend(generated); ai_succeeded+=1
+    ai_attempted=ai_succeeded=ai_fallback=ai_partial=0; failure_rows=[]; record_status=[]
+    try:
+        for index,(p,heuristic,evidence_args) in enumerate(prepared,1):
+            selected=mode=='ai' or p['provision_id'] in hybrid_ids
+            if mode=='ollama':
+                try: rows.extend(ollama_checklist(p,model,*evidence_args))
+                except Exception: rows.extend(heuristic)
+            elif selected:
+                before_calls=requests.network_calls+requests.cache_hits
+                generated=ai_checklist(p,provider,cache_dir(cfg),*evidence_args,requests=requests)
+                rows.extend(heuristic); rows.extend(generated)
+                ai_attempted+=int(requests.network_calls+requests.cache_hits>before_calls)
+                if generated.complete: ai_succeeded+=1
                 else:
-                    rows.extend(heuristic); ai_fallback+=1
-            except Exception:
-                rows.extend(heuristic); ai_fallback+=1
-        else: rows.extend(heuristic)
-        if mode in {'ai','hybrid_ai'} and (index==len(prepared) or index%250==0 or
-                                            (mode=='ai' or p['provision_id'] in hybrid_ids)):
-            report_ai_progress(output_dir,'checklists',index,len(prepared),mode=mode,
-              ai_planned=planned,ai_attempted=ai_attempted,ai_succeeded=ai_succeeded,
-              ai_fallback=ai_fallback)
+                    ai_fallback+=1
+                    if generated: ai_partial+=1
+                    errors=generated.errors or [{'reason':'NO_GROUNDED_AI_ITEMS'}]
+                    failure_rows.extend({'provision_id':p['provision_id'],**error} for error in errors)
+                record_status.append({'provision_id':p['provision_id'],'complete':generated.complete,
+                    'chunks_planned':generated.planned,'chunks_completed':generated.completed,
+                    'accepted_items':len(generated),'errors':generated.errors})
+            else: rows.extend(heuristic)
+            if mode in {'ai','hybrid_ai'} and (selected or index==len(prepared) or index%250==0):
+                # Actual network count differs from records attempted and cache hits.
+                report_ai_progress(output_dir,'checklists',index,len(prepared),mode=mode,ai_planned=planned,
+                    ai_attempted=requests.network_calls,ai_succeeded=ai_succeeded,ai_cache_hits=requests.cache_hits)
+                from .integrity import _atomic
+                _atomic(output_dir/'reports/checklist_ai_quality.json',{'mode':mode,'planned':planned,
+                    'attempted':ai_attempted,'network_calls':requests.network_calls,'cache_hits':requests.cache_hits,
+                    'succeeded':ai_succeeded,'partial':ai_partial,'fallback':ai_fallback,
+                    'skipped':max(0,planned-ai_attempted),'records':record_status,
+                    'complete':planned==ai_succeeded,'circuit_open':requests.stop_reason=='AI_CIRCUIT_OPEN',
+                    'stop_reason':requests.stop_reason})
+                # An interrupted run must retain the complete heuristic baseline,
+                # including provisions whose AI refinement has not started.
+                checkpoint_rows=rows+[row for _,baseline,_ in prepared[index:] for row in baseline]
+                write_jsonl(output_dir/'04_knowledge/diagnostic_checklists.jsonl',
+                    finalize_checklists([r for r in checkpoint_rows if r.get('provenance_status')=='VERIFIED']))
+    finally:
+        close=getattr(provider,'close',None)
+        if callable(close): close()
+    write_jsonl(output_dir/'reports/checklist_ai_failures.jsonl',failure_rows)
+    from .integrity import _atomic
+    _atomic(output_dir/'reports/checklist_ai_quality.json',{'mode':mode,'planned':planned,
+        'attempted':ai_attempted,'network_calls':requests.network_calls if requests else 0,
+        'cache_hits':requests.cache_hits if requests else 0,'succeeded':ai_succeeded,'partial':ai_partial,
+        'fallback':ai_fallback,'skipped':max(0,planned-ai_attempted),'records':record_status,
+        'complete':planned==ai_succeeded,'circuit_open':bool(requests and requests.stop_reason=='AI_CIRCUIT_OPEN'),
+        'stop_reason':requests.stop_reason if requests else None})
     # Prefer the structured-AI form when both generators ground the same atomic rule.
     rows=finalize_checklists(rows)
     accepted=[r for r in rows if r.get('provenance_status')=='VERIFIED']

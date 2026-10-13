@@ -24,7 +24,7 @@ class RerankerConfig(StrictModel):
 
 class GraphConfig(StrictModel):
     enabled:bool=True; mode:Literal['adaptive','fixed']='adaptive'
-    max_rounds:int=Field(2,ge=0,le=2); max_nodes:int=Field(15,ge=1,le=15); max_edges:int=Field(40,ge=0,le=100); max_hops:int=Field(2,ge=0,le=2)
+    max_rounds:int=Field(2,ge=0,le=6); max_nodes:int=Field(15,ge=1,le=100); max_edges:int=Field(40,ge=0,le=400); max_hops:int=Field(2,ge=0,le=6)
     wall_clock_ms:int=Field(1500,ge=1); hub_penalty:float=Field(.15,ge=0)
     relevance_weight:float=Field(.3,ge=0); authority_weight:float=Field(.15,ge=0); temporal_weight:float=Field(.1,ge=0)
     gap_weight:float=Field(.5,ge=0); novelty_weight:float=Field(.1,ge=0); redundancy_weight:float=Field(.1,ge=0); traversal_cost_weight:float=Field(.05,ge=0)
@@ -55,8 +55,12 @@ class ApplicabilityConfig(StrictModel):
     provider:Literal['ollama','http']='ollama'
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None
     timeout_seconds:float=120; max_items:int=Field(10,ge=1,le=30)
+    max_batches:int=Field(4,ge=1,le=12)
 
 class AdjudicationConfig(StrictModel):
+    semantic_review:bool=True
+    semantic_repair_attempts:int=Field(1,ge=0,le=2)
+    context_tokens:int=Field(16384,ge=4096,le=65536)
     max_output_tokens:int=Field(2048,ge=256,le=8192)
     mode:Literal['deterministic','ollama','http']='deterministic'; fail_closed:bool=True
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None; timeout_seconds:float=120
@@ -72,6 +76,7 @@ class OnlineConfig(StrictModel):
     applicability:ApplicabilityConfig=Field(default_factory=ApplicabilityConfig)
     adjudication:AdjudicationConfig=Field(default_factory=AdjudicationConfig)
     max_verified_units:int=Field(12,ge=1); minimum_coverage:float=Field(.5,ge=0,le=1); allow_partial:bool=True; trace_dir:str='artifacts/online_traces'
+    answer_while_clarifying:bool=False
     allow_document_temporal_fallback:bool=True
     corpus_snapshot_as_of:str|None=None
     embedding_model:str='BAAI/bge-m3'; embedding_model_path:str|None=None

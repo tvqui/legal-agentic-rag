@@ -38,3 +38,29 @@ Kiểm chứng ngày 2026-10-06: **268/268 repository tests PASS** (15 test ch�
 câu trả lời mới), frontend lint và build PASS. Đường sửa bằng LLM được kiểm
 bằng mocked provider; chưa kiểm chứng inference thực tế trên Kaggle. Báo cáo:
 `artifacts/reports/online_answer_quality_validation.json`.
+
+
+## Cập nhật 2026-10-10: kiểm nội dung sau kiểm câu chữ
+
+Khi adjudication chạy Ollama/HTTP và `semantic_review: true`, mọi draft có claim,
+kể cả draft từ mẫu cố định, được kiểm riêng với toàn bộ câu hỏi và các nguồn
+được dẫn. Giữ ngữ cảnh cha và toàn văn provision; không cắt câu theo từ khóa.
+Checker hạch toán từng claim, trích đúng đoạn nguồn và kiểm các phần chưa trả
+lời. Tối đa một lượt sửa rồi kiểm lại trong cấu hình production.
+
+Fallback ở mục trước chỉ là fallback kiểm **câu chữ**, vẫn phải qua kiểm nội
+dung trong chế độ LLM. Không dùng draft chưa kiểm khi semantic auditor lỗi.
+Nếu chỉ một phần được hỗ trợ, giữ phần ấy và báo `PARTIAL_ALLOWED`; sửa citation
+không được nâng thành đủ. Chế độ deterministic không gọi semantic LLM và không
+được coi có mức kiểm chứng giống production đã bật checker.
+
+`/ready` công khai `quality_policy`; trace có `semantic_answer_audit`.
+Warnings mới: `ANSWER_SEMANTIC_REVIEW_INCOMPLETE`,
+`ANSWER_SEMANTIC_REVIEW_ERROR:*`, `MISSING_REQUIRED_RULE:*`.
+Limitations: `answer_coverage`, `pending_facts`, `semantic_verification`.
+Ollama nhận cửa sổ context rõ ràng; prompt vượt dung lượng bị từ chối và review
+lớn được tách theo claim, không âm thầm cắt nguồn.
+
+Mô hình kiểm là request riêng cùng provider hiện có, có thể vẫn hiểu sai;
+trích đúng nguồn chưa chứng minh entailment hoàn hảo. Chưa có benchmark live
+V5 hay Gold mới được duyệt. Xem [báo cáo đối chiếu](review-v4-corrections-20261010.md).

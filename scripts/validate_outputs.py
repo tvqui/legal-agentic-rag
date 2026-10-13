@@ -96,6 +96,9 @@ def audit(check_neo4j=False, output_dir=None, config_path=None):
     units = rows("06_indexes/retrieval_units.jsonl", "indexes")
     unique(units, "unit_id", "indexes")
     check("indexes", "retrieval units resolve to graph", bool(units) and all(u.get("unit_id") in node_ids for u in units))
+    check("indexes", "all accepted provisions have retrieval units",
+          set(provs) <= {u.get('unit_id') for u in units},
+          str(len(set(provs)-{u.get('unit_id') for u in units})) + " missing provision units")
     try:
         import numpy as np
         import faiss

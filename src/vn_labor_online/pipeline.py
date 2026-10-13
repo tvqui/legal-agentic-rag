@@ -96,12 +96,17 @@ class OnlinePipeline:
               applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               limitations=['out_of_scope'],warnings=warnings+['OUT_OF_LABOR_LAW_SCOPE'],facts=analysis.facts,
               build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
-        if analysis.missing_facts:
+        clarify_during_answer=bool(analysis.missing_facts and self.cfg.answer_while_clarifying and analysis.route!=Route.DIRECT)
+        if clarify_during_answer:
+            warnings.append('CONDITIONAL_EXPLANATION_PENDING_FACTS')
+            assumptions.append('Chỉ giải thích có điều kiện đối với phần còn thiếu dữ kiện; không xác nhận điều kiện đó đã xảy ra.')
+        if analysis.missing_facts and not clarify_during_answer:
             trace.stop_reason=Stop.NEED_MORE_FACTS; trace.reference_audit='NOT_RUN'; trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2)
             trace.events.append({'event':'fact_gate','status':'NEED_MORE_FACTS','missing':analysis.missing_facts}); persist(trace,self.cfg.trace_dir)
             return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,answer='Cần bổ sung dữ kiện trước khi tra cứu chuyên sâu.',questions=analysis.missing_facts,
               evidence_status='NOT_RETRIEVED',applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               warnings=warnings,facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+        audit_outcome='EXPLAIN' if clarify_during_answer else analysis.requested_outcome
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
@@ -118,7 +123,7 @@ class OnlinePipeline:
             probe,_=authority_filter(probe,strict=not self.cfg.provisional_mode)
             probe=deterministic_audit(self.store,probe,analysis.query_date,allow_fallback,analysis.query_date_end)
             proved,probe_decisions,_=self.applicability._deterministic([item for item in probe if item.verified],
-              env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
+              env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome)
             probe_plan=extend_plan_for_evidence(plan,proved,analysis.facts,analysis.query_date)
             probe_state=state_for(proved,probe_plan,analysis.query_date,allow_fallback)
             recognized={'DETERMINISTIC_PROFILE_RULE','DETERMINISTIC_RULE_MATCH','DETERMINISTIC_LEAVE_RULE_CHAIN',
@@ -181,7 +186,7 @@ class OnlinePipeline:
         audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
         trace.timings_ms['deterministic_audit']=round((time.perf_counter()-audit_started)*1000,2)
         applicability_started=time.perf_counter()
-        verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
+        verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome)
         trace.timings_ms['applicability_audit']=round((time.perf_counter()-applicability_started)*1000,2)
         warnings+=app_warnings
         extended_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
@@ -222,7 +227,7 @@ class OnlinePipeline:
                     expanded,removed_more=temporal_filter(expanded,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end); removed+=removed_more
                     expanded,authority_removed_more=authority_filter(expanded,strict=not self.cfg.provisional_mode); authority_removed+=authority_removed_more
                     expanded=deterministic_audit(self.store,expanded,analysis.query_date,allow_fallback,analysis.query_date_end)
-                    expanded,round_decisions,round_warnings=self.applicability.audit([x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,analysis.requested_outcome)
+                    expanded,round_decisions,round_warnings=self.applicability.audit([x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome)
                     decisions+=round_decisions; warnings+=round_warnings
                     verified=rerank(list({x.unit_id:x for x in verified+expanded}.values()),self.cfg)
                     state=state_for(verified,plan,analysis.query_date,allow_fallback)
@@ -243,13 +248,16 @@ class OnlinePipeline:
         selection_started=time.perf_counter()
         selected,state=select_for_plan(verified,plan,analysis.query_date,allow_fallback,route_limit)
         conflicts=detect_authoritative_conflicts(verified,analysis.query_date,analysis.query_date_end)
+        required_missing=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
+        if required_missing:
+            warnings+=['MISSING_REQUIRED_RULE:'+slot for slot in required_missing if slot in plan.slot_requirements]
         trace.timings_ms['selection']=round((time.perf_counter()-selection_started)*1000,2)
         if conflicts:
             conflict_ids={uid for pair in conflicts for uid in pair}
             selected=list({item.unit_id:item for item in selected+[x for x in verified if x.unit_id in conflict_ids]}.values())
             state=state_for(selected,plan,analysis.query_date,allow_fallback)
         imprecise_boundary_ids=[x.unit_id for x in selected if 'IMPRECISE_QUERY_DATE_OVERLAPS_VERSION_BOUNDARY' in x.audit_warnings]
-        followup_questions=[]
+        followup_questions=list(analysis.missing_facts) if clarify_during_answer else []
         if imprecise_boundary_ids:
             state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['imprecise_query_date']))})
             followup_questions=['Quy định thay đổi trong khoảng thời gian đã nêu. Vui lòng cung cấp ngày chính xác (YYYY-MM-DD) để xác định đúng phiên bản pháp luật.']
@@ -260,9 +268,10 @@ class OnlinePipeline:
         actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
         sufficient=bool(selected) and not state.gaps
         partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial
-        status=Stop.CONFLICTING_EVIDENCE if conflicts else Stop.NEED_MORE_FACTS if followup_questions else Stop.SUFFICIENT if sufficient else Stop.PARTIAL_ALLOWED if partial else Stop.INSUFFICIENT_EVIDENCE
+        status=Stop.CONFLICTING_EVIDENCE if conflicts else Stop.NEED_MORE_FACTS if imprecise_boundary_ids else Stop.SUFFICIENT if sufficient else Stop.PARTIAL_ALLOWED if partial else Stop.INSUFFICIENT_EVIDENCE
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome)
+        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks})
         adjudication_started=time.perf_counter()
         if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS}:
             summary='Cần ngày chính xác để xác định phiên bản pháp luật áp dụng.' if status==Stop.NEED_MORE_FACTS else 'Không đủ bằng chứng đã xác minh để kết luận.'
@@ -277,7 +286,12 @@ class OnlinePipeline:
                 output_state=state_for([item for item in selected if item.unit_id in cited],plan,analysis.query_date,allow_fallback)
                 return _actionable_gaps(output_state.gaps,[item for item in selected if item.unit_id in cited],self.cfg.provisional_mode)
             missing_claims=missing_answer_slots(draft)
-            if missing_claims and 'ANSWER_QUALITY_BLOCKED' not in generation_warnings:
+            if missing_claims and draft.semantic_review and 'ANSWER_QUALITY_BLOCKED' not in generation_warnings:
+                generation_warnings.append('ANSWER_SEMANTIC_REVIEW_INCOMPLETE')
+                # Structural repair cannot bypass the semantic checker. Keep
+                # only independently checked parts and disclose incompleteness.
+                draft=draft.model_copy(update={'limitations':list(dict.fromkeys(draft.limitations+['answer_coverage']))})
+            if missing_claims and not draft.semantic_review and 'ANSWER_QUALITY_BLOCKED' not in generation_warnings:
                 # One bounded deterministic repair, with the same vetted pack;
                 # never fabricate a source or issue another inference request.
                 repaired,repair_warnings=LegalAdjudicator(AdjudicationConfig()).generate(pack,partial,assumptions)
@@ -285,12 +299,23 @@ class OnlinePipeline:
                     draft=repaired; generation_warnings+=repair_warnings+['ANSWER_REQUIRED_EVIDENCE_REPAIRED']
                 else:
                     generation_warnings+=['ANSWER_REQUIRED_EVIDENCE_MISSING:'+','.join(missing_claims),'ANSWER_QUALITY_BLOCKED']
+            if draft.semantic_review:
+                trace.events.append({'event':'semantic_answer_audit',**draft.semantic_review})
+            if 'ANSWER_SEMANTIC_REVIEW_INCOMPLETE' in generation_warnings:
+                status=Stop.PARTIAL_ALLOWED
+                state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['answer_coverage']))})
+            if clarify_during_answer and status==Stop.SUFFICIENT:
+                status=Stop.PARTIAL_ALLOWED
+                state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['pending_facts']))})
             answer=draft.answer_summary
             if 'ANSWER_QUALITY_BLOCKED' in generation_warnings:
                 status=Stop.INSUFFICIENT_EVIDENCE
                 if any(warning.startswith('ANSWER_REQUIRED_EVIDENCE_MISSING:') for warning in generation_warnings):
                     quality_gap='answer_completeness'
                     answer='Câu trả lời còn thiếu nội dung pháp lý bắt buộc của câu hỏi. Cần bổ sung chuỗi căn cứ trước khi kết luận.'
+                elif any(warning.startswith('ANSWER_SEMANTIC_REVIEW_ERROR:') for warning in generation_warnings):
+                    quality_gap='semantic_verification'
+                    answer='Chưa xác minh được ý nghĩa pháp lý của câu trả lời. Không thể coi việc có trích dẫn là đủ để kết luận.'
                 elif any(warning.startswith('SOURCE_TEXT_QUALITY:') for warning in generation_warnings):
                     quality_gap='source_text_quality'
                     answer='Nội dung nguồn có lỗi đọc chữ đáng ngờ. Cần đối chiếu bản gốc trước khi kết luận.'
@@ -322,13 +347,17 @@ class OnlinePipeline:
             if repaired_ok:
                 answer=repaired_answer; selected=repaired_items; refs=repaired_refs; ok=True; problems=[]
                 draft=draft.model_copy(update={'claims':repaired_claims}); warnings.append('REFERENCE_AUDIT_REPAIRED')
+                preserved_gaps=[gap for gap in state.gaps if gap in {'answer_coverage','pending_facts'}]
                 selected,state=select_for_plan(selected,plan,analysis.query_date,allow_fallback,len(selected))
+                state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+preserved_gaps))})
                 pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
                   [x for x in decisions if x.evidence_id in {item.unit_id for item in selected}],analysis.requested_outcome)
                 sufficient=bool(selected) and not state.gaps
                 actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
                 partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial
                 status=Stop.SUFFICIENT if sufficient else Stop.PARTIAL_ALLOWED if partial else Stop.INSUFFICIENT_EVIDENCE
+                if selected and preserved_gaps and not _actionable_gaps([g for g in state.gaps if g not in preserved_gaps],selected,self.cfg.provisional_mode):
+                    status=Stop.PARTIAL_ALLOWED
                 if status==Stop.INSUFFICIENT_EVIDENCE:
                     answer='Không đủ bằng chứng đã xác minh để kết luận.'; refs=[]
                     draft=AdjudicationDraft(answer_summary=answer,claims=[],applicable_law_versions=[],assumptions=assumptions,limitations=state.gaps)

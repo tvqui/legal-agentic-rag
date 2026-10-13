@@ -66,6 +66,11 @@ const NOTICE_LABELS = {
   source_text_quality: 'Nội dung nguồn còn lỗi đọc chữ, cần đối chiếu bản gốc.',
   answer_completeness: 'Câu trả lời còn thiếu nội dung bắt buộc; cần kiểm tra chuỗi căn cứ.',
   answer_text_quality: 'Câu trả lời chưa đạt kiểm tra câu chữ.',
+  answer_coverage: 'Một số phần của câu hỏi chưa có đủ căn cứ để trả lời.',
+  pending_facts: 'Cần bổ sung dữ kiện để kết luận cho trường hợp cụ thể.',
+  semantic_verification: 'Hệ thống chưa hoàn tất kiểm tra kết luận với nguồn.',
+  ANSWER_SEMANTIC_REVIEW_INCOMPLETE: 'Chỉ trình bày phần đã kiểm được; câu hỏi còn phần chưa đủ căn cứ.',
+  ANSWER_WITH_UNCONFIRMED_FACTS: 'Phần giải thích có điều kiện; chưa kết luận khi dữ kiện còn thiếu.',
   SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW: 'Nguồn có đoạn đang gộp nhiều khoản; cần đối chiếu ranh giới khoản trong bản gốc.',
   ANSWER_QUALITY_BLOCKED: 'Câu trả lời chưa đạt kiểm tra chất lượng nội dung.',
   ANSWER_LANGUAGE_SAFE_FALLBACK: 'Hệ thống dùng cách trả lời dự phòng để giữ nguyên nội dung pháp lý.',
@@ -75,6 +80,8 @@ const NOTICE_LABELS = {
 
 function humanizeNotice(value) {
   if (NOTICE_LABELS[value]) return NOTICE_LABELS[value]
+  if (value.startsWith('ANSWER_SEMANTIC_REVIEW_ERROR:')) return 'Hệ thống chưa hoàn tất kiểm tra nội dung với nguồn; chưa thể kết luận.'
+  if (value.startsWith('MISSING_REQUIRED_RULE:')) return 'Chưa tìm đủ quy định trực tiếp cần thiết để trả lời câu hỏi.'
   if (value.startsWith('SOURCE_TEXT_QUALITY:')) return 'Nội dung nguồn có chữ đáng ngờ, cần đối chiếu bản gốc.'
   if (value.startsWith('ANSWER_TEXT_QUALITY:') || value.startsWith('ANSWER_LANGUAGE_REPAIR_REJECTED:')) return 'Hệ thống phát hiện lỗi câu chữ và đã kiểm tra cách trả lời dự phòng.'
   if (value.startsWith('DOCUMENT_LEVEL_TEMPORAL_FALLBACK_USED:')) {

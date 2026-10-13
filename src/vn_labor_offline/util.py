@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, re, unicodedata
+import hashlib, json, re, unicodedata, os, tempfile
 from pathlib import Path
 from typing import Iterable, Iterator, Any
 
@@ -19,9 +19,17 @@ def stable_id(*parts: str, prefix: str = "id") -> str:
 
 def write_jsonl(path: Path, rows: Iterable[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=path.parent,
+                prefix='tmp_'+path.name+'_',suffix='.tmp',delete=False) as f:
+            temporary=Path(f.name)
+            for row in rows:
+                f.write(json.dumps(row,ensure_ascii=False)+"\n")
+            f.flush()
+        os.replace(temporary,path)
+    finally:
+        if temporary is not None: temporary.unlink(missing_ok=True)
 
 
 def read_jsonl(path: Path) -> Iterator[dict]:

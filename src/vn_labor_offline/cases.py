@@ -4,6 +4,8 @@ from .ai_enrichment import cache_dir,cached_structured,provider_from_config,repo
 from .evidence import locate_document_evidence
 from pathlib import Path
 from .util import stable_id, write_jsonl
+import json
+from .integrity import _atomic
 
 CASE_NO_RE = re.compile(r"(?:Bản án|Quyết định giám đốc thẩm|Quyết định)\s+(?:số\s*:\s*)?([0-9]{1,4}/[0-9]{4}/[A-ZĐa-zđ-]+)", re.I)
 DATE_PATTERNS = [
@@ -78,7 +80,7 @@ def parse_case(doc: dict, text: str) -> dict:
         "reasoning": sections["reasoning"],
         "decision": sections["decision"],
         "features": features,
-        "search_text": "\n".join(x for x in [dispute, sections["facts"][:12000], sections["reasoning"][:12000]] if x),
+        "search_text": "\n".join(x for x in [dispute, sections["facts"], sections["reasoning"], sections["decision"]] if x),
     }
 
 
@@ -92,43 +94,71 @@ def build_cases(registry: list[dict], extracted: list[dict], output_dir: Path) -
     write_jsonl(output_dir / "03_structure" / "cases.jsonl", rows)
     return rows
 
-CASE_FEATURE_SCHEMA={"type":"object","additionalProperties":False,"properties":{"features":{"type":"array","items":{"type":"object","additionalProperties":False,"properties":{
+CASE_FEATURE_SCHEMA={"type":"object","additionalProperties":False,"properties":{"features":{"type":"array","maxItems":12,"items":{"type":"object","additionalProperties":False,"properties":{
   "type":{"type":"string","enum":["PARTY_PROFILE","EMPLOYMENT_RELATIONSHIP","EMPLOYMENT_EVENT","PROTECTED_STATUS","PROCEDURE","CLAIM_OR_REMEDY","OUTCOME"]},
   "value":{"type":"string"},"source_quote":{"type":"string"}
 },"required":["type","value","source_quote"]}}},"required":["features"]}
 
+def source_chunks(source,byte_budget=3500):
+    if byte_budget<256: raise ValueError('Case chunk budget too small')
+    start=0
+    while start<len(source):
+        end=start; consumed=0
+        while end<len(source) and consumed+len(source[end].encode('utf-8'))<=byte_budget:
+            consumed+=len(source[end].encode('utf-8')); end+=1
+        yield start,source[start:end]
+        if end==len(source): break
+        # Overlap keeps sentences crossing a chunk boundary available in full.
+        start=max(start+1,end-min(200,(end-start)//4))
+
 def enrich_case_ontology(cases,cfg,output_dir):
-    provider=provider_from_config(cfg); cache=cache_dir(cfg); enriched=[]
-    system="""Extract normalized Vietnamese labour-case ontology features from the quoted case only.
-Every feature must have a short exact source_quote. Do not infer unstated facts, guilt, intent, or criminal-law attributes.
-Return only JSON matching the schema."""
-    attempted=succeeded=fallback=0
-    report_ai_progress(output_dir,'case_ontology',0,len(cases),ai_planned=len(cases),
-                       ai_attempted=0,ai_succeeded=0,ai_fallback=0)
-    for index,case in enumerate(cases,1):
-        source='\n'.join(str(case.get(field) or '') for field in ('dispute','facts','reasoning','decision'))
-        payload={'case_id':case['case_id'],'source':source[:30000]}
-        attempted+=1
-        try: data=cached_structured(provider,system,payload,CASE_FEATURE_SCHEMA,cache,case['case_id'])
-        except Exception:
-            fallback+=1; enriched.append(case)
-            report_ai_progress(output_dir,'case_ontology',index,len(cases),ai_planned=len(cases),ai_attempted=attempted,
-                               ai_succeeded=succeeded,ai_fallback=fallback)
-            continue
-        features=list(case.get('features',[]))
-        allowed={'PARTY_PROFILE','EMPLOYMENT_RELATIONSHIP','EMPLOYMENT_EVENT','PROTECTED_STATUS','PROCEDURE','CLAIM_OR_REMEDY','OUTCOME'}
-        for item in data.get('features',[])[:40] if isinstance(data,dict) else []:
-            typ=item.get('type'); value=' '.join(str(item.get('value','')).split())
-            quote=' '.join(str(item.get('source_quote','')).split())
-            if typ not in allowed or not value or not quote: continue
-            evidence_text,evidence_span,status=locate_document_evidence(quote,source)
-            if status!='RESOLVED': continue
-            features.append({'type':typ,'value':value,'source_quote':evidence_text,'evidence_span':evidence_span,
-              'provenance_status':'VERIFIED','generator':'structured-ai:'+str(getattr(provider,'model','unknown'))})
-        unique={(x.get('type'),x.get('value'),x.get('source_quote')):x for x in features}
-        enriched.append({**case,'features':list(unique.values())})
-        succeeded+=1
-        report_ai_progress(output_dir,'case_ontology',index,len(cases),ai_planned=len(cases),ai_attempted=attempted,
-                           ai_succeeded=succeeded,ai_fallback=fallback)
-    write_jsonl(output_dir/'03_structure'/'cases.jsonl',enriched)
+    from .ai_requests import AIRequests
+    provider=provider_from_config(cfg); requests=AIRequests(provider,cfg,output_dir,'case_ontology')
+    enriched=[]; quality=[]; succeeded=fallback=0
+    system="""Extract normalized Vietnamese labour-case ontology features from this fragment only.
+Each feature needs a short exact source_quote. Distinguish allegations, court findings and outcomes.
+Do not infer unstated facts. Use concise Vietnamese values. Return at most 12 features, only schema JSON."""
+    try:
+        for index,case in enumerate(cases,1):
+            source='\n'.join(str(case.get(field) or '') for field in ('dispute','facts','reasoning','decision'))
+            responses,errors,planned=requests.generate(system,{'case_id':case['case_id'],'source':source},
+                CASE_FEATURE_SCHEMA,case['case_id'])
+            features=list(case.get('features',[])); accepted=0
+            for response in responses:
+                chunk=response['source']; offset=response['source_offset']; grounded=[]
+                for item in response['data'].get('features',[]):
+                    value=' '.join(item['value'].split()); quote=' '.join(item['source_quote'].split())
+                    if not value or not quote: continue
+                    evidence_text,local_span,status=locate_document_evidence(quote,chunk)
+                    if status!='RESOLVED': continue
+                    start=offset+local_span['document_char_start']; end=offset+local_span['document_char_end']
+                    if source[start:end]!=evidence_text: continue
+                    evidence_span={'coordinate_space':'CASE_SOURCE_TEXT','char_start':start,'char_end':end,
+                        'source_sha256':__import__('hashlib').sha256(source.encode('utf-8')).hexdigest()}
+                    grounded.append({'type':item['type'],'value':value,'source_quote':evidence_text,
+                        'evidence_span':evidence_span,'source_chunk_offset':offset,'provenance_status':'VERIFIED',
+                        'generator':'structured-ai:'+str(getattr(provider,'model','unknown'))})
+                if len(grounded)!=len(response['data']['features']):
+                    errors.append({'reason':'UNGROUNDED_AI_FEATURES','source_start':offset,'source_end':offset+len(chunk)})
+                features.extend(grounded); accepted+=len(grounded)
+            unique={(x.get('type'),x.get('value'),x.get('source_quote')):x for x in features}
+            enriched.append({**case,'features':list(unique.values())})
+            if accepted: succeeded+=1
+            else: fallback+=1
+            quality.append({'case_id':case['case_id'],'source_chars':len(source),'chunks_planned':planned,
+                'chunks_completed':len(responses),'accepted_features':accepted,
+                'errors':[e['reason'] for e in errors],'error_details':errors,
+                'coverage_complete':len(responses)==planned and not errors,
+                'complete':len(responses)==planned and not errors and accepted>0})
+            # Preserve the full set of case records if interrupted partway through.
+            write_jsonl(output_dir/'03_structure/cases.jsonl',enriched+cases[index:])
+            _atomic(output_dir/'reports/case_ai_quality.json',{'cases':quality,'total_cases':len(cases),
+                'ai_attempted':requests.network_calls,'ai_cache_hits':requests.cache_hits,
+                'ai_succeeded':succeeded,'ai_fallback':fallback,'circuit_open':requests.stop_reason=='AI_CIRCUIT_OPEN',
+                'stop_reason':requests.stop_reason,'complete':len(quality)==len(cases) and all(r['complete'] for r in quality)})
+            report_ai_progress(output_dir,'case_ontology',index,len(cases),ai_attempted=requests.network_calls,
+                ai_cache_hits=requests.cache_hits,ai_succeeded=succeeded,ai_fallback=fallback)
+    finally:
+        close=getattr(provider,'close',None)
+        if callable(close): close()
     return enriched

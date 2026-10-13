@@ -42,8 +42,10 @@ def build():
         for p in sorted((ROOT / folder).rglob('*')):
             if p.is_file() and not p.is_symlink() and p.suffix.lower() in suffixes and '__pycache__' not in p.parts:
                 files[p.relative_to(ROOT).as_posix()] = p
-    for name in ['pyproject.toml', 'scripts/prepare_dense_model.py', 'scripts/validate_outputs.py', 'scripts/package_kaggle.py',
+    for name in ['docs/kaggle/offline-ai-enrichment.md', 'pyproject.toml', 'scripts/prepare_dense_model.py', 'scripts/validate_outputs.py', 'scripts/package_kaggle.py',
                  'scripts/prepare_source_attachments.py', 'scripts/review_kaggle_extraction.py',
+                 'docs/kaggle/offline-quality-upgrade-20261012.md',
+                 'docs/kaggle/offline-provenance-fix-20261012.md',
                  'scripts/evaluate_gold.py', 'scripts/prepare_review_inputs.py', 'scripts/pin_online_artifact.py']:
         files[name] = ROOT / name
     converted = []
@@ -65,7 +67,7 @@ def build():
         with p.open('rb') as f:
             sha = hashlib.file_digest(f, 'sha256').hexdigest()
         entries.append({'path': name, 'bytes': p.stat().st_size, 'sha256': sha})
-    manifest = {'schema': 1, 'owner': 'qutrnvinh3', 'privacy': 'PRIVATE',
+    manifest = {'schema': 1, 'owner': 'qutrnvinh3', 'privacy': 'PRIVATE', 'bundle_revision': '20261012-footnote-provenance-v2',
                 'corpus_files': sum(n.startswith('data/') for n in files),
                 'converted_docs': converted, 'files': entries}
     archive = DEST / 'vn_labor_kaggle_v8.zip'
@@ -90,7 +92,7 @@ def build():
         archive_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
     sidecar = Path(str(archive) + '.sha256')
     sidecar.write_text(f'{archive_sha256}  {archive.name}\n', encoding='ascii')
-    report = {'bundle': archive.name, 'sha256': archive_sha256, 'sha256_file': sidecar.name,
+    report = {'bundle_revision': '20261012-footnote-provenance-v2', 'bundle': archive.name, 'sha256': archive_sha256, 'sha256_file': sidecar.name,
               'workflow': 'V8_1_CHECKPOINT_FIRST_REBUILD_AI_AURA',
               'size_mb': round(archive.stat().st_size / 1e6, 2),
               'files': len(files), 'corpus_files': manifest['corpus_files'], 'converted_docs': len(converted),

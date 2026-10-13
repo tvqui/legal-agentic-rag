@@ -7,7 +7,7 @@ import pymupdf as fitz
 from bs4 import BeautifulSoup
 from docx import Document
 from .cleaning import clean_text, remove_repeated_page_lines
-from .page_quality import initial_page_reasons, finalize_page_quality, text_layer_metrics, write_page_quality_artifacts
+from .page_quality import initial_page_reasons, finalize_page_quality, page_number_only_evidence, text_layer_metrics, write_page_quality_artifacts
 from .util import write_jsonl, stable_id
 
 EXTRACTION_SCHEMA = 'page-v5-quality-audit'
@@ -98,13 +98,22 @@ def extract_pdf_pages(path: Path, row: dict, cfg: dict, output_dir: Path):
             needs=not blank and (rotation or mode=='always' or count<40 or
                 (count<threshold and coverage>.25) or (coverage>.6 and count<2000) or
                 bad_fraction>.02 or bool(native_reasons))
+            from .page_content import native_form_layer
+            form_proof=native_form_layer(page,native,coverage) if mode=='auto' and not rotation else None
+            if form_proof: needs=False
             text=native; method='pymupdf'; error=None; status='NOT_NEEDED'
             key=stable_id(EXTRACTION_SCHEMA,row['sha256'],str(i+1),json.dumps(cache_settings,sort_keys=True),json.dumps(review,sort_keys=True),prefix='page')
             cached=cache/(key+'.json')
             if needs and mode!='never':
                 try:
+                    cached_text=None
                     if cached.exists():
-                        text=json.loads(cached.read_text(encoding='utf-8'))['text']; method='docling_easyocr_cached'
+                        try:
+                            cached_text=json.loads(cached.read_text(encoding='utf-8'))['text']
+                            if not isinstance(cached_text,str) or not cached_text.strip(): cached_text=None
+                        except (OSError,ValueError,KeyError,TypeError): pass
+                    if cached_text is not None:
+                        text=cached_text; method='docling_easyocr_cached'
                     else:
                         text=extract_pdf_docling(path,settings.get('ocr_languages',['vi','en']),bool(settings.get('ocr_use_gpu',False)),i+1,layout_cache=cached.with_suffix('.layout.json'),rotation=rotation)
                         if not text.strip(): raise RuntimeError('OCR returned empty text')
@@ -119,12 +128,26 @@ def extract_pdf_pages(path: Path, row: dict, cfg: dict, output_dir: Path):
                 text=''; method='reviewed_no_body_text'; status='REVIEWED_NO_BODY_TEXT'
             quality_reasons,_,agreement=initial_page_reasons(
                 native,text,used_ocr=method.startswith('docling'),blank=blank,settings=settings)
+            # Keep geometric proof for harmless pagination-only cleaning. This
+            # does not change blank detection, OCR selection or cache keys.
+            non_body_evidence=None
+            if native.strip()==str(i+1) and text.strip()==native.strip():
+                native_boxes=[span['bbox'] for block in page.get_text('dict').get('blocks',[])
+                              for line in block.get('lines',[]) for span in line.get('spans',[])
+                              if span.get('text','').strip()]
+                non_body_evidence=page_number_only_evidence(
+                    native,text,page_number=i+1,page_height=float(page.rect.height),
+                    native_boxes=native_boxes,image_count=len(images),drawing_count=len(page.get_drawings()))
+            from .page_content import pdf_note_candidates
+            note_candidates=pdf_note_candidates(page)
             pages.append(text)
             provenance.append({'page':i+1,'method':method,'chars':len(text),'native_chars':count,
                 'image_coverage':round(coverage,3),'bad_character_fraction':bad_fraction,'ocr':method.startswith('docling'),'ocr_status':status,
                 'blank':blank,'error':error,'file_id':row['file_id'],'sha256':row['sha256'],'page_review':review,
                 'native_quality':native_quality,'selected_quality':text_layer_metrics(text),
-                'native_ocr_agreement':agreement,'quality_reason_codes':quality_reasons})
+                'native_ocr_agreement':agreement,'quality_reason_codes':quality_reasons,
+                'non_body_text_evidence':non_body_evidence,'note_candidates':note_candidates,
+                'native_text':native,'selected_text':text,'native_form_layer_proof':form_proof})
     return pages,provenance
 
 
@@ -232,7 +255,7 @@ def extract_one(row: dict, cfg: dict, output_dir: Path) -> dict:
     needs_ocr = False
     error = None
     raw = ""
-    page_provenance=[]
+    page_provenance=[]; annotations=[]
     text_source=None
     try:
         # A SHA-bound official attachment may replace a landing page or a scan
@@ -279,10 +302,12 @@ def extract_one(row: dict, cfg: dict, output_dir: Path) -> dict:
             )
         cleaned_pages=[clean_text(p, cfg['cleaning'].get('unicode_form','NFC')) for p in pages]
         cleaned = '\n\n'.join(cleaned_pages) if pages else clean_text(raw,cfg['cleaning'].get('unicode_form','NFC'))
-        offset=0
+        offset=0; annotations=[]
         for p,content,selected in zip(page_provenance,cleaned_pages,selected_pages):
             p['text_start']=offset; p['text_end']=offset+len(content)
             finalize_page_quality(p,content,selected)
+            from .page_content import align_notes
+            annotations.extend(align_notes(p.pop('note_candidates',[]),content,p['page'],p['sha256'],offset))
             offset+=len(content)+2
         if ext=='.pdf' and page_provenance:
             render_suspicious_page_previews(path,page_provenance,output_dir,cfg['extraction'])
@@ -296,7 +321,7 @@ def extract_one(row: dict, cfg: dict, output_dir: Path) -> dict:
         "needs_ocr": needs_ocr,
         "extraction_error": error,
         'page_provenance':page_provenance,'page_count':len(page_provenance),'extraction_schema':EXTRACTION_SCHEMA,
-        'text_source':text_source,
+        'text_source':text_source,'non_body_annotations':annotations,'page_content_schema':'page-content-v1','content_selection_schema':'native-form-v1',
     }
     return out
 
@@ -316,11 +341,15 @@ def _cache_matches_current_sources(result: dict, row: dict, attachments: dict, r
     """Allow a checkpoint hit only when this document's bound inputs still match."""
     if result.get('extraction_schema')!=EXTRACTION_SCHEMA:
         return False
+    if result.get('page_provenance') and result.get('content_selection_schema')!='native-form-v1':
+        return False
     if result.get('file_id')!=row.get('file_id') or result.get('sha256')!=row.get('sha256'):
+        return False
+    if result.get('extraction_settings_fingerprint') != row.get('_extraction_settings_fingerprint'):
         return False
     if result.get('extraction_error') or not result.get('text'):
         return False
-    if any(page.get('ocr_status') in {'FAILED','DISABLED'} for page in result.get('page_provenance',[])):
+    if any(page.get('ocr_status') in {'FAILED','DISABLED'} or page.get('page_quality_status')=='ERROR' for page in result.get('page_provenance',[])):
         return False
 
     attachment=attachments.get(row.get('relative_path'))
@@ -372,9 +401,15 @@ def extract_all(manifest: list[dict], cfg: dict, output_dir: Path) -> list[dict]
         extraction_settings={key:value for key,value in cfg['extraction'].items() if key!='document_timeout_attempts'}
         key=stable_id(EXTRACTION_SCHEMA,row['file_id'],row['sha256'],attachment_hash,json.dumps({'extraction':extraction_settings,'cleaning':cfg['cleaning']},sort_keys=True),prefix='extract')
         cached=cache/(key+'.json')
+        settings_fingerprint=hashlib.sha256(json.dumps({'extraction':extraction_settings,'cleaning':cfg['cleaning']},sort_keys=True).encode()).hexdigest()
+        row={**row,'_extraction_settings_fingerprint':settings_fingerprint}
+        result=None
         if cached.exists():
-            result=json.loads(cached.read_text(encoding='utf-8'))
-        else:
+            try:
+                candidate=json.loads(cached.read_text(encoding='utf-8'))
+                if _cache_matches_current_sources(candidate,row,attachments,reviews): result=candidate
+            except (OSError,ValueError,TypeError): pass
+        if result is None:
             result=next((candidate for candidate in checkpoint_cache.get((row.get('file_id'),row.get('sha256')),[])
                          if _cache_matches_current_sources(candidate,row,attachments,reviews)),None)
             if result is not None:
@@ -386,24 +421,41 @@ def extract_all(manifest: list[dict], cfg: dict, output_dir: Path) -> list[dict]
                     request.write_text(json.dumps({'row':row,'cfg':cfg,'output_dir':str(output_dir),'response':str(response)},default=str),encoding='utf-8')
                     exc=None; result=None
                     for attempt in range(1,attempts+1):
+                        response.unlink(missing_ok=True)
                         try:
                             process=subprocess.run([sys.executable,'-m','vn_labor_offline.extraction_worker',str(request)],capture_output=True,timeout=timeout)
                             if process.returncode or not response.exists(): raise RuntimeError(process.stderr.decode('utf-8',errors='replace')[-1500:])
                             result=json.loads(response.read_text(encoding='utf-8'))
                             break
-                        except (subprocess.TimeoutExpired,RuntimeError) as error:
+                        except (subprocess.TimeoutExpired,RuntimeError,ValueError,OSError) as error:
                             exc=error
                             if attempt==attempts: break
                     if result is None:
                         result={**row,'text':'','text_chars':0,'needs_ocr':row['extension']=='.pdf','extraction_method':'failed_worker',
                             'page_provenance':[],'extraction_schema':EXTRACTION_SCHEMA,
                             'extraction_error':f'{type(exc).__name__} after {attempts} attempt(s): {exc}'}
-            if not result.get('extraction_error') and not any(p.get('ocr_status')=='FAILED' for p in result.get('page_provenance',[])):
-                cached.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8')
+            result['extraction_settings_fingerprint']=settings_fingerprint
+            result.pop('_extraction_settings_fingerprint',None)
+            if not result.get('extraction_error') and not any(p.get('ocr_status') in {'FAILED','DISABLED'} or p.get('page_quality_status')=='ERROR' for p in result.get('page_provenance',[])):
+                temporary=cached.with_suffix('.tmp'); temporary.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8'); os.replace(temporary,cached)
+        if result.get('page_content_schema')!='page-content-v1' and not result.get('extraction_error'):
+            from .page_content import refresh_document_notes
+            if result.get('page_provenance'):
+                from .page_review import source_path
+                source,_=source_path(result,Path(cfg['project_root']))
+                refresh_document_notes(result,source)
+            else:
+                result['non_body_annotations']=[]; result['page_content_schema']='page-content-v1'
+            temporary=cached.with_suffix('.tmp')
+            temporary.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8'); os.replace(temporary,cached)
         rows.append(result)
+        from .integrity import report_progress
+        report_progress(output_dir,'extraction',len(rows),len(manifest),path=row['relative_path'])
         write_jsonl(output_dir/'01_extracted'/'documents.jsonl',rows)
     write_jsonl(output_dir / "01_extracted" / "documents.jsonl", rows)
     failures = [r for r in rows if r.get("extraction_error") or r.get("text_chars", 0) < 100]
     write_jsonl(output_dir / "reports" / "extraction_issues.jsonl", failures)
     write_page_quality_artifacts(rows,output_dir)
+    from .page_content import write_notes
+    write_notes(rows,output_dir)
     return rows

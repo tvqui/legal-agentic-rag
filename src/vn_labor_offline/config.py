@@ -35,7 +35,7 @@ CONFIG_KEYS={
                   'page_quality_max_previews_per_document','page_quality_preview_dpi'},
     'cleaning':{'unicode_form','repeated_line_page_ratio','repeated_line_max_chars'},
     'parsing':{'keep_unparsed_preamble','minimum_provision_chars'},
-    'knowledge':{'checklist_mode','ollama_model','issue_min_score','relation_confidence_threshold','case_ontology_mode','ai_provider','ai_url','ai_model','ai_health_url','ai_timeout_seconds','ai_cache_dir','ai_max_provisions'},
+    'knowledge':{'checklist_mode','ollama_model','issue_min_score','relation_confidence_threshold','case_ontology_mode','ai_provider','ai_url','ai_model','ai_health_url','ai_timeout_seconds','ai_cache_dir','ai_max_provisions','ai_max_output_tokens','ai_context_tokens','ai_max_consecutive_failures','ai_chunk_bytes','ai_case_budget_seconds','ai_checklist_budget_seconds'},
     'retrieval':{'embedding_model','embedding_model_path','embedding_device','embedding_batch_size','embedding_chunk_size','embedding_max_length','embedding_use_fp16','bm25_method','case_knn_k','community_algorithm'},
     'neo4j':{'load_batch_size'},
 }

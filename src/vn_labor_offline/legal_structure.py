@@ -138,14 +138,17 @@ def _parse_main_body(doc: dict, text: str) -> list[dict]:
     return provisions
 
 
-def parse_legal_document(doc: dict, text: str) -> list[dict]:
+def parse_legal_document(doc: dict, text: str, notes=None) -> list[dict]:
     from .segmentation import segment_document
     result=[]; preamble=''
     for segment in segment_document(doc,text):
         if segment['segment_type']=='PREAMBLE': preamble=segment['text']
         if segment['segment_type']!='MAIN_BODY': continue
         chapter_lines=[line for line in preamble.splitlines() if CHAPTER_RE.match(line) or SECTION_RE.match(line)]
-        parsed=_parse_main_body(doc,'\n'.join(chapter_lines[-2:])+'\n'+segment['text'])
+        from .page_content import mask_segment_notes,segment_note_spans
+        parser_text=mask_segment_notes(segment['text'],notes or [])
+        annotation_spans=segment_note_spans(segment['text'],notes or [])
+        parsed=_parse_main_body(doc,'\n'.join(chapter_lines[-2:])+'\n'+parser_text)
         search_at=0
         for p in parsed:
             p['segment_id']=segment['segment_id']; p['segment_type']='MAIN_BODY'
@@ -161,6 +164,8 @@ def parse_legal_document(doc: dict, text: str) -> list[dict]:
             if span_start is not None:
                 p['char_start']=span_start
                 p['char_end']=span_end
+                excluded=[n for n in annotation_spans if n['segment_char_start']<span_end and n['segment_char_end']>span_start]
+                if excluded: p['excluded_annotation_spans']=excluded
                 p['line_start']=segment['line_start']+source_text[:span_start].count('\n')
                 p['line_end']=segment['line_start']+source_text[:span_end].count('\n')
                 p['span_scope']='SEGMENT_TEXT'
@@ -186,7 +191,8 @@ def parse_all(registry: list[dict], extracted: list[dict], output_dir: Path, cfg
         text = by_file.get(doc["file_id"], {}).get("text", "")
         parts=segment_document(doc,text,settings.get('keep_unparsed_preamble',True))
         segments.extend(parts)
-        parsed=parse_legal_document(doc,text)
+        from .page_content import validated_notes
+        parsed=parse_legal_document(doc,text,validated_notes(by_file.get(doc['file_id'],{})))
         counts=Counter(p['provision_id'] for p in parsed)
         repeated=[key for key,count in counts.items() if count>1]
         if repeated:

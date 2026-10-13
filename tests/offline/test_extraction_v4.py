@@ -281,5 +281,18 @@ class AttachmentTests(unittest.TestCase):
         self.assertEqual(reused[0]['text'],response['text'])
 
 
+
+    def test_corrupt_page_cache_regenerates_ocr(self):
+        from vn_labor_offline.util import stable_id
+        cfg=copy.deepcopy(self.cfg); cfg['extraction']['use_docling']='always'
+        cache=self.root/'out/01_extracted/page_cache'; cache.mkdir(parents=True)
+        settings={k:v for k,v in cfg['extraction'].items() if k!='document_timeout_attempts'}
+        key=stable_id('page-v5-quality-audit',self.row['sha256'],'1',json.dumps(settings,sort_keys=True),json.dumps({},sort_keys=True),prefix='page')
+        (cache/(key+'.json')).write_text('{broken',encoding='utf-8')
+        with patch('vn_labor_offline.extract.extract_pdf_docling',return_value='Recovered OCR source text') as ocr:
+            pages,provenance=extract_pdf_pages(self.root/'review/attachments/full.pdf',self.row,cfg,self.root/'out')
+        ocr.assert_called_once(); self.assertEqual(pages,['Recovered OCR source text'])
+        self.assertEqual(provenance[0]['ocr_status'],'COMPLETE')
+
 if __name__=='__main__': unittest.main()
 
