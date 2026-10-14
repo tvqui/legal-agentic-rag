@@ -64,7 +64,10 @@ def validate_structured(value,schema):
         if not isinstance(value,list): raise ValueError('AI_SCHEMA_ARRAY')
         if len(value)>min(100,schema.get('maxItems',100)): raise ValueError('AI_SCHEMA_ARRAY_LIMIT')
         for item in value: validate_structured(item,schema.get('items',{}))
-    elif typ=='string' and not isinstance(value,str): raise ValueError('AI_SCHEMA_STRING')
+    elif typ=='string':
+        if not isinstance(value,str): raise ValueError('AI_SCHEMA_STRING')
+        if len(value)>schema.get('maxLength',len(value)): raise ValueError('AI_SCHEMA_STRING_LIMIT')
+        if len(value)<schema.get('minLength',0): raise ValueError('AI_SCHEMA_STRING_MINIMUM')
     if 'enum' in schema and value not in schema['enum']: raise ValueError('AI_SCHEMA_ENUM')
 
 def cache_dir(cfg):

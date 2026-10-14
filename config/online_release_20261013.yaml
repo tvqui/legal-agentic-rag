@@ -1,0 +1,70 @@
+online:
+  artifact_source: D:\data_thô\result\result_13-10\vn_labor_results.zip
+  cache_dir: .cache/online
+  expected_archive_sha256: ee128bcbc47d14212f07188a29d27d736f18bac6752951c0989c0b6ce891e3c0
+  expected_build_id: 1836aa6ece8e0fda4f81b05492424217fe7ebd175fde5eb671232e8895b5c33a
+  expected_retrieval_unit_fingerprint: 2a82928a2968cf5583858c2b56aafb12550c61e304df52b5cdd4262d015d9557
+  expected_dense_fingerprint: 3c33b60ad0696ddc65006725613281bfee1e419e77be4183311cbde3f584a41a
+  corpus_snapshot_as_of: '2026-09-15'
+  provisional_mode: true
+  embedding_model: BAAI/bge-m3
+  embedding_model_path: .cache/models/bge-m3
+  embedding_device: auto
+  embedding_use_fp16: true
+  retrieval:
+    exact_lookup: true
+    bm25_enabled: true
+    bm25_top_k: 30
+    dense_enabled: true
+    dense_top_k: 30
+    issue_anchor_enabled: true
+    issue_anchor_top_k: 20
+    case_law_enabled: true
+    case_law_top_k: 10
+    community_enabled: true
+    community_top_k: 3
+    community_case_top_k: 10
+    fusion_top_k: 30
+    rrf_k: 60
+  graph:
+    enabled: true
+    mode: adaptive
+    max_rounds: 2
+    max_nodes: 15
+    max_edges: 40
+    max_hops: 2
+    allowed_relations:
+    - AMENDS
+    - REPEALS
+    - REPLACES
+    - IMPLEMENTS
+    - REFERENCES
+    - VERSION_OF
+    - PART_OF
+    - CITES
+    - NEXT
+    - RELATES_TO_ISSUE
+    - HAS_ISSUE
+    - SIMILAR_TO
+    - BELONGS_TO
+    wall_clock_ms: 1500
+    hub_penalty: 0.15
+    novelty_weight: 0.1
+    redundancy_weight: 0.1
+  max_verified_units: 32
+  answer_while_clarifying: true
+  minimum_coverage: 0.5
+  allow_partial: true
+  allow_document_temporal_fallback: true
+  researcher:
+    adaptive: false
+    max_queries: 4
+  applicability:
+    mode: deterministic
+    fail_closed: true
+  adjudication:
+    semantic_review: true
+    semantic_repair_attempts: 1
+    mode: deterministic
+    fail_closed: true
+  trace_dir: artifacts/online_traces

@@ -142,6 +142,12 @@ def rerun_enrichment(cfg,mode='ollama'):
     segments=load_stage(out,'03_structure/segments.jsonl')
     build_hierarchy_headings(registry,extracted,segments,out)
     identities, _=materialize_provision_versions(registry,provisions,out,cfg['project_root'])
+    # Stop metadata/config incompatibility BEFORE spending hours on AI requests.
+    catalog=load_stage(out,'00_manifest/source_catalog_resolved.jsonl')
+    preflight_units=build_retrieval_units(provisions,cases,registry,segments,catalog,extracted)
+    if (load_stage(out,'06_indexes/retrieval_units.jsonl')!=preflight_units or
+            load_stage(out,'06_indexes/dense/metadata.jsonl')!=preflight_units):
+        raise RuntimeError('AI enrichment changes retrieval metadata; rebuild technical indexes before AI')
     if mode in {'ai','hybrid_ai'}: cases=enrich_case_ontology(cases,cfg,out)
     checklists=build_checklists(provisions,cfg,out,mode=mode)
     report_ai_progress(out,'graph_rebuild',0,1,mode=mode,checklists=len(checklists),cases=len(cases))

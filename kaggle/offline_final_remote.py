@@ -73,6 +73,9 @@ def _configure_ai(config: Path, max_provisions: int) -> None:
         "ai_max_output_tokens": 2048,
         "ai_max_consecutive_failures": 5,
         "ai_chunk_bytes": 3500,
+        "ai_compact_output": True,
+        "ai_grounding_repair": True,
+        "ai_max_split_depth": 3,
         "ai_case_budget_seconds": 10800,
         "ai_checklist_budget_seconds": 10800,
     })
@@ -108,6 +111,24 @@ def _technical_audit(config="config/kaggle.yaml") -> dict:
             "offline_ready_for_online": bool(report.get("offline_ready_for_online"))}
 
 
+def _resume_integrity(config: Path) -> dict:
+    """Check the restored source and indexes before requesting any AI work."""
+    import tempfile
+    from vn_labor_offline.config import load_yaml, resolve_paths
+    from vn_labor_offline.scanner import scan
+    from vn_labor_offline.util import read_jsonl
+    cfg=resolve_paths(load_yaml(config),config)
+    out=cfg['output_dir']
+    extracted=list(read_jsonl(out/'01_extracted/documents.jsonl'))
+    with tempfile.TemporaryDirectory(prefix='vn_resume_integrity_') as temporary:
+        current=scan(cfg['data_dir'],Path(temporary))
+    def identities(rows):
+        return {(row['file_id'],row['sha256'],row['relative_path']) for row in rows}
+    if not extracted or len(identities(extracted))!=len(extracted) or identities(current)!=identities(extracted):
+        raise RuntimeError('AI resume checkpoint/corpus identity mismatch')
+    return _technical_audit(config)
+
+
 def _export(name: str) -> None:
     _run(["kaggle/remote.py", "export", "--archive-name", name])
 
@@ -120,7 +141,11 @@ def main() -> int:
     parser.add_argument("--load-aura", action="store_true")
     parser.add_argument("--refresh-extraction", action="store_true",
                         help="Run page-v5 selective OCR and page-quality audit before rebuilding")
+    parser.add_argument("--resume-ai", action="store_true",
+                        help="Validate and enrich a restored technical build without OCR/index rebuild")
     args = parser.parse_args()
+    if args.resume_ai and args.refresh_extraction:
+        parser.error("--resume-ai cannot be combined with --refresh-extraction")
     if os.name=='posix':
         import signal
         def terminate(signum,frame):
@@ -136,17 +161,30 @@ def main() -> int:
     started = datetime.now(timezone.utc).isoformat()
     _write_json(RUN, {"pipeline_exit_code": 1, "stage": "starting", "started_at": started})
     _state("starting", started_at=started, ai_enabled=not args.skip_ai,
-           ai_max_provisions=args.ai_max_provisions, load_aura=args.load_aura)
+           ai_max_provisions=args.ai_max_provisions, load_aura=args.load_aura, resume_ai=args.resume_ai)
 
     try:
         if args.refresh_extraction:
             _state("extraction_quality_refresh")
             _run(["-m", "vn_labor_offline.cli", "extract", "--config", str(config)])
-        _state("technical_rebuild")
-        _run(["-m", "vn_labor_offline.cli", "rebuild", "--config", str(config), "--mode", "heuristic"])
-        technical = _technical_audit(config)
+        if args.resume_ai:
+            _state("resume_checkpoint_validation")
+            technical=_resume_integrity(config)
+        else:
+            # A heuristic rebuild has no current case-AI execution; preserve old
+            # statistics separately instead of exporting them as fresh quality.
+            import shutil
+            prior=REPORTS/'previous_ai_quality'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+            for name in ('case_ai_quality.json','checklist_ai_quality.json','offline_ai_progress.json'):
+                path=REPORTS/name
+                if path.is_file():
+                    prior.mkdir(parents=True,exist_ok=True); shutil.copy2(path,prior/name); path.unlink()
+            _state("technical_rebuild")
+            _run(["-m", "vn_labor_offline.cli", "rebuild", "--config", str(config), "--mode", "heuristic"])
+            technical = _technical_audit(config)
         _write_json(RUN, {"pipeline_exit_code": 0, "stage": "technical_checkpoint",
-                          "started_at": started, "technical_validation": technical})
+                          "started_at": started, "technical_validation": technical,
+                          "ai_quality_scope": "RESTORED_BASELINE" if args.resume_ai else "HEURISTIC_BASELINE"})
         _state("technical_checkpoint", technical_validation=technical)
         _export(technical_name)
         _state('page_evidence_audit',technical_checkpoint=technical_name)

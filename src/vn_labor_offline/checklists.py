@@ -148,6 +148,14 @@ Preserve scope, actor, prohibitions and exceptions inherited from ancestor_conte
 Do not turn prohibition into permission. Use only the source; each source_text is a short exact quote.
 Do not invent missing conditions. Use concise questions. Return at most 12 items, only schema JSON."""
     responses,errors,planned=requests.generate(system,payload,AI_CHECKLIST_SCHEMA,provision['provision_id'])
+    from .anchored_ai import repair_grounding
+    def grounded_item(item,response):
+        quote=item.get('source_text','')
+        return bool(item.get('question','').strip() and quote.strip()
+            and ' '.join(quote.split()) in ' '.join(response['source'].split())
+            and locate_evidence(provision,quote,segment_text,document_text,pages)[2]=='RESOLVED')
+    responses,errors=repair_grounding(requests,system,payload,AI_CHECKLIST_SCHEMA,provision['provision_id'],
+        responses,errors,grounded_item)
     out=[]
     for response in responses:
         normalized_source=' '.join(response['source'].split()); grounded=[]
@@ -209,6 +217,17 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
                          source.get("page_provenance", []))
         heuristic=heuristic_checklist(p,*evidence_args)
         prepared.append((p,heuristic,evidence_args))
+    # Retain prior AI items only after rechecking against the current source.
+    old_by_id={p['provision_id']:(p,args) for p,_,args in prepared}
+    for old in read_jsonl(output_dir/'04_knowledge/diagnostic_checklists.jsonl'):
+        if mode not in {'ai','hybrid_ai'}: break
+        if not str(old.get('generator','')).startswith('structured-ai:'): continue
+        record=old_by_id.get(old.get('provision_id'))
+        if record is None: continue
+        current,args=record; quote=old.get('source_text','')
+        if not quote or ' '.join(quote.split()) not in ' '.join(current.get('text','').split()): continue
+        evidence,span,status=locate_evidence(current,quote,*args)
+        if status=='RESOLVED': rows.append({**old,'evidence_text':evidence,'evidence_span':span,'provenance_status':'VERIFIED'})
     ai_limit=int(cfg['knowledge'].get('ai_max_provisions',2000))
     hybrid_ids=select_hybrid_ai_ids(prepared,ai_limit) if mode=='hybrid_ai' else set()
     from .ai_requests import AIRequests

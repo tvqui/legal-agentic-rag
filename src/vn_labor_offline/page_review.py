@@ -1,6 +1,6 @@
 """CPU-only audit of every suspicious page against SHA-bound PDF images."""
 from __future__ import annotations
-import argparse, difflib, hashlib, html, json, re, zipfile
+import argparse, csv, difflib, hashlib, html, json, re, zipfile
 from collections import Counter
 from pathlib import Path
 from .page_quality import compare_native_ocr, text_layer_metrics
@@ -92,6 +92,14 @@ def audit_archive(archive:Path,root:Path,output:Path):
                     f'<details><summary>Native / selected / cleaned và khác biệt</summary><div class="columns">'
                     f'<pre>{html.escape(native)}</pre><pre>{html.escape(compared)}</pre><pre>{html.escape(cleaned)}</pre></div>'
                     f'<pre>{html.escape(diff)}</pre></details></article>')
+    # Prioritize discrepancies that may alter amounts, dates or legal citations.
+    for row in rows:
+        row['review_priority']='HIGH' if row['finding']=='NUMERIC_DIFFERENCE_COMPARE_WITH_IMAGE' else 'NORMAL'
+    tracking_fields=['file_id','relative_path','page','source_sha256','review_priority','finding',
+        'preview_path','review_status','reviewer','reviewed_at','decision','review_evidence','corrected_text_path']
+    with (output/'page_review_tracking.csv').open('w',encoding='utf-8-sig',newline='') as stream:
+        writer=csv.DictWriter(stream,fieldnames=tracking_fields,extrasaction='ignore'); writer.writeheader()
+        writer.writerows(sorted(rows,key=lambda r:(r['review_priority']!='HIGH',r['relative_path'],r['page'])))
     write_jsonl(output/'page_review_evidence.jsonl',rows)
     write_jsonl(output/'footnote_evidence.jsonl',all_notes)
     write_jsonl(output/'documents_with_annotations.jsonl',docs)

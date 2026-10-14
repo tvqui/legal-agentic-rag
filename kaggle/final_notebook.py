@@ -15,8 +15,9 @@ def make_notebook():
     md("""# VN Labor — OFFLINE final build (checkpoint-first)
 
 Notebook này dùng hai Kaggle Input Private: package code mới và một checkpoint `vn_labor_results.zip` mới nhất (hoặc V8.1 Aura).
-Nó dùng checkpoint để phục hồi cache, chạy lại extraction chọn lọc theo page-v5, rồi dựng registry → structure →
-knowledge → graph → Dense/BM25, lưu checkpoint kỹ thuật, chạy AI enrichment, nạp Aura, audit và xuất ZIP cuối.
+Mặc định tiếp tục AI từ build 13/10: kiểm corpus/SHA/provenance/indexes, giữ AI cache và kết quả đã khớp,
+chạy AI phần thiếu → dựng knowledge/graph → nạp Aura → audit → xuất ZIP cuối. Không OCR hoặc dựng Dense/BM25 lại.
+Nếu cần cập nhật extraction, đặt RESUME_AI_ONLY=False và REFRESH_EXTRACTION_QUALITY=True.
 
 Nếu Kaggle/Ollama lỗi sau khi checkpoint kỹ thuật đã tạo, Output vẫn có bản kỹ thuật hoàn chỉnh và thường có
 thêm recovery ZIP chứa AI cache để tiếp tục ở phiên sau. Bật **GPU T4 x2**, **Internet** và bốn Aura Secrets.
@@ -31,7 +32,8 @@ _system_setup.run(['apt-get', 'install', '-y', 'zstd'], check=True, timeout=300)
 print('System prerequisite zstd: PASS', flush=True)
 """)
     code("""RESTORE_ARCHIVE = "AUTO"
-REFRESH_EXTRACTION_QUALITY = True
+RESUME_AI_ONLY = True
+REFRESH_EXTRACTION_QUALITY = False
 RUN_AI_ENRICHMENT = True
 OFFLINE_AI_MODEL = "qwen3:8b"
 OFFLINE_AI_MAX_PROVISIONS = 250
@@ -61,8 +63,8 @@ if len(matches) != 1:
     raise RuntimeError('Cần đúng một Dataset package VN Labor mới; tìm thấy: ' + str(len(matches)))
 source = matches[0].parent
 bundle_revision = json.loads(matches[0].read_text(encoding='utf-8')).get('bundle_revision')
-if bundle_revision != '20261012-footnote-provenance-v2':
-    raise RuntimeError('Dataset code cũ: cần upload ZIP mới có revision 20261012-footnote-provenance-v2.')
+if bundle_revision != '20261013-anchored-ai-resume-v1':
+    raise RuntimeError('Dataset code cũ: cần upload ZIP mới có revision 20261013-anchored-ai-resume-v1.')
 print('Bundle revision:', bundle_revision, flush=True)
 
 restore = RESTORE_ARCHIVE
@@ -80,7 +82,12 @@ spec = importlib.util.spec_from_file_location('vn_kaggle_bootstrap', source / 'k
 bootstrap = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bootstrap)
 ROOT = bootstrap.prepare(source, restore=restore)
-PYTHON = bootstrap.install(ROOT, extras='ocr,retrieval,graph,community')
+if RESUME_AI_ONLY and REFRESH_EXTRACTION_QUALITY:
+    raise ValueError('RESUME_AI_ONLY yêu cầu REFRESH_EXTRACTION_QUALITY = False.')
+if REFRESH_EXTRACTION_QUALITY:
+    PYTHON = bootstrap.install(ROOT, extras='ocr,retrieval,graph,community')
+else:
+    PYTHON = bootstrap.install(ROOT, extras='retrieval,graph,community')
 REPORTS = ROOT / 'artifacts/reports'
 REPORTS.mkdir(parents=True, exist_ok=True)
 
@@ -218,7 +225,10 @@ if LOAD_AURA:
     if result.returncode:
         raise RuntimeError('Aura preflight chưa PASS. Xem reason_code ở trên hoặc aura_preflight.json. '
                            'Kiểm tra URI/Secrets; nếu muốn dựng OFFLINE trước, đặt LOAD_AURA = False.')
-subprocess.run([str(PYTHON), 'kaggle/remote.py', 'preflight'], cwd=ROOT, check=True, timeout=3600)
+if not RESUME_AI_ONLY:
+    subprocess.run([str(PYTHON), 'kaggle/remote.py', 'preflight'], cwd=ROOT, check=True, timeout=3600)
+else:
+    print('AI resume: corpus/provenance/Dense/BM25 audit precedes AI; no OCR/model reindex.', flush=True)
 print('Ollama will start AFTER the technical checkpoint export.', flush=True)
 """)
 
@@ -229,6 +239,8 @@ Mốc `vn_labor_results_technical_checkpoint.zip` được tạo trước AI. N�
 """)
     code("""arguments = ['kaggle/offline_final_remote.py',
              '--ai-max-provisions', str(OFFLINE_AI_MAX_PROVISIONS)]
+if RESUME_AI_ONLY:
+    arguments.append('--resume-ai')
 if REFRESH_EXTRACTION_QUALITY:
     arguments.append('--refresh-extraction')
 if not RUN_AI_ENRICHMENT:

@@ -1,5 +1,5 @@
-> Cập nhật 12/10/2026: xem [hướng dẫn sửa AI và chất lượng trang](offline-quality-upgrade-20261012.md).
-> Dùng notebook/ZIP code mới cùng checkpoint kết quả ngày 12/10. Timeout mới 240 giây, chunk 3.500 byte; không tăng số provision trước khi kiểm tra báo cáo AI.
+> Cập nhật 13/10/2026: mặc định notebook tiếp tục AI từ ZIP cuối ngày 13/10, giữ cache và kết quả đã khớp nguồn. Xem [hướng dẫn chạy tiếp AI](offline-ai-resume-20261013.md).
+> Phần dưới mô tả chế độ dựng lại đầy đủ; dùng `RESUME_AI_ONLY=False`, `REFRESH_EXTRACTION_QUALITY=True` nếu cần OCR và index mới. Không tăng số provision trước khi kiểm tra báo cáo AI.
 
 # Chạy OFFLINE hoàn chỉnh trên Kaggle trong khi tiếp tục kiểm thử ONLINE
 
@@ -71,10 +71,11 @@ URI/credentials và tên database cần được lấy từ instance tương ứ
 
 Không cần chạy từng cell. Không bấm Stop Session trong khi version đang chạy.
 
-## Cấu hình mặc định đã chọn
+## Cấu hình dựng lại đầy đủ (khác mặc định tiếp tục AI)
 
 ```python
 RESTORE_ARCHIVE = "AUTO"
+RESUME_AI_ONLY = False
 REFRESH_EXTRACTION_QUALITY = True
 RUN_AI_ENRICHMENT = True
 OFFLINE_AI_MODEL = "qwen3:8b"

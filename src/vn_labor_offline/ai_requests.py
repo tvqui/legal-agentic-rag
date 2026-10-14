@@ -83,7 +83,9 @@ class AIRequests:
             self.network_calls+=1
         if event=='cache_hit': self.cache_hits+=1
         if event=='success': self.failures=0
-        if event=='error' and details.get('reason') not in {'AI_CIRCUIT_OPEN','AI_STAGE_BUDGET_EXHAUSTED'}:
+        # A length/schema problem is task-specific, not proof of provider outage.
+        recoverable={'AI_OUTPUT_TOKEN_LIMIT','AI_INVALID_STRUCTURED_OUTPUT'} if self.settings.get('ai_compact_output',False) else set()
+        if event=='error' and details.get('reason') not in {'AI_CIRCUIT_OPEN','AI_STAGE_BUDGET_EXHAUSTED'} | recoverable:
             self.failures+=1
         row={'schema_version':1,'run_id':self.run_id,'stage':self.stage,'event':event,
              'updated_at':datetime.now(timezone.utc).isoformat(),**details}
@@ -98,7 +100,7 @@ class AIRequests:
     def generate(self,system,payload,schema,identity):
         """Return successful fragments and explicit uncovered fragments.
 
-        A timeout/length failure can split once. Successful cache fragments are
+        Failures and saturated outputs can split to a bounded depth. Cache fragments are
         read even when the network circuit is open. No tail truncation occurs.
         """
         source=payload.get('source','')
@@ -110,31 +112,44 @@ class AIRequests:
         if budget<256:
             return [],[{'reason':'AI_ANCESTOR_CONTEXT_TOO_LARGE','source_start':0,'source_end':len(source)}],1
         completed=[]; errors=[]; planned=0
+        max_depth=min(4,max(1,int(self.settings.get('ai_max_split_depth',1))))
         def visit(offset,text,depth):
             nonlocal planned
             value={**payload,'source':text,'source_offset':offset}
             key=structured_cache_key(self.provider,system,value,schema,identity)
             split_path=self.cache/(key+'.split.json')
-            if depth==0 and split_path.exists():
+            if depth<max_depth and split_path.exists():
                 try:
                     split=json.loads(split_path.read_text(encoding='utf-8')); smaller=split['byte_budget']
                     if not isinstance(smaller,int) or not 256<=smaller<len(text.encode('utf-8')): raise ValueError('Invalid split cache')
-                    for child_offset,child in source_chunks(text,smaller): visit(offset+child_offset,child,1)
+                    for child_offset,child in source_chunks(text,smaller): visit(offset+child_offset,child,depth+1)
                     return
                 except (OSError,ValueError,KeyError,TypeError): pass
             try:
-                data=cached_structured(self.provider,system,value,schema,self.cache,identity,self.observe)
+                from .anchored_ai import request_fragment
+                data,saturated=request_fragment(self,system,value,schema,identity)
+                if saturated and self.settings.get('ai_compact_output',False):
+                    if depth<max_depth and len(text.encode('utf-8'))>512:
+                        smaller=max(256,len(text.encode('utf-8'))//2)
+                        split_path.parent.mkdir(parents=True,exist_ok=True)
+                        temporary=split_path.with_suffix('.tmp')
+                        temporary.write_text(json.dumps({'byte_budget':smaller}),encoding='utf-8')
+                        temporary.replace(split_path)
+                        for child_offset,child in source_chunks(text,smaller): visit(offset+child_offset,child,depth+1)
+                        return
+                    errors.append({'reason':'AI_FRAGMENT_CAPACITY_REACHED','source_start':offset,'source_end':offset+len(text)})
                 completed.append({'source_offset':offset,'source':text,'data':data}); planned+=1
             except Exception as exc:
                 info=error_details(exc)
                 recover=info['reason'] in {'AI_REQUEST_TIMEOUT','AI_OUTPUT_TOKEN_LIMIT','AI_HTTP_500'}
-                if recover and depth==0 and len(text.encode('utf-8'))>1024 and not self.stop_reason:
+                recover=recover or (self.settings.get('ai_compact_output',False) and info['reason']=='AI_INVALID_STRUCTURED_OUTPUT')
+                if recover and depth<max_depth and len(text.encode('utf-8'))>512 and not self.stop_reason:
                     smaller=max(256,len(text.encode('utf-8'))//2)
                     split_path.parent.mkdir(parents=True,exist_ok=True)
                     temporary=split_path.with_suffix('.tmp')
                     temporary.write_text(json.dumps({'byte_budget':smaller}),encoding='utf-8')
                     temporary.replace(split_path)
-                    for child_offset,child in source_chunks(text,smaller): visit(offset+child_offset,child,1)
+                    for child_offset,child in source_chunks(text,smaller): visit(offset+child_offset,child,depth+1)
                 else:
                     errors.append({**info,'source_start':offset,'source_end':offset+len(text)}); planned+=1
         for offset,text in source_chunks(source,budget): visit(offset,text,0)

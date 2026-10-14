@@ -123,7 +123,23 @@ Do not infer unstated facts. Use concise Vietnamese values. Return at most 12 fe
             source='\n'.join(str(case.get(field) or '') for field in ('dispute','facts','reasoning','decision'))
             responses,errors,planned=requests.generate(system,{'case_id':case['case_id'],'source':source},
                 CASE_FEATURE_SCHEMA,case['case_id'])
-            features=list(case.get('features',[])); accepted=0
+            from .anchored_ai import repair_grounding
+            def grounded_item(item,response):
+                if not item.get('value','').strip(): return False
+                return locate_document_evidence(item.get('source_quote',''),response['source'])[2]=='RESOLVED'
+            responses,errors=repair_grounding(requests,system,{'case_id':case['case_id'],'source':source},
+                CASE_FEATURE_SCHEMA,case['case_id'],responses,errors,grounded_item)
+            source_sha=__import__('hashlib').sha256(source.encode('utf-8')).hexdigest()
+            features=[]
+            for old in case.get('features',[]):
+                if str(old.get('generator','')).startswith('structured-ai:'):
+                    span=old.get('evidence_span') or {}; start=span.get('char_start'); end=span.get('char_end')
+                    if not (span.get('coordinate_space')=='CASE_SOURCE_TEXT' and span.get('source_sha256')==source_sha
+                            and type(start) is int and type(end) is int and 0<=start<end<=len(source)
+                            and source[start:end]==old.get('source_quote')): continue
+                features.append(old)
+            retained=sum(str(item.get('generator','')).startswith('structured-ai:') for item in features)
+            accepted=0
             for response in responses:
                 chunk=response['source']; offset=response['source_offset']; grounded=[]
                 for item in response['data'].get('features',[]):
@@ -146,7 +162,7 @@ Do not infer unstated facts. Use concise Vietnamese values. Return at most 12 fe
             if accepted: succeeded+=1
             else: fallback+=1
             quality.append({'case_id':case['case_id'],'source_chars':len(source),'chunks_planned':planned,
-                'chunks_completed':len(responses),'accepted_features':accepted,
+                'chunks_completed':len(responses),'accepted_features':accepted,'retained_ai_features':retained,
                 'errors':[e['reason'] for e in errors],'error_details':errors,
                 'coverage_complete':len(responses)==planned and not errors,
                 'complete':len(responses)==planned and not errors and accepted>0})
@@ -154,7 +170,10 @@ Do not infer unstated facts. Use concise Vietnamese values. Return at most 12 fe
             write_jsonl(output_dir/'03_structure/cases.jsonl',enriched+cases[index:])
             _atomic(output_dir/'reports/case_ai_quality.json',{'cases':quality,'total_cases':len(cases),
                 'ai_attempted':requests.network_calls,'ai_cache_hits':requests.cache_hits,
-                'ai_succeeded':succeeded,'ai_fallback':fallback,'circuit_open':requests.stop_reason=='AI_CIRCUIT_OPEN',
+                'ai_succeeded':succeeded,'complete_cases':sum(r['complete'] for r in quality),
+                'partial_cases':sum(bool(r['accepted_features']) and not r['complete'] for r in quality),
+                'unprocessed_cases':len(cases)-len(quality),'run_id':requests.run_id,
+                'ai_fallback':fallback,'circuit_open':requests.stop_reason=='AI_CIRCUIT_OPEN',
                 'stop_reason':requests.stop_reason,'complete':len(quality)==len(cases) and all(r['complete'] for r in quality)})
             report_ai_progress(output_dir,'case_ontology',index,len(cases),ai_attempted=requests.network_calls,
                 ai_cache_hits=requests.cache_hits,ai_succeeded=succeeded,ai_fallback=fallback)
