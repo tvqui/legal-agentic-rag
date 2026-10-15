@@ -9,7 +9,7 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v5'
+TAXONOMY_VERSION = 'labor-subissues-v6'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -22,6 +22,7 @@ SUBISSUES = {
     'CONTRACT.CONTRACT_TYPES':'Phân loại hợp đồng lao động',
     'CONTRACT.PROBATION_PAY':'Tiền lương trong thời gian thử việc',
     'CONTRACT.PROBATION_DURATION':'Các nhóm thời gian thử việc',
+    'CONTRACT.PROBATION_END':'Kết thúc thử việc và tiếp tục làm việc',
     'CONTRACT.PROBATION_REPEAT':'Thử việc một lần đối với một công việc',
     'CONTRACT.PROBATION_SANCTION':'Chế tài và khắc phục vi phạm thử việc',
     'TRAINING.RELATIONSHIP_COMPARISON':'Phân biệt thực tập, tập nghề, thử việc và quan hệ lao động',
@@ -109,10 +110,12 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('CONTRACT.CONTRACT_TYPES')
     if has('thử việc') and has('lương','85%','phần trăm'):
         add('CONTRACT.PROBATION_PAY')
-    if has('thử việc') and (has('thời gian','thời hạn','tối đa','bao lâu') or re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q)):
+    if has('thử việc') and (has('thời gian','thời hạn','tối đa','bao lâu','mấy ngày','mấy tháng') or re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q)):
         add('CONTRACT.PROBATION_DURATION')
     if has('thử việc') and has('hai lần','2 lần','nhiều lần','lần hai','lần thứ hai','lần thứ 2','thử việc lại'):
         add('CONTRACT.PROBATION_REPEAT')
+    if has('thử việc') and has('chính thức','kết thúc','hết thử','đạt yêu cầu','không được nhận','không đạt','tiếp tục làm','kết quả thử'):
+        add('CONTRACT.PROBATION_END')
     if has('thử việc') and has('xử phạt','chế tài','phạt tiền','nghị định nào','văn bản nào khác'):
         add('CONTRACT.PROBATION_SANCTION')
     if relationship_comparison(q):
@@ -220,6 +223,9 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         if key=='CONTRACT.PROBATION_DURATION':
             article='27' if historical else '25'
             require('probation_duration', *[[loc(article,str(i))] for i in ((1,2,3) if historical else (1,2,3,4))])
+        elif key=='CONTRACT.PROBATION_END':
+            require('probation_end',[loc('29' if historical else '27','1')],
+              [loc('29' if historical else '27','2')])
         elif key=='CONTRACT.PROBATION_REPEAT':
             require('probation_once',[loc('27' if historical else '25',exact=True,contains=['một lần','một công việc'])])
         elif key=='CONTRACT.PROBATION_SANCTION':

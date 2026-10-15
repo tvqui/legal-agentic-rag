@@ -8,21 +8,30 @@ import { DocumentsPage } from './pages/DocumentsPage'
 import { initialConversations } from './data/legalData'
 import { conversationService } from './services/conversationService'
 
-function getPath() { return window.location.pathname === '/' ? '/chat/labor-termination' : window.location.pathname }
+function getPath() {
+  if (window.location.pathname !== '/') return window.location.pathname
+  const first = conversationService.loadConversations(initialConversations)[0]
+  return first ? `/chat/${first.id}` : '/chat'
+}
+function getTheme() {
+  try { return localStorage.getItem('legal-ai-theme') || 'light' }
+  catch { return 'light' }
+}
 
 export default function App() {
   const [path, setPath] = useState(getPath)
-  const [conversations, setConversations] = useState(initialConversations)
+  const [conversations, setConversations] = useState(() => conversationService.loadConversations(initialConversations))
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [theme, setTheme] = useState(() => localStorage.getItem('legal-ai-theme') || 'light')
+  const [theme, setTheme] = useState(getTheme)
   const activeId = path.startsWith('/chat/') ? path.split('/').pop() : null
   const activeConversation = useMemo(() => conversations.find((item) => item.id === activeId), [conversations, activeId])
+  useEffect(() => { conversationService.saveConversations(conversations) }, [conversations])
 
   useEffect(() => {
     const applied = theme === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme
     document.documentElement.dataset.theme = applied
-    localStorage.setItem('legal-ai-theme', theme)
+    try { localStorage.setItem('legal-ai-theme', theme) } catch { /* Theme still works without storage. */ }
   }, [theme])
 
   useEffect(() => {
@@ -39,11 +48,25 @@ export default function App() {
   const newChat = () => {
     const conversation = conversationService.create()
     setConversations((current) => [conversation, ...current])
+    conversationService.saveConversations([conversation, ...conversations])
     navigate(`/chat/${conversation.id}`)
+  }
+  const deleteChat = (id) => {
+    const next = conversations.filter(item => item.id !== id)
+    if (!conversationService.deleteConversation(id)) return
+    setConversations(next)
+    if (id === activeId) navigate(next.length ? `/chat/${next[0].id}` : '/chat')
+  }
+  const updateChat = (id, content) => {
+    setConversations(current => {
+      const next = current.map(item => item.id === id ? { ...item, preview: content.slice(0, 100), updatedAt: new Date().toISOString() } : item)
+      conversationService.saveConversations(next)
+      return next
+    })
   }
 
   return <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
-    <Sidebar conversations={conversations} activeId={activeId} onNavigate={navigate} onNewChat={newChat} collapsed={collapsed} onCollapse={() => setCollapsed((value) => !value)} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} path={path} />
+    <Sidebar conversations={conversations} activeId={activeId} onNavigate={navigate} onNewChat={newChat} onDelete={deleteChat} collapsed={collapsed} onCollapse={() => setCollapsed((value) => !value)} mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} path={path} />
     {mobileOpen && <button className="sidebar-scrim" aria-label="Đóng menu" onClick={() => setMobileOpen(false)} />}
     <section className="workspace">
       <header className="topbar">
@@ -58,7 +81,7 @@ export default function App() {
         ? <SettingsPage theme={theme} setTheme={setTheme} />
         : path.startsWith('/documents')
           ? <DocumentsPage />
-          : <ChatPage activeConversation={activeConversation} onMenu={() => setMobileOpen(true)} />}
+          : <ChatPage key={activeId || 'empty'} activeConversation={activeConversation} onConversationUpdate={updateChat} onMenu={() => setMobileOpen(true)} />}
     </section>
   </div>
 }

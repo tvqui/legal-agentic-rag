@@ -10,6 +10,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 
 from .errors import LLMProviderError,StructuredOutputError
+from .runtime import checkpoint,request_timeout,RequestStopped
 
 def _unique_object(pairs):
     result={}
@@ -42,7 +43,9 @@ class BaseProvider(ABC):
 
     def _post(self,payload,headers):
         for attempt in range(2):
-            response=self.client.post(self.url,json=payload,headers=headers)
+            checkpoint()
+            response=self.client.post(self.url,json=payload,headers=headers,timeout=request_timeout(self.timeout))
+            checkpoint()
             if response.status_code in {429,502,503,504} and attempt==0:
                 time.sleep(.25); continue
             response.raise_for_status()
@@ -90,7 +93,7 @@ class HttpJsonProvider(BaseProvider):
             raw=self._post(payload,self._headers())
             content = raw["choices"][0]["message"]["content"]
             return _decode_content(content)
-        except StructuredOutputError:
+        except (StructuredOutputError,RequestStopped):
             raise
         except Exception as exc:
             raise LLMProviderError(str(exc)) from exc
@@ -133,7 +136,7 @@ class OllamaProvider(BaseProvider):
             raw=self._post(payload,{"Content-Type": "application/json", "Accept": "application/json"})
             if raw.get('done_reason')=='length': raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
             return _decode_content(raw['message']['content'])
-        except StructuredOutputError:
+        except (StructuredOutputError,RequestStopped):
             raise
         except Exception as exc:
             raise LLMProviderError(str(exc)) from exc
@@ -148,3 +151,51 @@ class OllamaProvider(BaseProvider):
         except Exception as exc:
             return {"status": "DEGRADED", "provider": "ollama", "model": self.model,
                     "error": type(exc).__name__}
+
+
+class GeminiProvider(BaseProvider):
+    """Optional official Google SDK, used for understanding, not source authority."""
+    def __init__(self, model, api_key=None, timeout=20, max_output_tokens=2048):
+        self.model, self.api_key = model, api_key
+        self.timeout, self.max_output_tokens = timeout, max_output_tokens
+
+    def structured(self, system, user, schema):
+        if not self.model or not self.api_key:
+            raise LLMProviderError('GEMINI_CONFIGURATION_MISSING')
+        checkpoint()
+        try:
+            from google import genai
+            from google.genai import types
+            # Per-call client keeps deadlines scoped; do not mutate a shared timeout.
+            with genai.Client(api_key=self.api_key, http_options=types.HttpOptions(
+                    timeout=max(1, int(request_timeout(self.timeout)*1000)),
+                    retry_options=types.HttpRetryOptions(attempts=1))) as client:
+                response=client.models.generate_content(model=self.model, contents=user,
+                    config=types.GenerateContentConfig(system_instruction=system, temperature=0,
+                        max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
+                        response_json_schema=schema))
+            checkpoint()
+            return _decode_content(response.text)
+        except (RequestStopped,StructuredOutputError):
+            raise
+        except Exception as exc:
+            # SDK errors can include request URLs. Never surface credentials.
+            raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__) from None
+
+    def readiness(self):
+        from importlib.util import find_spec
+        try: installed=find_spec('google.genai') is not None
+        except ModuleNotFoundError: installed=False
+        ready=bool(getattr(self,'_ready',False))
+        if installed and self.model and self.api_key and not ready:
+            try:
+                from .runtime import request_budget
+                with request_budget(min(10,self.timeout)):
+                    result=self.structured('Return the requested JSON only.','Set ready to true.',
+                      {'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False})
+                ready=result=={'ready':True}
+                self._ready=ready
+            except Exception:
+                ready=False
+        return {'status':'READY' if ready else 'DEGRADED',
+                'provider':'gemini','model':self.model,'check':'INFERENCE_PROBE'}

@@ -4,21 +4,17 @@ import { AppLogo } from './AppLogo'
 import { IconButton } from '../ui/IconButton'
 
 //du lieu mau
-const groups = [
-  { title: 'Hôm nay', ids: ['labor-termination', 'personal-income-tax'] },
-  { title: 'Hôm qua', ids: ['labor-dispute', 'land-rights'] },
-  { title: '7 ngày trước', ids: ['insurance'] },
-]
 
 function relativeTime(date) {
   return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(date))
 }
 
-export function Sidebar({ conversations, activeId, onNavigate, onNewChat, collapsed, onCollapse, mobileOpen, onCloseMobile, path }) {
+export function Sidebar({ conversations, activeId, onNavigate, onNewChat, onDelete, collapsed, onCollapse, mobileOpen, onCloseMobile, path }) {
   const [search, setSearch] = useState('')
   const [menu, setMenu] = useState(null)
   const filtered = conversations.filter(item => `${item.title} ${item.preview}`.toLowerCase().includes(search.toLowerCase()))
   const byId = Object.fromEntries(filtered.map(item => [item.id, item]))
+  const groups = [{ title: 'Cuộc trò chuyện', ids: [...filtered].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(item => item.id) }]
   
   return <aside className={`sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
 
@@ -64,7 +60,7 @@ export function Sidebar({ conversations, activeId, onNavigate, onNewChat, collap
                   <button>Đổi tên</button>
                   <button>Ghim cuộc trò chuyện</button>
                   <button><Archive size={14} /> Lưu trữ</button>
-                  <button className="danger">Xóa</button>
+                  <button className="danger" onClick={() => { onDelete(item.id); setMenu(null) }}>Xóa</button>
                 </div>}
               </div>)}
             </section>

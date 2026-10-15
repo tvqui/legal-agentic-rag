@@ -10,11 +10,25 @@ class Stop(str,Enum): SUFFICIENT="SUFFICIENT"; PARTIAL_ALLOWED="PARTIAL_ALLOWED"
 class SlotStatus(str,Enum): MISSING="MISSING"; CANDIDATE="CANDIDATE"; FOUND="FOUND"; FOUND_VERIFIED="FOUND_VERIFIED"; CONFLICT="CONFLICT"; UNRESOLVED="UNRESOLVED"; NOT_APPLICABLE="NOT_APPLICABLE"
 class ExplicitReference(BaseModel):
     instrument_number:str|None=None; article:str|None=None; clause:str|None=None; point:str|None=None
+class ConversationTurn(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    turn_id:str=Field(min_length=1,max_length=100)
+    role:Literal['user']='user'
+    content:str=Field(min_length=1,max_length=10000)
+
 class QueryRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     question:str=Field(min_length=2,max_length=10000); query_date:str|None=None
     conversation_context:list[str]=Field(default_factory=list,max_length=20)
     facts:dict[str,Any]=Field(default_factory=dict)
+    conversation_id:str|None=Field(default=None,pattern=r'^[A-Za-z0-9_-]{1,100}$')
+    message_id:str|None=Field(default=None,pattern=r'^[A-Za-z0-9_-]{1,100}$')
+    conversation_turns:list[ConversationTurn]=Field(default_factory=list,max_length=20)
+    @field_validator('conversation_turns')
+    @classmethod
+    def unique_turns(cls,value):
+        if len({turn.turn_id for turn in value})!=len(value): raise ValueError('conversation turn IDs must be unique')
+        return value
     @field_validator('conversation_context')
     @classmethod
     def validate_context(cls,value):
@@ -65,6 +79,7 @@ class AnswerTask(BaseModel):
     request_quote:str=Field(min_length=2,max_length=10000)
     description:str=Field(min_length=2,max_length=10000)
     retrieval_query:str=Field(min_length=2,max_length=10000)
+    depends_on:list[str]=Field(default_factory=list,max_length=12)
 
 class ResearcherResult(BaseModel):
     model_config=ConfigDict(extra='forbid')

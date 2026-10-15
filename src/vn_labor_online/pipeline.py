@@ -48,6 +48,40 @@ class OnlinePipeline:
             if component.provider is not None: component.provider.close()
 
     def ask(self,request:QueryRequest)->AnswerResponse:
+        from .conversation import resolve_context
+        from .runtime import request_budget,checkpoint
+        with request_budget(self.cfg.request_timeout_seconds):
+            resolved=resolve_context(request)
+            checkpoint('understanding')
+            if resolved.clarification:
+                env=intake(request.question,request.conversation_context,request.query_date,request.facts)
+                trace=Trace(trace_id='trace_'+hashlib.sha256(str(time.time_ns()).encode()).hexdigest()[:16],
+                  query_id=env.query_id,build_id=self.store.report.build_id or '',route=Route.STANDARD,
+                  route_reason='ambiguous follow-up',stop_reason=Stop.NEED_MORE_FACTS,
+                  events=[{'event':'context_clarification','model_calls':0}])
+                persist(trace,self.cfg.trace_dir)
+                return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,
+                  answer='Cần xác định chủ đề của câu hỏi nối tiếp trước khi tra cứu.',
+                  questions=[resolved.clarification],evidence_status='NOT_RETRIEVED',
+                  warnings=['CONVERSATION_CONTEXT_AMBIGUOUS'],build_id=self.store.report.build_id or '',
+                  trace_id=trace.trace_id,trace=trace)
+            effective=request.model_copy(update={'question':resolved.query,
+              'facts':{**resolved.facts,**request.facts},
+              'query_date':request.query_date or resolved.query_date})
+            response=self._ask(effective)
+            checkpoint('completed')
+            if resolved.used_turns:
+                response.warnings=list(dict.fromkeys(response.warnings+['CONVERSATION_CONTEXT_USED']))
+                if response.trace:
+                    response.trace.events.insert(0,{'event':'conversation_context',
+                      'turn_ids':resolved.used_turns,'fact_provenance':resolved.provenance,
+                      'original_question':request.question,'resolved_question':resolved.query})
+                    persist(response.trace,self.cfg.trace_dir)
+            return response
+
+    def _ask(self,request:QueryRequest)->AnswerResponse:
+        from .runtime import checkpoint
+        checkpoint('analysis')
         start=time.perf_counter(); stage=time.perf_counter()
         env=intake(request.question,request.conversation_context,request.query_date,request.facts)
         analysis=analyze(env,request.query_date,request.facts)
@@ -59,9 +93,11 @@ class OnlinePipeline:
               'query_date_precision':'DAY','temporal_intent':'CURRENT'})
             defaulted_query_date=True
         analysis_ms=round((time.perf_counter()-stage)*1000,2)
+        checkpoint('understanding')
         researcher_started=time.perf_counter()
         researcher_path=self.researcher.execution_path(analysis)
         analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
+        checkpoint('planning')
         plan=plan_evidence(analysis)
         trace=Trace(trace_id='trace_'+hashlib.sha256((env.query_id+str(time.time_ns())).encode()).hexdigest()[:16],query_id=env.query_id,
           build_id=self.store.report.build_id or '',route=analysis.route,route_reason=analysis.route_reason,
@@ -106,6 +142,7 @@ class OnlinePipeline:
             return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,answer='Cần bổ sung dữ kiện trước khi tra cứu chuyên sâu.',questions=analysis.missing_facts,
               evidence_status='NOT_RETRIEVED',applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               warnings=warnings,facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+        checkpoint('retrieval')
         audit_outcome='EXPLAIN' if clarify_during_answer else analysis.requested_outcome
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
@@ -186,7 +223,9 @@ class OnlinePipeline:
         audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
         trace.timings_ms['deterministic_audit']=round((time.perf_counter()-audit_started)*1000,2)
         applicability_started=time.perf_counter()
+        checkpoint('applicability')
         verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome)
+        checkpoint()
         trace.timings_ms['applicability_audit']=round((time.perf_counter()-applicability_started)*1000,2)
         warnings+=app_warnings
         extended_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
@@ -278,7 +317,9 @@ class OnlinePipeline:
             draft=AdjudicationDraft(answer_summary=summary,claims=[],applicable_law_versions=[],assumptions=assumptions,limitations=state.gaps)
             generation_warnings=[]; answer=draft.answer_summary; refs=[]
         else:
+            checkpoint('generation')
             draft,generation_warnings=self.adjudicator.generate(pack,partial,assumptions)
+            checkpoint()
             # Retrieval completeness does not establish answer completeness.
             # The public claims must actually cite every mandatory locator group.
             def missing_answer_slots(candidate):

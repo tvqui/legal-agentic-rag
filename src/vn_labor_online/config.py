@@ -45,7 +45,7 @@ class GraphConfig(StrictModel):
 class ResearcherConfig(StrictModel):
     adaptive:bool=True
     max_output_tokens:int=Field(1024,ge=256,le=8192)
-    mode:Literal['deterministic','ollama','http']='deterministic'
+    mode:Literal['deterministic','ollama','http','gemini']='deterministic'
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None
     timeout_seconds:float=120; max_queries:int=Field(2,ge=0,le=4)
 
@@ -66,6 +66,7 @@ class AdjudicationConfig(StrictModel):
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None; timeout_seconds:float=120
 
 class OnlineConfig(StrictModel):
+    request_timeout_seconds:float=Field(180,ge=5,le=1800)
     artifact_source:str=Field(min_length=1); cache_dir:str='.cache/online'; expected_build_id:str|None=None
     expected_archive_sha256:str|None=None; expected_retrieval_unit_fingerprint:str|None=None
     expected_dense_fingerprint:str|None=None; provisional_mode:bool=True
@@ -94,6 +95,7 @@ def load_config(path:Path)->OnlineConfig:
     values=dict(raw.get('online',raw))
     if os.getenv('VN_LABOR_ARTIFACT_SOURCE'): values['artifact_source']=os.environ['VN_LABOR_ARTIFACT_SOURCE']
     if os.getenv('VN_LABOR_ONLINE_CACHE'): values['cache_dir']=os.environ['VN_LABOR_ONLINE_CACHE']
+    if os.getenv('VN_LABOR_REQUEST_TIMEOUT_SECONDS'): values['request_timeout_seconds']=float(os.environ['VN_LABOR_REQUEST_TIMEOUT_SECONDS'])
     sections=(('researcher','VN_LABOR_RESEARCHER'),('applicability','VN_LABOR_APPLICABILITY'),('adjudication','VN_LABOR_ADJUDICATION'))
     for section,prefix in sections:
         configured=dict(values.get(section) or {})
@@ -104,4 +106,7 @@ def load_config(path:Path)->OnlineConfig:
             env_key=f'{prefix}_{key.upper()}'
             if os.getenv(env_key): configured[key]=float(os.environ[env_key]) if key=='timeout_seconds' else int(os.environ[env_key])
         if configured: values[section]=configured
+    if values.get('researcher',{}).get('mode')=='gemini':
+        if not values['researcher'].get('api_key'): values['researcher']['api_key']=os.getenv('GEMINI_API_KEY')
+        if os.getenv('GEMINI_MODEL'): values['researcher']['model']=os.environ['GEMINI_MODEL']
     return OnlineConfig.model_validate(values)

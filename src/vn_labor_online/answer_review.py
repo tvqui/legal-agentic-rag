@@ -120,6 +120,29 @@ def validate_review(review, draft, pack, tasks):
             raise StructuredOutputError('invalid answered task')
         if coverage.status != 'ANSWERED' and not coverage.missing:
             raise StructuredOutputError('unanswered task requires explanation')
+    # Preserve independently supported claims, but never call a dependent task
+    # complete while its prerequisite is missing or only partially answered.
+    by_task={item.task_id:item for item in review.coverage}
+    for _ in tasks:
+        changed=False
+        for task in tasks:
+            coverage=by_task[task.task_id]
+            unmet=[uid for uid in task.depends_on if uid not in by_task or by_task[uid].status!='ANSWERED']
+            if coverage.status=='ANSWERED' and unmet:
+                supported.difference_update(coverage.claim_ids)
+                coverage.claim_ids=[]
+                coverage.status='PARTIAL'
+                coverage.missing='Chưa hoàn tất điều kiện tiên quyết: '+', '.join(unmet)
+                review.question_fully_addressed=False
+                changed=True
+        for coverage in review.coverage:
+            if not set(coverage.claim_ids)<=supported:
+                coverage.claim_ids=[uid for uid in coverage.claim_ids if uid in supported]
+                coverage.status='PARTIAL'
+                coverage.missing=coverage.missing or 'Kết luận còn phụ thuộc phần chưa được xác minh.'
+                review.question_fully_addressed=False
+                changed=True
+        if not changed: break
     if review.question_fully_addressed and (review.missing_requirements or any(
         t.status != 'ANSWERED' for t in review.coverage)):
         raise StructuredOutputError('false completion verdict')

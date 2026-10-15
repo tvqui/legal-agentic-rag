@@ -119,6 +119,8 @@ def main() -> int:
     api_key = secret("VN_LABOR_API_KEY")
     secret("NGROK_AUTHTOKEN")
     hf_token = secret("HF_TOKEN", required=False)
+    # Optional, backend-only. The selected config/environment controls whether it is used.
+    secret("GEMINI_API_KEY", required=False)
     artifact = detect_artifact(args.artifact)
     count = gpu_count()
     if count < 1:

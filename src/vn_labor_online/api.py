@@ -1,7 +1,8 @@
-from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
-import logging, os, secrets, threading, uuid
+import hashlib, json, logging, os, re, secrets, threading, uuid
+from datetime import date
+from .runtime import RequestRegistry,RequestStopped,request_budget
 from .config import load_config
 from .errors import OnlineError
 from .models import AnswerResponse,QueryRequest
@@ -36,6 +37,7 @@ def create_app(config_path:str|Path|None=None):
     try: max_concurrent_answers=max(1,int(os.getenv('VN_LABOR_MAX_CONCURRENT_ANSWERS','1')))
     except ValueError: max_concurrent_answers=1
     answer_slots=threading.BoundedSemaphore(max_concurrent_answers)
+    requests=RequestRegistry()
     @asynccontextmanager
     async def lifespan(app):
         try:
@@ -54,7 +56,16 @@ def create_app(config_path:str|Path|None=None):
     origins=[value.strip() for value in os.getenv('VN_LABOR_CORS_ORIGINS','http://127.0.0.1:5173,http://localhost:5173').split(',') if value.strip()]
     if origins:
         app.add_middleware(CORSMiddleware,allow_origins=origins,allow_credentials=False,allow_methods=['GET','POST','OPTIONS'],
-          allow_headers=['Accept','Content-Type','Authorization','ngrok-skip-browser-warning'])
+          allow_headers=['Accept','Content-Type','Authorization','ngrok-skip-browser-warning','X-Client-Session'],expose_headers=['X-Request-ID'])
+
+    @app.exception_handler(RequestStopped)
+    async def stopped_handler(request:Request,exc:RequestStopped):
+        cancelled=exc.reason=='REQUEST_CANCELLED'
+        logger.warning('[%s] %s stage=%s',getattr(request.state,'request_id','unknown'),exc.reason,exc.stage)
+        return JSONResponse(status_code=409 if cancelled else 504,content=_error_envelope(
+          409 if cancelled else 504,'CANCELLED' if cancelled else 'TIMEOUT',
+          'Yêu cầu đã được dừng.' if cancelled else 'Yêu cầu vượt thời gian xử lý. Chưa có kết luận pháp lý được trả về.',
+          details={'stage':exc.stage,'request_id':getattr(request.state,'request_id',None)}))
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -107,6 +118,7 @@ def create_app(config_path:str|Path|None=None):
 
     @app.middleware('http')
     async def bearer_auth(request:Request,call_next):
+        request.state.request_id='REQ_'+uuid.uuid4().hex[:16]
         expected=os.getenv('VN_LABOR_API_KEY','').strip()
         if expected and request.url.path!='/health' and request.method!='OPTIONS':
             supplied=request.headers.get('Authorization','')
@@ -117,7 +129,9 @@ def create_app(config_path:str|Path|None=None):
                     message="Invalid or missing bearer token"
                 )
                 return JSONResponse(status_code=401,content=payload)
-        return await call_next(request)
+        response=await call_next(request)
+        response.headers['X-Request-ID']=request.state.request_id
+        return response
     @app.get('/health')
     def health(): return {'status':'ok'}
     @app.get('/ready')
@@ -131,14 +145,60 @@ def create_app(config_path:str|Path|None=None):
           'adjudicator':_component(pipeline.adjudicator.provider,'adjudicator')}
         model_components=[components[x] for x in ('researcher','auditor','adjudicator')]
         degraded=any(x.get('status')=='DEGRADED' for x in model_components)
-        return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
+        return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,
+          'online_features':{'conversation_context':'user-turns-v1','history_storage':'browser',
+            'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'cooperative_cancel':True,'idempotent_retry':True},
+          'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
           'semantic_repair_attempts':pipeline.cfg.adjudication.semantic_repair_attempts,'answer_while_clarifying':pipeline.cfg.answer_while_clarifying,
           'applicability_batch_size':pipeline.cfg.applicability.max_items,'applicability_max_batches':pipeline.cfg.applicability.max_batches},'components':components,
           'compatibility':pipeline.store.report.model_dump(mode='json')}
+    def request_key(http_request,message_id):
+        capability=http_request.headers.get('X-Client-Session','')
+        if not re.fullmatch(r'[A-Za-z0-9_-]{32,128}',capability):
+            return None
+        return (hashlib.sha256(capability.encode()).hexdigest(),message_id)
+
+    @app.get('/v1/requests/{message_id}')
+    def progress(message_id:str,http_request:Request):
+        key=request_key(http_request,message_id)
+        entry=requests.get(key) if key else None
+        if not entry: raise HTTPException(404,detail='Request not found')
+        return {'state':entry.state,'stage':entry.budget.stage,
+          'cancel_requested':entry.budget.cancelled.is_set()}
+
+    @app.post('/v1/requests/{message_id}/cancel')
+    def cancel(message_id:str,http_request:Request):
+        key=request_key(http_request,message_id)
+        entry=requests.get(key) if key else None
+        if not entry: raise HTTPException(404,detail='Request not found')
+        if entry.state=='RUNNING': entry.budget.cancelled.set()
+        return {'state':entry.state,'cancel_requested':entry.budget.cancelled.is_set()}
+
     @app.post('/v1/answer',response_model=AnswerResponse,summary='Answer a Vietnamese labor-law question')
-    def answer(request:QueryRequest)->AnswerResponse:
+    def answer(request:QueryRequest,http_request:Request)->AnswerResponse:
         if not state['pipeline']: raise HTTPException(503,detail='ONLINE is not ready')
-        if not answer_slots.acquire(blocking=False): raise HTTPException(429,detail='The answer service is busy; retry after the current request finishes')
-        try: return state['pipeline'].ask(request)
-        finally: answer_slots.release()
+        seconds=getattr(state['pipeline'].cfg,'request_timeout_seconds',180)
+        key=request_key(http_request,request.message_id) if request.message_id else None
+        entry=None
+        if key:
+            identity={'request':request.model_dump(mode='json'),'day':date.today().isoformat() if not request.query_date else None,
+              'taxonomy':TAXONOMY_VERSION}
+            fingerprint=hashlib.sha256(json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+            status,entry=requests.begin(key,fingerprint,seconds)
+            if status=='CONFLICT': raise HTTPException(409,detail='Message ID already used for different input')
+            if status=='DONE': return entry.result
+            if status in {'RUNNING','FULL'}: raise HTTPException(429,detail='Request is already running or service is busy')
+        if not answer_slots.acquire(blocking=False):
+            if key: requests.finish(key,state='FAILED')
+            raise HTTPException(429,detail='The answer service is busy; retry after the current request finishes')
+        try:
+            with request_budget(seconds,entry.budget if entry else None):
+                result=state['pipeline'].ask(request)
+            if key: requests.finish(key,result)
+            return result
+        except BaseException:
+            if key: requests.finish(key,state='FAILED')
+            raise
+        finally:
+            answer_slots.release()
     return app

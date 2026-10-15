@@ -51,7 +51,7 @@ online:
   allow_partial: true
   allow_document_temporal_fallback: true
   researcher:
-    adaptive: false
+    adaptive: true
     mode: ollama
     url: "http://127.0.0.1:11434/api/chat"
     health_url: "http://127.0.0.1:11434/api/tags"

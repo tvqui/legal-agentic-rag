@@ -1,9 +1,11 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api')
+import { clientSession } from './conversationService.js'
+
+const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || '/api')
   .trim()
   .replace(/\/+$/, '')
   .replace(/\/v1\/answer$/i, '')
   .replace(/\/v1$/i, '')
-const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 960000)
+const REQUEST_TIMEOUT_MS = Number(import.meta.env?.VITE_API_TIMEOUT_MS || 210000)
 
 export class ApiError extends Error {
   constructor(message, status = 0, details = null, category = 'NETWORK_ERROR', errorId = null) {
@@ -76,6 +78,8 @@ const NOTICE_LABELS = {
   ANSWER_LANGUAGE_SAFE_FALLBACK: 'Hệ thống dùng cách trả lời dự phòng để giữ nguyên nội dung pháp lý.',
   CORPUS_MAY_BE_STALE: 'Bộ dữ liệu có thể chưa bao gồm thay đổi pháp luật sau ngày chốt.',
   QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT: 'Bạn chưa nhập ngày tra cứu; hệ thống dùng ngày chốt của bộ dữ liệu.',
+  CONVERSATION_CONTEXT_USED: 'Đã sử dụng ngữ cảnh từ lời bạn cung cấp ở các lượt trước.',
+  CONVERSATION_CONTEXT_AMBIGUOUS: 'Chưa xác định rõ chủ đề của câu hỏi nối tiếp.',
 }
 
 function humanizeNotice(value) {
@@ -94,17 +98,21 @@ function humanizeNotices(values = []) {
   return [...new Set(values.filter(value => !['ANSWER_LAYOUT_CLEANED', 'ANSWER_LANGUAGE_REPAIRED'].includes(value)).map(humanizeNotice))]
 }
 
-async function parseResponse(response) {
+export async function parseResponse(response) {
   let payload
   try {
     payload = await response.json()
   } catch {
-    throw new ApiError(`Backend trả về dữ liệu không hợp lệ (HTTP ${response.status}).`, response.status)
+    const category = response.ok ? 'INVALID_RESPONSE' : response.status === 429 ? 'SERVICE_BUSY' : response.status >= 500 ? 'UPSTREAM_ERROR' : 'BACKEND_ERROR'
+    throw new ApiError(response.ok ? 'Dịch vụ trả về nội dung không đọc được.' : `Dịch vụ tạm thời không xử lý được yêu cầu (HTTP ${response.status}).`, response.status, null, category, response.headers.get('X-Request-ID'))
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new ApiError('Dịch vụ trả về nội dung không đọc được.', response.status, null, 'INVALID_RESPONSE')
   }
   if (!response.ok) {
     const detail = typeof payload.detail === 'string' ? payload.detail : null
     const message = payload.message || detail || `Yêu cầu thất bại (HTTP ${response.status}).`
-    throw new ApiError(message, response.status, payload.details || payload, payload.category || 'BACKEND_ERROR', payload.error_id || null)
+    throw new ApiError(message, response.status, payload.details || payload, payload.category || 'BACKEND_ERROR', payload.error_id || response.headers.get('X-Request-ID'))
   }
   return payload
 }
@@ -125,6 +133,28 @@ function boundedSignal(parentSignal, timeoutMs = REQUEST_TIMEOUT_MS) {
 }
 
 export const chatService = {
+  async progress(messageId, signal) {
+    const capability = clientSession()
+    if (!capability) return null
+    const bounded = boundedSignal(signal, 5000)
+    try {
+      const response = await fetch(`${API_BASE_URL}/v1/requests/${encodeURIComponent(messageId)}`, {
+        headers: { 'X-Client-Session': capability }, signal: bounded.signal,
+      })
+      return response.ok ? response.json() : null
+    } finally { bounded.cleanup() }
+  },
+  async cancel(messageId) {
+    const capability = clientSession()
+    if (!capability || !messageId) return
+    const bounded = boundedSignal(null, 5000)
+    try {
+      await fetch(`${API_BASE_URL}/v1/requests/${encodeURIComponent(messageId)}/cancel`, {
+        method: 'POST', headers: { 'X-Client-Session': capability }, signal: bounded.signal,
+      })
+    } catch { /* Backend budget still applies if the tunnel is lost. */ }
+    finally { bounded.cleanup() }
+  },
   async health(signal) {
     const bounded = boundedSignal(signal, Math.min(REQUEST_TIMEOUT_MS, 15000))
     try {
@@ -135,10 +165,13 @@ export const chatService = {
     }
   },
 
-  async sendMessage({ conversationId, question, conversationContext = [], facts = {}, queryDate, signal }) {
+  async sendMessage({ conversationId, messageId, question, conversationContext = [], conversationTurns = [], facts = {}, queryDate, signal }) {
     const request = {
       question,
-      conversation_context: conversationContext.slice(-8),
+      conversation_context: conversationContext.slice(-20),
+      conversation_turns: conversationTurns.slice(-20),
+      conversation_id: conversationId,
+      message_id: messageId,
       facts,
     }
     if (queryDate) request.query_date = queryDate
@@ -148,20 +181,24 @@ export const chatService = {
     try {
       const response = await fetch(`${API_BASE_URL}/v1/answer`, {
         method: 'POST',
-        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(clientSession() ? { 'X-Client-Session': clientSession() } : {}) },
         body: JSON.stringify(request),
         signal: bounded.signal,
       })
       payload = await parseResponse(response)
     } catch (error) {
       if (bounded.signal.aborted && !signal?.aborted) {
+        void this.cancel(messageId)
         throw new ApiError('AI backend xử lý quá thời gian cho phép. Vui lòng thử lại.', 408, null, 'TIMEOUT')
       }
       throw error
     } finally {
       bounded.cleanup()
     }
-    const citations = (payload.citations || []).map((citation, index) => mapCitation(citation, payload, index))
+    if (typeof payload.answer !== 'string' || !['SUFFICIENT', 'PARTIAL_ALLOWED', 'NEED_MORE_FACTS', 'INSUFFICIENT_EVIDENCE', 'CONFLICTING_EVIDENCE', 'ABSTAIN', 'ERROR'].includes(payload.status) || !Array.isArray(payload.citations) || payload.citations.some(item => !item || typeof item.evidence_id !== 'string')) {
+      throw new ApiError('Cấu trúc câu trả lời từ dịch vụ không hợp lệ.', 200, null, 'INVALID_RESPONSE')
+    }
+    const citations = payload.citations.map((citation, index) => mapCitation(citation, payload, index))
     return {
       id: payload.query_id || crypto.randomUUID(),
       conversationId,
