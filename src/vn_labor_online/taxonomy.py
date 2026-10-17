@@ -87,6 +87,8 @@ def covered_profile_parents(analysis) -> set[str]:
     return covered
 
 def profile_covers_issues(analysis) -> bool:
+    if any(task.origin=='DETERMINISTIC' and not task.legal_subissues for task in getattr(analysis,'answer_tasks',[])):
+        return False
     return bool(analysis.legal_subissues) and set(analysis.legal_issues)-{'GENERAL'} <= covered_profile_parents(analysis)
 
 def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:

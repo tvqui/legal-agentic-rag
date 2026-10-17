@@ -80,6 +80,9 @@ const NOTICE_LABELS = {
   QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT: 'Bạn chưa nhập ngày tra cứu; hệ thống dùng ngày chốt của bộ dữ liệu.',
   CONVERSATION_CONTEXT_USED: 'Đã sử dụng ngữ cảnh từ lời bạn cung cấp ở các lượt trước.',
   CONVERSATION_CONTEXT_AMBIGUOUS: 'Chưa xác định rõ chủ đề của câu hỏi nối tiếp.',
+  CORPUS_LEGAL_REVIEW_INCOMPLETE: 'Bộ dữ liệu chưa được duyệt pháp lý đầy đủ; kiểm tra căn cứ của từng nội dung.',
+  per_task_answer_completeness: 'Chưa xác minh đầy đủ từng ý trong câu hỏi.',
+  INDEPENDENT_TASK_RULES_ONLY: 'Chỉ trình bày phần có chuỗi căn cứ độc lập; các phần còn lại chưa đủ căn cứ.',
 }
 
 function humanizeNotice(value) {
@@ -215,6 +218,8 @@ export const chatService = {
       facts: payload.facts || {},
       buildId: payload.build_id,
       traceId: payload.trace_id,
+      legalStatus: payload.legal_status,
+      parts: payload.parts || [],
     }
   },
 }

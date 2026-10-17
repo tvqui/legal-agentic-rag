@@ -10,6 +10,7 @@ from .taxonomy import locator_matches
 from .issue_mapping import graph_issue_keys
 from .legal_metadata import document_type
 from .models import Evidence,ExplicitReference
+from .runtime import measured
 
 def _norm(value): return re.sub(r'[^0-9A-Z]','',str(value or '').upper().replace('Đ','D'))
 def _terms(value):
@@ -90,10 +91,14 @@ class Retriever:
             if len(out)>=limit: break
         return out
     def bm25(self,query:str,k:int|None=None)->list[Evidence]:
-        import bm25s
-        if self._bm25 is None: self._bm25=self.store.load_bm25()
-        tokens=bm25s.tokenize([query.lower()],stopwords=None,stemmer=None)
-        docs,scores=self._bm25.retrieve(tokens,k=min(k or self.cfg.retrieval.bm25_top_k,len(self.store.units)))
+        with measured('bm25.dependencies_import'):
+            import bm25s
+        if self._bm25 is None:
+            with measured('bm25.index_load'): self._bm25=self.store.load_bm25()
+        with measured('bm25.tokenize'):
+            tokens=bm25s.tokenize([query.lower()],stopwords=None,stemmer=None)
+        with measured('bm25.search'):
+            docs,scores=self._bm25.retrieve(tokens,k=min(k or self.cfg.retrieval.bm25_top_k,len(self.store.units)))
         out=[]
         for i,(doc,score) in enumerate(zip(docs[0],scores[0]),1):
             uid=doc.get('id') if isinstance(doc,dict) else str(doc)
@@ -101,20 +106,25 @@ class Retriever:
         return out
     def dense(self,query:str,k:int|None=None)->list[Evidence]:
         try:
-            import numpy as np,faiss
-            if self._faiss is None: self._faiss=self.store.load_faiss()
+            with measured('dense.dependencies_import'):
+                import numpy as np,faiss
+            if self._faiss is None:
+                with measured('dense.index_load'): self._faiss=self.store.load_faiss()
             if self._model is None:
                 with self._lock:
                     if self._model is None:
-                        from FlagEmbedding import BGEM3FlagModel
-                        configured_path=self.cfg.embedding_model_path
-                        model=str(Path(configured_path).expanduser()) if configured_path and Path(configured_path).expanduser().exists() else self.cfg.embedding_model
-                        import torch
-                        device=self.cfg.embedding_device
-                        if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
-                        self._model=BGEM3FlagModel(model,use_fp16=self.cfg.embedding_use_fp16 and device!='cpu',devices=device)
-            vector=np.asarray(self._model.encode([query],batch_size=1,max_length=1024,return_dense=True,return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
-            faiss.normalize_L2(vector); scores,positions=self._faiss.search(vector,min(k or self.cfg.retrieval.dense_top_k,len(self.store.units)))
+                        with measured('dense.model_init'):
+                            from FlagEmbedding import BGEM3FlagModel
+                            configured_path=self.cfg.embedding_model_path
+                            model=str(Path(configured_path).expanduser()) if configured_path and Path(configured_path).expanduser().exists() else self.cfg.embedding_model
+                            import torch
+                            device=self.cfg.embedding_device
+                            if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
+                            self._model=BGEM3FlagModel(model,use_fp16=self.cfg.embedding_use_fp16 and device!='cpu',devices=device)
+            with measured('dense.encode'):
+                vector=np.asarray(self._model.encode([query],batch_size=1,max_length=1024,return_dense=True,return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
+            with measured('dense.search'):
+                faiss.normalize_L2(vector); scores,positions=self._faiss.search(vector,min(k or self.cfg.retrieval.dense_top_k,len(self.store.units)))
             return [as_evidence(self.store.units[int(pos)],float(score),'dense',i,{'dense':float(score)}) for i,(pos,score) in enumerate(zip(positions[0],scores[0]),1) if pos>=0]
         except IndexUnavailable:
             raise
@@ -128,15 +138,17 @@ class Retriever:
             if self._reranker is None:
                 with self._lock:
                     if self._reranker is None:
-                        from FlagEmbedding import FlagReranker
-                        import torch
-                        configured=settings.model_path
-                        model=str(Path(configured).expanduser()) if configured and Path(configured).expanduser().exists() else settings.model
-                        device=settings.device
-                        if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
-                        self._reranker=FlagReranker(model,use_fp16=settings.use_fp16 and device!='cpu',devices=device)
+                        with measured('reranker.model_init'):
+                            from FlagEmbedding import FlagReranker
+                            import torch
+                            configured=settings.model_path
+                            model=str(Path(configured).expanduser()) if configured and Path(configured).expanduser().exists() else settings.model
+                            device=settings.device
+                            if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
+                            self._reranker=FlagReranker(model,use_fp16=settings.use_fp16 and device!='cpu',devices=device)
             pairs=[[query,item.source_text or item.text] for item in candidates]
-            raw=self._reranker.compute_score(pairs,normalize=True)
+            with measured('reranker.score'):
+                raw=self._reranker.compute_score(pairs,normalize=True)
             scores=[float(raw)] if len(candidates)==1 and isinstance(raw,(int,float)) else [float(x) for x in raw]
             if len(scores)!=len(candidates): raise ValueError('reranker score count mismatch')
             rescored=[item.model_copy(update={'score':score,'component_scores':{**item.component_scores,'cross_encoder':score}})

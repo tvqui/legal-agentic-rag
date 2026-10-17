@@ -69,7 +69,7 @@ VN Labor Legal GraphRAG
   run.bat enrich            Enrich diagnostic checklists with Ollama
   run.bat neo4j             Start local Neo4j
   run.bat load-neo4j        Load the current graph into Neo4j
-  run.bat online            Start deterministic ONLINE API
+  run.bat online            Start ONLINE API using the selected config/providers
   run.bat online-check      Verify the pinned OFFLINE release for ONLINE
   run.bat online-ollama     Start ONLINE API with Ollama adjudication
   run.bat frontend          Start the React/Vite frontend
@@ -125,13 +125,15 @@ try {
     }
     'online' {
       $python = Get-ProjectPython
-      $selected = if ($Config) { $Config } else { 'config/online.yaml' }
+      $selected = if ($Config) { $Config } elseif ($env:VN_LABOR_ONLINE_CONFIG) { $env:VN_LABOR_ONLINE_CONFIG } else { 'config/online.yaml' }
+      Write-Host "ONLINE config: $selected"
       & $python scripts/serve_online.py --config $selected --host $HostAddress --port $Port
       Assert-ExitCode 'ONLINE API'
     }
     'online-check' {
       $python = Get-ProjectPython
-      $selected = if ($Config) { $Config } else { 'config/online.yaml' }
+      $selected = if ($Config) { $Config } elseif ($env:VN_LABOR_ONLINE_CONFIG) { $env:VN_LABOR_ONLINE_CONFIG } else { 'config/online.yaml' }
+      Write-Host "ONLINE config: $selected"
       & $python -m vn_labor_online.cli --config $selected check
       Assert-ExitCode 'ONLINE artifact compatibility check'
     }

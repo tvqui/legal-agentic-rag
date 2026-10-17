@@ -72,3 +72,17 @@ test('a JSON 200 without a valid answer is not displayed as a completed answer',
     await assert.rejects(() => chatService.sendMessage({ conversationId: 'c', messageId: 'm', question: 'Test' }), error => error.category === 'INVALID_RESPONSE')
   } finally { globalThis.fetch = previousFetch }
 })
+
+test('per-task completeness and provisional legal status survive response mapping', async () => {
+  const previousFetch = globalThis.fetch
+  const parts = [
+    { task_id: 'pay', description: 'Tiền lương', answer_status: 'ANSWERED', legal_status: 'PROVISIONAL' },
+    { task_id: 'duration', description: 'Thời gian', answer_status: 'MISSING', legal_status: 'PROVISIONAL' },
+  ]
+  globalThis.fetch = async () => new Response(JSON.stringify({ query_id: 'q', status: 'PARTIAL_ALLOWED', answer: 'Phần đã có căn cứ', citations: [], parts, legal_status: 'PROVISIONAL' }))
+  try {
+    const result = await chatService.sendMessage({ conversationId: 'c', messageId: 'm', question: 'Test' })
+    assert.equal(result.legalStatus, 'PROVISIONAL')
+    assert.deepEqual(result.parts, parts)
+  } finally { globalThis.fetch = previousFetch }
+})

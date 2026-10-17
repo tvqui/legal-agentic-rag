@@ -67,9 +67,17 @@ class OnlinePipeline:
                   trace_id=trace.trace_id,trace=trace)
             effective=request.model_copy(update={'question':resolved.query,
               'facts':{**resolved.facts,**request.facts},
+              'conversation_context':[turn.content for turn in request.conversation_turns] if request.conversation_turns else request.conversation_context,
               'query_date':request.query_date or resolved.query_date})
             response=self._ask(effective)
             checkpoint('completed')
+            from .runtime import measured_timings
+            if response.trace:
+                response.trace.timings_ms.update(measured_timings())
+                persist(response.trace,self.cfg.trace_dir)
+            response.legal_status=getattr(self.store.report,'legal_status','PROVISIONAL')
+            if response.legal_status=='PROVISIONAL':
+                response.warnings=list(dict.fromkeys(response.warnings+['CORPUS_LEGAL_REVIEW_INCOMPLETE']))
             if resolved.used_turns:
                 response.warnings=list(dict.fromkeys(response.warnings+['CONVERSATION_CONTEXT_USED']))
                 if response.trace:
@@ -116,7 +124,8 @@ class OnlinePipeline:
         if analysis.query_date_precision in {'MONTH','YEAR'}:
             assumptions.append(f'Mốc thời gian chỉ chính xác theo {"tháng" if analysis.query_date_precision=="MONTH" else "năm"}; kiểm tra các phiên bản giao với khoảng {analysis.query_date} đến {analysis.query_date_end}.')
         trace.events.append({'event':'query_intake','raw_preserved':env.raw_query==request.question,'conversation_turns':len(env.conversation_context),'evidence_treated_as_data':True})
-        trace.events.append({'event':'analysis','issues':analysis.legal_issues,'subissues':analysis.legal_subissues,'taxonomy_version':TAXONOMY_VERSION,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
+        trace.events.append({'event':'analysis','issues':analysis.legal_issues,'subissues':analysis.legal_subissues,'routing_topics':analysis.routing_topics,
+          'answer_task_count':len(analysis.answer_tasks),'taxonomy_version':TAXONOMY_VERSION,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
           'query_date_precision':analysis.query_date_precision,'query_date':analysis.query_date,'query_date_end':analysis.query_date_end,
           'fact_candidates':[candidate.model_dump(mode='json') for candidate in analysis.fact_candidates]})
         trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'execution':researcher_path,'issues':analysis.legal_issues,
@@ -308,6 +317,15 @@ class OnlinePipeline:
         sufficient=bool(selected) and not state.gaps
         partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial
         status=Stop.CONFLICTING_EVIDENCE if conflicts else Stop.NEED_MORE_FACTS if imprecise_boundary_ids else Stop.SUFFICIENT if sufficient else Stop.PARTIAL_ALLOWED if partial else Stop.INSUFFICIENT_EVIDENCE
+        partial_task_plan=None
+        if status==Stop.INSUFFICIENT_EVIDENCE and self.cfg.allow_partial and not conflicts:
+            from .tasks import independent_partial_plan
+            partial_task_plan,partial_ids=independent_partial_plan(analysis,selected,allow_fallback)
+            if partial_task_plan:
+                selected=[item for item in selected if item.unit_id in partial_ids]
+                state=state_for(selected,plan,analysis.query_date,allow_fallback)
+                status=Stop.PARTIAL_ALLOWED; partial=True
+                warnings.append('INDEPENDENT_TASK_RULES_ONLY')
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome)
         pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks})
@@ -324,7 +342,7 @@ class OnlinePipeline:
             # The public claims must actually cite every mandatory locator group.
             def missing_answer_slots(candidate):
                 cited={uid for claim in candidate.claims for uid in claim.evidence_ids}
-                output_state=state_for([item for item in selected if item.unit_id in cited],plan,analysis.query_date,allow_fallback)
+                output_state=state_for([item for item in selected if item.unit_id in cited],partial_task_plan or plan,analysis.query_date,allow_fallback)
                 return _actionable_gaps(output_state.gaps,[item for item in selected if item.unit_id in cited],self.cfg.provisional_mode)
             missing_claims=missing_answer_slots(draft)
             if missing_claims and draft.semantic_review and 'ANSWER_QUALITY_BLOCKED' not in generation_warnings:
@@ -397,6 +415,9 @@ class OnlinePipeline:
                 actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
                 partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial
                 status=Stop.SUFFICIENT if sufficient else Stop.PARTIAL_ALLOWED if partial else Stop.INSUFFICIENT_EVIDENCE
+                if partial_task_plan and selected:
+                    subset=state_for(selected,partial_task_plan,analysis.query_date,allow_fallback)
+                    if not _actionable_gaps(subset.gaps,selected,self.cfg.provisional_mode): status=Stop.PARTIAL_ALLOWED
                 if selected and preserved_gaps and not _actionable_gaps([g for g in state.gaps if g not in preserved_gaps],selected,self.cfg.provisional_mode):
                     status=Stop.PARTIAL_ALLOWED
                 if status==Stop.INSUFFICIENT_EVIDENCE:
@@ -436,6 +457,13 @@ class OnlinePipeline:
            'estimated_tokens':sum(len(x.text) for x in pack.evidence)/4},
           {'event':'adjudication','mode':self.cfg.adjudication.mode,'claims':len(draft.claims),'fallback':bool(generation_warnings)},
           {'event':'reference_audit','passed':ok,'issues':problems}]
+        from .tasks import assess_parts
+        parts=assess_parts(analysis,selected,draft.claims,draft.semantic_review,allow_fallback,getattr(self.store.report,'legal_ready',False))
+        if parts and any(part.answer_status!='ANSWERED' for part in parts) and status==Stop.SUFFICIENT:
+            status=Stop.PARTIAL_ALLOWED
+            state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['per_task_answer_completeness']))})
+        trace.events.append({'event':'task_completeness','parts':[part.model_dump(mode='json') for part in parts]})
+        trace.stop_reason=status
         trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2); persist(trace,self.cfg.trace_dir)
         evidence_status='CONFLICTING' if status==Stop.CONFLICTING_EVIDENCE else 'NEED_MORE_FACTS' if status==Stop.NEED_MORE_FACTS else 'SUFFICIENT' if status==Stop.SUFFICIENT else 'PARTIAL' if status==Stop.PARTIAL_ALLOWED else 'INSUFFICIENT'
         if status in {Stop.SUFFICIENT,Stop.PARTIAL_ALLOWED} and 'CONTRACT.PROBATION_DURATION' in analysis.legal_subissues:
@@ -445,4 +473,5 @@ class OnlinePipeline:
         return AnswerResponse(query_id=env.query_id,status=status,answer=answer,citations=refs,evidence_status=evidence_status,
           applicable_date=analysis.query_date,query_date=analysis.query_date,applicable_law_versions=draft.applicable_law_versions,
           claims=draft.claims,assumptions=draft.assumptions,limitations=state.gaps,questions=followup_questions,warnings=list(dict.fromkeys(warnings)),
-          facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+          facts=analysis.facts,parts=parts,legal_status=getattr(self.store.report,'legal_status','PROVISIONAL'),
+          build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)

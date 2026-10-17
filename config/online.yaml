@@ -1,10 +1,10 @@
 online:
-  artifact_source: "build/releases/vn_labor_results_v8_1_aura.zip"
+  artifact_source: "build/releases/vn_labor_results_20261014.zip"
   cache_dir: ".cache/online"
-  expected_archive_sha256: "afb456c552f6122101e4c92dd9c7d8240cf3f093483266b14aa0d111417ddf5a"
-  expected_build_id: "7b33c8206124e32d423ddfc02adbf58ad26cce68e8ac0154329d51b5dd667d38"
-  expected_retrieval_unit_fingerprint: "20c9d1c76bd250eda9067322c58b46e8210df0637f59f6f5a5a45911afcdd3f7"
-  expected_dense_fingerprint: "05ae8fe99f3e430125be53f85db65f5796ceb9584ef9975f13ade452dc0574d6"
+  expected_archive_sha256: "895db689d0cb60f6a76042a70452cedadfb80151bc1d9818b1cb54c182d19071"
+  expected_build_id: "9a615f1927162fe63e73b734b6a48759596984fbf2d004ce76bc2eb94e0e5da0"
+  expected_retrieval_unit_fingerprint: "2a82928a2968cf5583858c2b56aafb12550c61e304df52b5cdd4262d015d9557"
+  expected_dense_fingerprint: "3c33b60ad0696ddc65006725613281bfee1e419e77be4183311cbde3f584a41a"
   corpus_snapshot_as_of: "2026-09-15"
   provisional_mode: true
   embedding_model: "BAAI/bge-m3"
@@ -44,7 +44,7 @@ online:
   allow_partial: true
   allow_document_temporal_fallback: true
   researcher:
-    adaptive: false
+    adaptive: true
     max_queries: 4
   applicability:
     mode: deterministic

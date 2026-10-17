@@ -24,7 +24,7 @@ class ArtifactStore:
         if source.is_file():
             self.archive_sha256=_hash_file(source)
             if cfg.expected_archive_sha256 and self.archive_sha256!=cfg.expected_archive_sha256:
-                raise OfflineArtifactMismatch('OFFLINE archive SHA-256 mismatch')
+                raise OfflineArtifactMismatch(f'OFFLINE archive SHA-256 mismatch for {source.name!r}: expected {cfg.expected_archive_sha256}, got {self.archive_sha256}. Check the selected config and VN_LABOR_ARTIFACT_SOURCE; do not disable integrity checks.')
             cache_root=Path(cfg.cache_dir); cache_root.mkdir(parents=True,exist_ok=True)
             target=cache_root/('build_'+self.archive_sha256[:16]); marker=target/'.complete'
             if marker.exists() and marker.read_text(encoding='ascii').strip()!=self.archive_sha256:
@@ -116,7 +116,12 @@ class ArtifactStore:
         if self.final.get('source_catalog_quality',{}).get('passed') is not True: provisional.append('SOURCE_CATALOG_HUMAN_REVIEW_INCOMPLETE')
         if self.final.get('semantic_quality',{}).get('passed') is not True: provisional.append('PROVISION_TEMPORAL_REVIEW_INCOMPLETE')
         if self.final.get('gold_evaluation',{}).get('passed') is not True: provisional.append('GOLD_NOT_APPROVED')
-        return CompatibilityReport(compatible=not issues,build_id=graph,graph_fingerprint=graph,
+        if self.final.get('offline_ready_for_online') is not True and not provisional:
+            provisional.append('OFFLINE_LEGAL_READINESS_INCOMPLETE')
+        legal_ready=not provisional and self.final.get('offline_ready_for_online') is True
+        return CompatibilityReport(compatible=not issues,technical_compatible=not issues,
+          legal_ready=legal_ready,legal_status='REVIEWED' if legal_ready else 'PROVISIONAL',
+          archive_sha256=self.archive_sha256,build_id=graph,graph_fingerprint=graph,
           retrieval_unit_fingerprint=units,dense_fingerprint=self.dense_report.get('fingerprint'),
           gold_build_id=self.final.get('gold_build_id'),issues=issues,provisional_reasons=provisional,
           source_catalog_records=len(self.source_catalog),corpus_snapshot_as_of=self.cfg.corpus_snapshot_as_of)

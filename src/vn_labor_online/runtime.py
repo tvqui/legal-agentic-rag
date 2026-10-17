@@ -26,6 +26,7 @@ class RequestBudget:
     cancelled: threading.Event = field(default_factory=threading.Event)
     started: float = field(default_factory=time.monotonic)
     stage: str = 'intake'
+    timings: dict = field(default_factory=dict)
 
     def remaining(self):
         if self.cancelled.is_set():
@@ -62,6 +63,22 @@ def checkpoint(stage=None):
 def request_timeout(configured):
     budget = _current.get()
     return min(configured, budget.remaining()) if budget else configured
+
+
+@contextmanager
+def measured(name):
+    started=time.perf_counter()
+    try:
+        yield
+    finally:
+        budget=_current.get()
+        if budget:
+            budget.timings[name]=budget.timings.get(name,0)+(time.perf_counter()-started)*1000
+
+
+def measured_timings():
+    budget=_current.get()
+    return {key:round(value,3) for key,value in budget.timings.items()} if budget else {}
 
 
 @dataclass

@@ -31,6 +31,10 @@ run.bat online-check
 run.bat online
 ```
 
+Đặt ZIP OFFLINE ngày 14/10/2026 tại `build/releases/vn_labor_results_20261014.zip` trước khi chạy. Các cấu hình ONLINE chính đã ghim SHA-256, graph build và fingerprints của bản này; không đổi đường dẫn sang một ZIP khác mà giữ các mã kiểm tra cũ. Gói này đạt kiểm tra kỹ thuật, vẫn cần duyệt pháp lý.
+
+Lệnh `online` và `online-check` chọn cấu hình theo thứ tự: `-Config` → `VN_LABOR_ONLINE_CONFIG` trong môi trường/`.env` → `config/online.yaml`. `online-check` in cấu hình, artifact và chế độ provider thực tế. Biến môi trường có thể ghi đè các trường trong YAML.
+
 Mở terminal thứ hai:
 
 ```bat
@@ -56,7 +60,7 @@ run.bat validate
 run.bat kaggle
 ```
 
-ONLINE mặc định dùng adjudication deterministic. Sau khi cài Ollama và tải `qwen3:8b`, có thể thử cấu hình LLM có kiểm soát:
+YAML ONLINE local mặc định dùng adjudication deterministic; `.env` có thể chọn HTTP/Ollama thay thế. Sau khi cài Ollama và tải `qwen3:8b`, có thể thử cấu hình LLM có kiểm soát:
 
 ```bat
 run.bat online-ollama
@@ -70,6 +74,7 @@ Applicability vẫn chạy deterministic và mọi câu trả lời vẫn phải
 - [Kiến trúc tổng thể](docs/architecture.md)
 - [OFFLINE](docs/offline.md)
 - [ONLINE](docs/online.md)
+- [Đối chiếu đánh giá và nâng cấp ONLINE 15/10](docs/online/review-followup-20261015.md)
 - [Vận hành](docs/operations.md)
 - [Human review](docs/human-review.md)
 - [Kaggle](docs/kaggle.md)

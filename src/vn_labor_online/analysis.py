@@ -4,6 +4,8 @@ from datetime import date
 from .temporal import legal_regime_for
 from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison
 from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan,FactCandidate
+from .topics import TOPICS,detect_topics
+from .tasks import deterministic_tasks
 
 ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ ngay","nghỉ sau","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương","trợ cấp mất việc","hết hạn hợp đồng","hợp đồng hết hạn","thay đổi cơ cấu","thay đổi công nghệ","lý do kinh tế","tái cơ cấu","cắt giảm nhân sự","sáp nhập"],"WAGE":["tiền lương","lương","làm thêm"],
  "SOCIAL_INSURANCE":["bảo hiểm xã hội","bhxh"],"SAFETY":["an toàn lao động","tai nạn lao động"],
@@ -85,6 +87,8 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     if not explicit_date and facts.get('termination_date'):
         query_date=facts['termination_date']; query_date_end=query_date; precision='DAY'
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
+    topics=detect_topics(q)
+    issues=list(dict.fromkeys([item for item in issues if item!='GENERAL']+[topic.issue for topic in topics])) or ['GENERAL']
     subissues=classify_subissues(q,facts,issues)
     # A retention deadline is not a request to assess an employee's resignation.
     if original_documents(lower) and not re.search(r'(?:tôi|người lao động|nlđ)\s+(?:muốn|xin|sẽ|đơn phương|chỉ báo|báo trước)|thời hạn báo trước|hậu quả.*(?:nghỉ|chấm dứt)',lower):
@@ -107,10 +111,14 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     missing=missing_fact_questions(issues,outcome,facts,lower,query_date)
     if route==Route.DIRECT and refs and all(not ref.instrument_number for ref in refs):
         missing.append('Bạn đang hỏi Điều/Khoản/Điểm của văn bản pháp luật nào?')
-    return QueryAnalysis(query_text=env.normalized_query,legal_issues=issues,legal_subissues=subissues,facts=facts,explicit_references=refs,event_dates=dates+month_dates+years,query_date=query_date,query_date_end=query_date_end,
+    result=QueryAnalysis(query_text=env.normalized_query,legal_issues=issues,legal_subissues=subissues,facts=facts,explicit_references=refs,event_dates=dates+month_dates+years,query_date=query_date,query_date_end=query_date_end,
       requested_outcome=outcome,temporal_intent=temporal,missing_facts=sorted(set(missing)),route=route,
       route_reason='explicit legal citation' if route==Route.DIRECT else 'multi-issue/change query' if route==Route.COMPLEX else 'single-issue query',query_date_precision=precision,fact_candidates=fact_candidates,
       in_scope=not _clearly_out_of_scope(lower,issues,refs))
+    from .taxonomy import SUBISSUES
+    result.routing_topics=[topic.key for topic in topics]
+    result.answer_tasks=deterministic_tasks(q,subissues,topics,SUBISSUES,route,outcome)
+    return result
 
 def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference])->bool:
     if refs: return False

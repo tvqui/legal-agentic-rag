@@ -80,6 +80,12 @@ export function Message({ message, onCitation, onRetry }) {
         : <RichContent content={message.content} citations={message.citations} onCitation={onCitation} />}
       {message.status === 'streaming' && <span className="streaming-cursor" aria-label="Đang phát nội dung" />}
       {!isUser && message.status === 'completed' && <>
+        {message.parts?.length > 1 && <details className="response-notice">
+          <summary>Mức độ trả lời từng ý ({message.parts.length})</summary>
+          <ul>{message.parts.map(part => <li key={part.task_id}>
+            <strong>{part.description}</strong>: {part.answer_status === 'ANSWERED' ? 'Đã kiểm tra nội dung trả lời' : part.answer_status === 'PARTIAL' ? 'Mới trả lời được một phần' : part.answer_status === 'MISSING' ? 'Chưa đủ để trả lời' : 'Chưa kiểm tra độc lập độ đầy đủ'}
+          </li>)}</ul>
+        </details>}
         <ReviewNotice message={message} />
         <EvidenceIndicator sourceCount={message.citations?.length || 0} evidenceStatus={message.evidenceStatus} answerStatus={message.answerStatus} />
       </>}

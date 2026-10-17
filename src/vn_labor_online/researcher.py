@@ -5,6 +5,8 @@ from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION,profile_
 from .config import ResearcherConfig
 from .models import FactCandidate,QueryAnalysis,ResearcherResult,Route
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
+from .tasks import merge_tasks
+from .topics import TOPICS
 
 SAFE_FACT_FIELDS={'actor','contract_type','notice_days','worked_months','notice_exception',
   'special_occupation','protected_status','service_years','age','minor','disabled',
@@ -74,7 +76,8 @@ class LegalResearcher:
     def _enrich_model(self,analysis,query,context):
         payload={'query':query,'recent_context':context[-4:],'deterministic_issues':analysis.legal_issues,'deterministic_subissues':analysis.legal_subissues,'taxonomy_version':TAXONOMY_VERSION,
           'confirmed_facts':analysis.facts,'requested_outcome':analysis.requested_outcome,
-          'allowed_issue_labels':sorted(ISSUES),'allowed_fact_fields':sorted(SAFE_FACT_FIELDS)}
+          'allowed_issue_labels':sorted(set(ISSUES)|{t.issue for t in TOPICS}),'allowed_fact_fields':sorted(SAFE_FACT_FIELDS),
+          'baseline_tasks':[task.model_dump(mode='json') for task in analysis.answer_tasks]}
         system="""You are the Researcher of a Vietnamese labour-law retrieval system.
 Map only facts explicitly present in the current query into the supplied labour ontology and create at most a few short Vietnamese search queries.
 Decompose EVERY requested legal issue into answer_tasks. Each task needs a distinct task_id, an exact request_quote from the current query, a short description and a retrieval_query without invented citations. Cover primary entitlement, conditions, exceptions, requested consequences, amounts, procedure, temporal selection and source references when requested. Tasks are requests, never facts or legal evidence. Use depends_on only when a task's conclusion requires another task's result, not merely because tasks share a topic. Never create circular dependencies.
@@ -84,7 +87,8 @@ The result improves retrieval recall and never counts as legal evidence. Return 
         try:
             raw=self.provider.structured(system,json.dumps(payload,ensure_ascii=False),ResearcherResult.model_json_schema())
             result=ResearcherResult.model_validate(raw)
-            issues=list(dict.fromkeys(analysis.legal_issues+[item for item in result.legal_issues if item in ISSUES]))
+            allowed=set(ISSUES)|{t.issue for t in TOPICS}
+            issues=list(dict.fromkeys(analysis.legal_issues+[item for item in result.legal_issues if item in allowed]))
             candidates=[candidate for proposed in result.fact_candidates if (candidate:=_verified_candidate(proposed,query)) is not None]
             facts=dict(analysis.facts)
             if relationship_comparison(query): candidates=[c for c in candidates if c.field not in {'contract_type','actor'}]
@@ -101,6 +105,7 @@ The result improves retrieval recall and never counts as legal evidence. Return 
                 if uid not in graph or uid in path: raise ValueError('invalid task dependency')
                 for parent in graph[uid]: visit(parent,path|{uid})
             for uid in graph: visit(uid,set())
+            tasks=merge_tasks(analysis.answer_tasks,tasks)
             queries=list(dict.fromkeys(queries+[t.retrieval_query for t in tasks]))
             subissues=classify_subissues(query,facts,issues)
             issues=parent_issues(issues,subissues)

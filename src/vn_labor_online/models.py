@@ -80,6 +80,10 @@ class AnswerTask(BaseModel):
     description:str=Field(min_length=2,max_length=10000)
     retrieval_query:str=Field(min_length=2,max_length=10000)
     depends_on:list[str]=Field(default_factory=list,max_length=12)
+    legal_subissues:list[str]=Field(default_factory=list,max_length=20)
+    legal_issues:list[str]=Field(default_factory=list,max_length=12)
+    topic_ids:list[str]=Field(default_factory=list,max_length=50)
+    origin:Literal['DETERMINISTIC','RESEARCHER']='RESEARCHER'
 
 class ResearcherResult(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -102,6 +106,18 @@ class QueryAnalysis(BaseModel):
     in_scope:bool=True
     query_text:str=''
     answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
+    routing_topics:list[str]=Field(default_factory=list,max_length=50)
+
+class AnswerPart(BaseModel):
+    task_id:str
+    question:str
+    description:str
+    evidence_status:Literal['FOUND','PARTIAL','MISSING']='MISSING'
+    answer_status:Literal['ANSWERED','PARTIAL','NOT_CHECKED','MISSING']='NOT_CHECKED'
+    evidence_ids:list[str]=Field(default_factory=list)
+    claim_ids:list[str]=Field(default_factory=list)
+    missing_requirements:list[str]=Field(default_factory=list)
+    legal_status:Literal['PROVISIONAL','REVIEWED']='PROVISIONAL'
 
 class LegalLocator(BaseModel):
     exact_level:bool=False
@@ -213,9 +229,15 @@ class AnswerResponse(BaseModel):
     claims:list[Claim]=Field(default_factory=list); assumptions:list[str]=Field(default_factory=list)
     limitations:list[str]=Field(default_factory=list); questions:list[str]=Field(default_factory=list); warnings:list[str]=Field(default_factory=list)
     facts:dict[str,Any]=Field(default_factory=dict)
+    parts:list[AnswerPart]=Field(default_factory=list,max_length=12)
+    legal_status:Literal['PROVISIONAL','REVIEWED']='PROVISIONAL'
     build_id:str; trace_id:str; trace:Trace
 class CompatibilityReport(BaseModel):
     compatible:bool; build_id:str|None=None; graph_fingerprint:str|None=None
     retrieval_unit_fingerprint:str|None=None; dense_fingerprint:str|None=None
     gold_build_id:str|None=None; issues:list[str]=Field(default_factory=list); provisional_reasons:list[str]=Field(default_factory=list)
     source_catalog_records:int=0; corpus_snapshot_as_of:str|None=None
+    technical_compatible:bool=False
+    legal_ready:bool=False
+    legal_status:Literal['PROVISIONAL','REVIEWED']='PROVISIONAL'
+    archive_sha256:str|None=None

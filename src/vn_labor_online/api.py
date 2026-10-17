@@ -8,6 +8,7 @@ from .errors import OnlineError
 from .models import AnswerResponse,QueryRequest
 from .pipeline import OnlinePipeline
 from .taxonomy import TAXONOMY_VERSION
+from .topics import VERSION as TOPIC_REGISTRY_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +148,13 @@ def create_app(config_path:str|Path|None=None):
         degraded=any(x.get('status')=='DEGRADED' for x in model_components)
         return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,
           'online_features':{'conversation_context':'user-turns-v1','history_storage':'browser',
+            'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'cooperative_cancel':True,'idempotent_retry':True},
           'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
           'semantic_repair_attempts':pipeline.cfg.adjudication.semantic_repair_attempts,'answer_while_clarifying':pipeline.cfg.answer_while_clarifying,
           'applicability_batch_size':pipeline.cfg.applicability.max_items,'applicability_max_batches':pipeline.cfg.applicability.max_batches},'components':components,
+          'legal_ready':pipeline.store.report.legal_ready,
+          'legal_status':pipeline.store.report.legal_status,
           'compatibility':pipeline.store.report.model_dump(mode='json')}
     def request_key(http_request,message_id):
         capability=http_request.headers.get('X-Client-Session','')
