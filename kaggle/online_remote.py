@@ -52,6 +52,52 @@ def wait_json(url: str, token: str | None, process: subprocess.Popen, timeout: i
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")
 
 
+def readiness_diagnostics(snapshot):
+    """Allowlisted startup diagnostics, never raw SDK errors or configuration."""
+    values={}
+    for name in ('researcher','auditor','adjudicator','answer_reviewer'):
+        component=snapshot.get('components',{}).get(name,{})
+        values[name]={key:component[key] for key in ('status','provider','error_code','quota_kind','retry_after_seconds') if key in component}
+    return values
+
+
+def wait_ready(url, token, process, timeout=180):
+    deadline=time.monotonic()+timeout
+    last={}
+    last_error=None
+    last_print=-float('inf')
+    permanent={'GEMINI_API_KEY_MISSING','GEMINI_MODEL_MISSING','GEMINI_SDK_MISSING',
+               'GEMINI_HTTP_400','GEMINI_HTTP_401','GEMINI_HTTP_403','GEMINI_HTTP_404'}
+    while time.monotonic()<deadline:
+        exit_code=process.poll()
+        if exit_code is not None:
+            raise RuntimeError(f'Backend exited during readiness with code {exit_code}; see logs/backend.log')
+        try:
+            # /ready may perform two sequential inference probes, each <=20s.
+            last=get_json(url,token,timeout=min(45,max(.1,deadline-time.monotonic())))
+            if not isinstance(last,dict): raise ValueError('Invalid readiness response')
+            components=last.get('components',{})
+            required=('researcher','auditor','adjudicator','answer_reviewer')
+            if last.get('ready') is True and all(components.get(name,{}).get('status')=='READY' for name in required):
+                return last
+            diagnostic=readiness_diagnostics(last)
+            if time.monotonic()-last_print>=10:
+                print('ONLINE_READY_WAIT '+json.dumps(diagnostic),flush=True)
+                last_print=time.monotonic()
+            if any(value.get('error_code') in permanent or value.get('quota_kind') in {'DAILY','QUOTA_DISABLED'} for value in diagnostic.values()):
+                raise RuntimeError('ONLINE dependency configuration/quota needs attention: '+json.dumps(diagnostic))
+            last_error='dependencies not ready'
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            # Exception messages/URLs can contain credentials; types suffice.
+            last_error=type(exc).__name__
+        remaining=deadline-time.monotonic()
+        if remaining>0: time.sleep(min(2,remaining))
+    raise RuntimeError('ONLINE readiness timed out; last_error='+str(last_error)+
+                       '; components='+json.dumps(readiness_diagnostics(last))+'; see logs/backend.log')
+
+
 def _artifact_directory_roots(input_root: Path) -> list[Path]:
     """Find Kaggle datasets after Kaggle has automatically unpacked the ZIP."""
     roots = set()
@@ -153,7 +199,9 @@ def main() -> int:
     parser.add_argument("--model", default="qwen3:8b")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--skip-pull", action="store_true")
+    parser.add_argument("--ready-timeout",type=int,default=180)
     args = parser.parse_args()
+    if not 1<=args.ready_timeout<=1800: parser.error("--ready-timeout must be between 1 and 1800 seconds")
 
     if not shutil.which("ollama"):
         raise RuntimeError("Ollama is missing. Run: curl -fsSL https://ollama.com/install.sh | sh")
@@ -209,11 +257,7 @@ def main() -> int:
             start_new_session=True,
         )
         wait_json(f"http://127.0.0.1:{args.port}/health", None, backend, 300)
-        readiness = wait_json(f"http://127.0.0.1:{args.port}/ready", api_key, backend, 120)
-        model_components = [readiness.get("components", {}).get(name, {})
-                            for name in ("researcher", "auditor", "adjudicator")]
-        if not readiness.get("ready") or any(item.get("status") != "READY" for item in model_components):
-            raise RuntimeError(f"ONLINE backend is not fully ready: {readiness}")
+        readiness = wait_ready(f"http://127.0.0.1:{args.port}/ready",api_key,backend,args.ready_timeout)
         import ngrok
         listener = ngrok.forward(f"localhost:{args.port}", authtoken_from_env=True, compression=True)
         print("REMOTE_BACKEND_URL=" + listener.url(), flush=True)

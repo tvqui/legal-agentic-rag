@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import json
+import logging
+import math
+import re
+import threading
 import time
 from copy import deepcopy
 from functools import cached_property
@@ -183,6 +187,10 @@ class GeminiProvider(BaseProvider):
         self.timeout, self.max_output_tokens = timeout, max_output_tokens
         self.rate_policy=GeminiRatePolicy.from_env()
         self.rate_limiter=get_gemini_limiter(model,self.rate_policy)
+        self._probe_lock=threading.Lock()
+        self._probe_next_at=0.0
+        self._probe_failure={}
+
 
     def structured(self, system, user, schema):
         if not self.model or not self.api_key:
@@ -237,22 +245,62 @@ class GeminiProvider(BaseProvider):
 
     def readiness(self):
         from importlib.util import find_spec
-        try: installed=find_spec('google.genai') is not None
-        except ModuleNotFoundError: installed=False
-        ready=bool(getattr(self,'_ready',False))
-        if installed and self.model and self.api_key and not ready:
-            try:
-                from .runtime import request_budget
-                with request_budget(min(10,self.timeout)):
-                    result=self.structured('Return the requested JSON only.','Set ready to true.',
-                      {'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False})
-                ready=result=={'ready':True}
-                self._ready=ready
-            except Exception:
-                ready=False
-        return {'status':'READY' if ready else 'DEGRADED',
+        from .runtime import request_budget
+        def report(ready=False, **details):
+            return {'status':'READY' if ready else 'DEGRADED',
                 'provider':'gemini','model':self.model,'check':'INFERENCE_PROBE',
                 'rate_limit':{'requests_per_minute':self.rate_limiter.rpm,
                     'max_retries':self.rate_policy.max_retries,
                     'max_wait_seconds':self.rate_policy.max_wait_seconds,
-                    'scope':'SHARED_PROCESS_PROJECT_MODEL'}}
+                    'scope':'SHARED_PROCESS_PROJECT_MODEL'}, **details}
+        if not self.api_key: return report(error_code='GEMINI_API_KEY_MISSING')
+        if not self.model: return report(error_code='GEMINI_MODEL_MISSING')
+        try: installed=find_spec('google.genai') is not None
+        except ModuleNotFoundError: installed=False
+        if not installed: return report(error_code='GEMINI_SDK_MISSING')
+        if not self._probe_lock.acquire(blocking=False):
+            return report(error_code='GEMINI_PROBE_IN_PROGRESS',retry_after_seconds=2)
+        try:
+            if getattr(self,'_ready',False): return report(True)
+            remaining=self._probe_next_at-time.monotonic()
+            if remaining>0:
+                return report(**{**self._probe_failure,'retry_after_seconds':max(1,math.ceil(remaining))})
+            try:
+                # A probe can wait briefly for pacing, but cannot block /ready
+                # for the whole 70s quota budget. The launcher retries readiness
+                # across cooldowns instead of spawning overlapping long probes.
+                with request_budget(min(20,self.timeout)):
+                    result=self.structured('Return the requested JSON only.','Set ready to true.',
+                      {'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False})
+                if result!={'ready':True}: raise StructuredOutputError('GEMINI_PROBE_RESPONSE_MISMATCH')
+                self._ready=True
+                self._probe_failure={}
+                return report(True)
+            except Exception as exc:
+                details={'error_type':type(exc).__name__}
+                cooldown=self.rate_limiter.cooldown_snapshot()
+                if isinstance(exc,ProviderRateLimited) or cooldown:
+                    details['error_code']='GEMINI_HTTP_429'
+                    details['quota_kind']=getattr(exc,'quota_kind',None) or cooldown.get('quota_kind','UNKNOWN')
+                    delay=getattr(exc,'retry_after_seconds',None)
+                    if delay is None and details['quota_kind'] not in {'DAILY','QUOTA_DISABLED'}:
+                        delay=cooldown.get('retry_after_seconds')
+                    if delay is not None: details['retry_after_seconds']=max(1,math.ceil(delay))
+                elif isinstance(exc,RequestStopped):
+                    details['error_code']='GEMINI_PROBE_CANCELLED' if exc.reason=='REQUEST_CANCELLED' else 'GEMINI_PROBE_TIMEOUT'
+                elif isinstance(exc,StructuredOutputError):
+                    code=str(exc)
+                    details['error_code']=code if code in {'OUTPUT_TOKEN_LIMIT','GEMINI_EMPTY_RESPONSE',
+                      'GEMINI_SCHEMA_VALIDATION_FAILED','GEMINI_PROBE_RESPONSE_MISMATCH','INVALID_JSON',
+                      'NON_OBJECT_STRUCTURED_OUTPUT','DUPLICATE_JSON_KEY','NON_TEXT_STRUCTURED_OUTPUT'} else 'GEMINI_PROBE_INVALID_RESPONSE'
+                else:
+                    code=getattr(exc,'safe_code',None)
+                    details['error_code']=code if isinstance(code,str) and re.fullmatch(r'GEMINI_(?:HTTP_[45]\d\d|TIMEOUT|CLIENT_ERROR)',code) else 'GEMINI_PROBE_ERROR'
+                delay=details.get('retry_after_seconds',5)
+                self._probe_next_at=time.monotonic()+delay
+                self._probe_failure=details
+                logging.getLogger(__name__).warning('Gemini readiness failed: code=%s quota_kind=%s retry_after=%s',
+                    details['error_code'],details.get('quota_kind'),details.get('retry_after_seconds'))
+                return report(**details)
+        finally:
+            self._probe_lock.release()

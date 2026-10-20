@@ -167,7 +167,7 @@ def create_app(config_path:str|Path|None=None):
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'literal_source_lookup':'verified-excerpt-v1',
             'assessment_fact_gate':'critical-facts-v1','probation_scope':'dated-job-group-v1',
-            'gemini_schema_contract':'local-validation-v1','provider_capacity':'paced-retry-v2',
+            'gemini_schema_contract':'local-validation-v1','provider_capacity':'paced-retry-v2','gemini_readiness':'diagnostic-probe-v2',
             'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'cooperative_cancel':True,'idempotent_retry':True},
           'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
           'semantic_review_provider':pipeline.cfg.adjudication.review_provider,

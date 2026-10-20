@@ -132,6 +132,11 @@ class GeminiRateLimiter:
             if until >= self._cooldown:
                 self._cooldown, self._cooldown_kind = until, kind
 
+    def cooldown_snapshot(self):
+        with self._lock:
+            remaining=max(0,self._cooldown-self._clock())
+            return {'quota_kind':self._cooldown_kind,'retry_after_seconds':remaining} if remaining else {}
+
     def acquire(self, max_wait_seconds):
         started = self._clock()
         while True:
