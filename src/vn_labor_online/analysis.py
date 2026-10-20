@@ -2,7 +2,7 @@ from __future__ import annotations
 import calendar,hashlib,json,re,unicodedata
 from datetime import date
 from .temporal import legal_regime_for
-from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison
+from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison,affirmative_phrase
 from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan,FactCandidate
 from .topics import TOPICS,detect_topics
 from .tasks import deterministic_tasks
@@ -168,6 +168,8 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
     for field,value in facts.items():
         if field=='notice_days':
             match=NO_NOTICE.search(query) if value==0 else NOTICE_DAYS.search(query)
+        elif field=='mutual_termination_agreement' and value is False:
+            match=re.search(r'\b(?:chưa|không|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên)){0,4}\s+(?:đồng ý|thỏa thuận|thoả thuận)[^.;?!]{0,45}',query,re.I)
         else:
             match=patterns[field].search(query) if field in patterns else _needle_match(query,needles.get(field,()))
         if field=='service_years' and match is None:
@@ -305,7 +307,10 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
         material_effect=re.search(r'ảnh hưởng(?: trực tiếp)? (?:đến|tới) (?:việc )?thực hiện (?:hợp đồng(?: lao động)?|hđlđ)',q)
         if material_effect and not re.search(r'(?:không|chưa)\s+ảnh hưởng|có\s+ảnh hưởng[^.?!]{0,100}không\s*\?',q):
             facts['misinformation_material_effect']=True; facts['notice_exception']=True
-    if any(term in q for term in ('công ty đồng ý cho','giám đốc trả lời bằng văn bản rằng công ty đồng ý','hai bên thỏa thuận chấm dứt')):
+    agreement_terms=('đồng ý cho nghỉ','đồng ý chấm dứt','thỏa thuận chấm dứt','thoả thuận chấm dứt')
+    if any(term in q for term in agreement_terms) and not affirmative_phrase(q,agreement_terms):
+        facts['mutual_termination_agreement']=False
+    elif affirmative_phrase(q,('công ty đồng ý cho','giám đốc trả lời bằng văn bản rằng công ty đồng ý','hai bên thỏa thuận chấm dứt')):
         facts['mutual_termination_agreement']=True
     if any(term in q for term in ('hủy bỏ việc đơn phương','đổi ý trước khi hết thời hạn báo trước')): facts['query_intent']='WITHDRAW_TERMINATION'
     elif 'trái pháp luật' in q and 'nghĩa vụ' in q and ('hai điều luật khác nhau' in q or 'định nghĩa' in q): facts['query_intent']='UNLAWFUL_DEFINITION_CONSEQUENCES'

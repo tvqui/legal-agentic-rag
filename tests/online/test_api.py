@@ -56,6 +56,24 @@ class TestApiErrorHandling(unittest.TestCase):
             self.assertIn('message', body)
             self.assertIn('errors', body['details'])
 
+    def test_exact_lookup_survives_one_character_history_over_http(self):
+        question='Điều 1 Nghị định 145/2020/NĐ-CP quy định gì? Hãy trình bày đầy đủ phạm vi điều chỉnh và dẫn nguồn chính thức.'
+        with TestClient(create_app(self.config_path)) as client:
+            for context in ({'conversation_context':['f','']},
+              {'conversation_turns':[{'turn_id':'noise','role':'user','content':'f'}]}):
+                with self.subTest(context=context):
+                    response=client.post('/v1/answer',json={'question':question,**context})
+                    self.assertEqual(response.status_code,200,response.text)
+                    self.assertTrue(response.json()['citations'])
+
+    def test_normalized_short_question_returns_422_without_model_work(self):
+        with TestClient(create_app(self.config_path)) as client:
+            for question in (' f ',' \n','a\u0301'):
+                with self.subTest(question=question):
+                    response=client.post('/v1/answer',json={'question':question})
+                    self.assertEqual(response.status_code,422,response.text)
+                    self.assertEqual(response.json()['category'],'VALIDATION_ERROR')
+
     def test_auth_failure_returns_structured_envelope(self):
         with patch.dict('os.environ', {'VN_LABOR_API_KEY': 'secret-123'}, clear=False):
             with TestClient(create_app(self.config_path)) as client:

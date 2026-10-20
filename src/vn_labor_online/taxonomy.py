@@ -70,6 +70,19 @@ def relationship_comparison(query: str) -> bool:
       any(term in q for term in ('tập nghề','học nghề')) and
       any(term in q for term in ('hđlđ','hợp đồng lao động')))
 
+def affirmative_phrase(query,terms):
+    """Do not turn an explicitly negated agreement into an established event."""
+    q=query.lower()
+    for term in terms:
+        for match in re.finditer(re.escape(term),q):
+            prefix=re.split(r'[.;!?]|\b(?:nhưng|tuy nhiên)\b',q[max(0,match.start()-70):match.start()])[-1]
+            # Only a directly preceding negation belongs to this predicate.
+            if re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên|đã|đạt)){0,6}\s*$',prefix):
+                continue
+            return True
+    return False
+
+
 def covered_profile_parents(analysis) -> set[str]:
     """Context hits may be covered; independent requests must remain mandatory."""
     keys=set(analysis.legal_subissues); q=analysis.query_text.lower()
@@ -145,7 +158,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         ('ECONOMIC_RESTRUCTURING', ('thay đổi cơ cấu', 'thay đổi công nghệ', 'lý do kinh tế', 'tái cơ cấu', 'cắt giảm nhân sự')),
         ('ENTERPRISE_TRANSFER', ('sáp nhập', 'chia tách doanh nghiệp', 'chuyển quyền sở hữu doanh nghiệp')),
     ):
-        if has(*terms) or label == 'MUTUAL_AGREEMENT' and intent == 'MUTUAL_TERMINATION':
+        mechanism=(facts.get('mutual_termination_agreement') is not False and affirmative_phrase(q,terms)) if label=='MUTUAL_AGREEMENT' else has(*terms)
+        if mechanism or label == 'MUTUAL_AGREEMENT' and intent == 'MUTUAL_TERMINATION':
             add('TERMINATION.' + label); special_mechanism = True
     if intent == 'WITHDRAW_TERMINATION' or has('hủy bỏ việc đơn phương', 'huỷ bỏ việc đơn phương'):
         add('TERMINATION.WITHDRAWAL'); special_mechanism = True

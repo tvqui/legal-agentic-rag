@@ -20,7 +20,7 @@ TOPIC_LABELS = {
     'COLLECTIVE_RELATIONS': 'quan hệ lao động tập thể',
 }
 RESET = re.compile(r'\b(?:chuyện khác|vấn đề khác|tình huống mới|trường hợp khác|công ty khác|giả sử|giả định|nếu như|nếu tôi|nếu công ty|đổi chủ đề)\b', re.I)
-FOLLOWUP = re.compile(r'^(?:còn\b|vậy\b|thế\b|thì\b|trường hợp (?:đó|này)|điều đó|việc đó|thử bao lâu|bao lâu|bao nhiêu|bao giờ|khi nào|mấy (?:ngày|tháng|năm)|tại sao|vì sao|tôi làm\b|tôi là\b|tôi chỉ\b|thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|ngày (?:là|dự kiến)|không thuộc\b)', re.I)
+FOLLOWUP = re.compile(r'^(?:(?:nếu\s+)?(?:hết|sau|trong)\s+(?:thời gian|thời hạn|giai đoạn)\s+(?:đó|này)\b|còn\b|vậy\b|thế\b|thì\b|trường hợp (?:đó|này)|điều đó|việc đó|thử bao lâu|bao lâu|bao nhiêu|bao giờ|khi nào|mấy (?:ngày|tháng|năm)|tại sao|vì sao|tôi làm\b|tôi là\b|tôi chỉ\b|thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|ngày (?:là|dự kiến)|không thuộc\b)', re.I)
 
 
 @dataclass
@@ -56,7 +56,12 @@ def resolve_context(request):
     active = []
     topic = None
     for turn_id, text in turns[-20:]:
-        analysis = analyze(intake(text, []))
+        envelope = intake(text, [])
+        # Old browser history can contain accidental one-character messages.
+        # They are not legal context and must not break a later valid question.
+        if len(envelope.normalized_query) < 2:
+            continue
+        analysis = analyze(envelope)
         next_topic = _topic(analysis)
         if RESET.search(text) or not analysis.in_scope:
             active, topic = [], None

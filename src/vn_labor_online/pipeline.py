@@ -46,6 +46,8 @@ class OnlinePipeline:
     def close(self):
         for component in (self.researcher,self.applicability,self.adjudicator):
             if component.provider is not None: component.provider.close()
+        reviewer=getattr(self.adjudicator,'review_provider',None)
+        if reviewer is not None and reviewer is not self.adjudicator.provider: reviewer.close()
 
     def ask(self,request:QueryRequest)->AnswerResponse:
         from .conversation import resolve_context
@@ -155,9 +157,12 @@ class OnlinePipeline:
         audit_outcome='EXPLAIN' if clarify_during_answer else analysis.requested_outcome
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
+        lookup_scope_complete=False
         if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
             exact=self.retriever.exact(analysis.explicit_references)
-            descendants=self.retriever.hierarchy_descendants(exact,max(0,self.cfg.max_verified_units-len(exact)))
+            descendant_limit=max(0,self.cfg.max_verified_units-len(exact))
+            descendants=self.retriever.hierarchy_descendants(exact,descendant_limit)
+            lookup_scope_complete=bool(descendant_limit and len(descendants)<descendant_limit)
             lists.append(exact+descendants)
         exact_only=bool(analysis.route==Route.DIRECT and lists and lists[0])
         profile_only=False
@@ -329,6 +334,10 @@ class OnlinePipeline:
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome)
         pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks})
+        if (exact_only and lookup_scope_complete and len(analysis.explicit_references)==1
+          and not conflicts and not analysis.facts and not analysis.legal_subissues
+          and len(pack.evidence)==len(items)==len(selected)):
+            pack=pack.model_copy(update={'lookup_reference':analysis.explicit_references[0]})
         adjudication_started=time.perf_counter()
         if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS}:
             summary='Cần ngày chính xác để xác định phiên bản pháp luật áp dụng.' if status==Stop.NEED_MORE_FACTS else 'Không đủ bằng chứng đã xác minh để kết luận.'
@@ -359,7 +368,7 @@ class OnlinePipeline:
                 else:
                     generation_warnings+=['ANSWER_REQUIRED_EVIDENCE_MISSING:'+','.join(missing_claims),'ANSWER_QUALITY_BLOCKED']
             if draft.semantic_review:
-                trace.events.append({'event':'semantic_answer_audit',**draft.semantic_review})
+                trace.events.append({'event':'literal_source_audit' if draft.semantic_review.get('status')=='LITERAL_SOURCE_MATCH' else 'semantic_answer_audit',**draft.semantic_review})
             if 'ANSWER_SEMANTIC_REVIEW_INCOMPLETE' in generation_warnings:
                 status=Stop.PARTIAL_ALLOWED
                 state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['answer_coverage']))})

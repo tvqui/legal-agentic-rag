@@ -26,6 +26,41 @@ def question(text, history=()):
 
 
 class ContextTests(TestCase):
+    def test_short_typed_history_does_not_break_independent_lookup(self):
+        text='Điều 1 Nghị định 145/2020/NĐ-CP quy định gì? Hãy trình bày đầy đủ phạm vi điều chỉnh và dẫn nguồn chính thức.'
+        result=resolve_context(question(text,['f','?',' \n']))
+        self.assertEqual(result.query,text)
+        self.assertFalse(result.used_turns)
+        self.assertIsNone(result.clarification)
+
+    def test_short_legacy_history_does_not_break_independent_lookup(self):
+        request=QueryRequest(question='Điều 1 Nghị định 145/2020/NĐ-CP quy định gì?',conversation_context=['f','',' \n','a\u0301'])
+        self.assertEqual(resolve_context(request).query,request.question)
+
+    def test_short_history_does_not_erase_valid_followup_context(self):
+        result=resolve_context(question('Còn thời gian thử việc tối đa?', ['Tôi đang thử việc.','f',' \n']))
+        self.assertIn('thử việc',result.query)
+        self.assertEqual(result.used_turns,['0'])
+        self.assertEqual(result.facts['contract_type'],'PROBATION')
+
+    def test_only_noise_history_cannot_invent_a_followup_topic(self):
+        result=resolve_context(question('Còn bao lâu?', ['f','?']))
+        self.assertTrue(result.clarification)
+        self.assertFalse(result.facts)
+        self.assertFalse(result.used_turns)
+
+    def test_internal_analyzer_does_not_build_invalid_tasks_for_short_text(self):
+        for text in ('f','',' \n','a\u0301'):
+            with self.subTest(text=text):
+                self.assertEqual(analyze(intake(text,[])).answer_tasks,[])
+
+    def test_current_question_is_validated_after_normalization(self):
+        for text in (' f ',' \n','a\u0301'):
+            with self.subTest(text=text),self.assertRaises(ValidationError):
+                QueryRequest(question=text)
+        exact='  Người lao động được nghỉ phép bao lâu?  '
+        self.assertEqual(QueryRequest(question=exact).question,exact)
+
     def test_followup_resolves_without_assistant_facts(self):
         req=question('thử bao lâu thì được lên chính thức', ['Tôi đang thử việc ở công ty sản xuất thực phẩm.'])
         resolved=resolve_context(req)

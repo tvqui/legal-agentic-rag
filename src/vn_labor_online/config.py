@@ -58,6 +58,10 @@ class ApplicabilityConfig(StrictModel):
     max_batches:int=Field(4,ge=1,le=12)
 
 class AdjudicationConfig(StrictModel):
+    review_provider:Literal['same','gemini']='same'
+    review_model:str|None=None
+    review_timeout_seconds:float=Field(45,ge=1,le=180)
+    review_max_output_tokens:int=Field(6144,ge=256,le=8192)
     semantic_review:bool=True
     semantic_repair_attempts:int=Field(1,ge=0,le=2)
     context_tokens:int=Field(16384,ge=4096,le=65536)
@@ -109,4 +113,12 @@ def load_config(path:Path)->OnlineConfig:
     if values.get('researcher',{}).get('mode')=='gemini':
         if not values['researcher'].get('api_key'): values['researcher']['api_key']=os.getenv('GEMINI_API_KEY')
         if os.getenv('GEMINI_MODEL'): values['researcher']['model']=os.environ['GEMINI_MODEL']
+    adjudication=dict(values.get('adjudication') or {})
+    for key in ('review_provider','review_model','review_timeout_seconds','review_max_output_tokens'):
+        configured=os.getenv('VN_LABOR_ADJUDICATION_'+key.upper())
+        if configured:
+            if key=='review_timeout_seconds': configured=float(configured)
+            elif key=='review_max_output_tokens': configured=int(configured)
+            adjudication[key]=configured
+    if adjudication: values['adjudication']=adjudication
     return OnlineConfig.model_validate(values)

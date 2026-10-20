@@ -11,6 +11,9 @@ from .topics import detect_topics
 REQUEST=re.compile(r'\?|hãy|cho biết|giải thích|bao nhiêu|bao lâu|thế nào|đúng không|được không|hay không|căn cứ nào|quy định gì|có quyền|phải làm gì',re.I)
 
 def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
+    # Internal callers may inspect short historical turns. Preserve the task
+    # schema's minimum length instead of manufacturing padded legal requests.
+    if len(query.strip()) < 2: return []
     if route.value=='DIRECT': return []
     tasks=[]
     for key in subissues:

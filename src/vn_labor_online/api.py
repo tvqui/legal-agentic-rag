@@ -144,13 +144,17 @@ def create_app(config_path:str|Path|None=None):
           'researcher':_component(pipeline.researcher.provider,'researcher'),
           'auditor':_component(pipeline.applicability.provider,'auditor'),
           'adjudicator':_component(pipeline.adjudicator.provider,'adjudicator')}
-        model_components=[components[x] for x in ('researcher','auditor','adjudicator')]
+        reviewer=getattr(pipeline.adjudicator,'review_provider',None)
+        components['answer_reviewer']=_component(reviewer,'answer_reviewer')
+        model_components=[components[x] for x in ('researcher','auditor','adjudicator','answer_reviewer')]
         degraded=any(x.get('status')=='DEGRADED' for x in model_components)
         return {'ready':not degraded,'degraded':degraded,'taxonomy_version':TAXONOMY_VERSION,
-          'online_features':{'conversation_context':'user-turns-v1','history_storage':'browser',
+          'online_features':{'conversation_context':'user-turns-v2-short-history','history_storage':'browser',
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
+            'literal_source_lookup':'verified-excerpt-v1',
             'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'cooperative_cancel':True,'idempotent_retry':True},
           'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
+          'semantic_review_provider':pipeline.cfg.adjudication.review_provider,
           'semantic_repair_attempts':pipeline.cfg.adjudication.semantic_repair_attempts,'answer_while_clarifying':pipeline.cfg.answer_while_clarifying,
           'applicability_batch_size':pipeline.cfg.applicability.max_items,'applicability_max_batches':pipeline.cfg.applicability.max_batches},'components':components,
           'legal_ready':pipeline.store.report.legal_ready,

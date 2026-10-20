@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json,re
+import json,re,os
 import unicodedata
 from fractions import Fraction
 from .config import AdjudicationConfig
@@ -8,7 +8,7 @@ from .answer_quality import clean_draft,clean_source_excerpt,draft_issues,guarde
 from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
 from .taxonomy import classify_subissues,original_documents,profile_covers_issues
-from .providers import HttpJsonProvider,OllamaProvider
+from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
 
 def _fold(value:str)->str:
     value=unicodedata.normalize('NFD',value.lower()).replace('đ','d')
@@ -350,6 +350,52 @@ def _contract_rule_answer(pack,partial,assumptions):
       assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
     return render_claims(draft,partial)
 
+def literal_lookup_draft(pack,partial,assumptions=None):
+    """Display audited source text, without synthesizing a legal conclusion.
+
+    This is a structural quotation check, not an LLM semantic PASS. The pipeline
+    still applies provenance, date, applicability and final reference audits.
+    """
+    reference=pack.lookup_reference
+    if (not reference or not reference.instrument_number or not reference.article
+      or pack.requested_outcome!='LOOKUP' or not pack.evidence or pack.facts):
+        return None
+    # A quotation route must not consume an additional case assessment request.
+    if re.search(r'\btôi\b|có đúng|hợp pháp|trái pháp luật|hậu quả|bồi thường|so sánh|phân tích',pack.query,re.I):
+        return None
+    normalize=lambda value: re.sub(r'[^0-9A-Z]','',str(value or '').upper().replace('Đ','D'))
+    claims=[]; lines=['Nội dung trích từ bộ dữ liệu nguồn:']; unreviewed_source=False
+    for index,item in enumerate(pack.evidence,1):
+        if item.audit_status!='PASS' or not item.official_url or not item.provenance_span:
+            return None
+        if not item.official_source:
+            # Quoting a traceable corpus entry is not legal approval. Preserve
+            # the existing provisional source gap, never upgrade its authority.
+            if not partial or item.authority_rank<=0 or not item.binding or 'official_source' not in pack.coverage_state.gaps:
+                return None
+            unreviewed_source=True
+        for field in ('instrument_number','article','clause','point'):
+            expected=getattr(reference,field)
+            if expected and normalize(getattr(item,field))!=normalize(expected): return None
+        text=item.full_text
+        if not text or language_issues(text,allow_admin=True): return None
+        claim=Claim(claim_id=f'quote_{index:03d}',text=text,evidence_ids=[item.evidence_id])
+        claims.append(claim)
+        label=f'{item.instrument_number} · Điều {item.article}'
+        if item.clause: label+=f' · Khoản {item.clause}'
+        if item.point: label+=f' · Điểm {item.point}'
+        lines.append(f'{label}\n> {text} [{item.evidence_id}]')
+    if unreviewed_source:
+        lines.append('Liên kết nguồn lấy theo metadata của corpus; trạng thái xác minh nguồn vẫn đang chờ người có chuyên môn duyệt.')
+    if partial:
+        lines.append('Đây là bản trích nguồn trong corpus; việc duyệt nguồn hoặc hiệu lực cấp điều khoản còn chưa hoàn tất.')
+    return AdjudicationDraft(answer_summary='\n\n'.join(lines),claims=claims,
+      applicable_law_versions=_versions(pack.evidence),assumptions=assumptions or [],
+      limitations=pack.coverage_state.gaps,semantic_review={'status':'LITERAL_SOURCE_MATCH',
+        'method':'EXACT_CORPUS_QUOTATION','model_calls':0,'source_authority_approved':not unreviewed_source,
+        'evidence_ids':[item.evidence_id for item in pack.evidence]})
+
+
 class LegalAdjudicator:
     """Generate only from a VerifiedEvidencePack, with deterministic fallback."""
     def __init__(self,cfg:AdjudicationConfig):
@@ -358,12 +404,25 @@ class LegalAdjudicator:
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP adjudication mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
+        self._review_provider=None
+        if cfg.semantic_review and cfg.mode!='deterministic' and cfg.review_provider=='gemini':
+            model=cfg.review_model or os.getenv('GEMINI_MODEL')
+            if not model: raise ValueError('Gemini answer review requires review_model or GEMINI_MODEL')
+            self._review_provider=GeminiProvider(model,os.getenv('GEMINI_API_KEY'),
+              cfg.review_timeout_seconds,cfg.review_max_output_tokens)
+
+    @property
+    def review_provider(self):
+        return self._review_provider if self._review_provider is not None else self.provider
 
     def generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
+        literal=literal_lookup_draft(pack,partial,assumptions)
+        if literal is not None:
+            return literal,['LITERAL_SOURCE_QUOTATION']
         draft,warnings=self._generate_with_layout(pack,partial,assumptions)
         if self.cfg.semantic_review and self.cfg.mode!='deterministic' and self.provider and draft.claims and 'ANSWER_QUALITY_BLOCKED' not in warnings:
             from .answer_review import review_answer
-            draft,review_warnings=review_answer(self.provider,draft,pack,self.cfg.semantic_repair_attempts)
+            draft,review_warnings=review_answer(self.review_provider,draft,pack,self.cfg.semantic_repair_attempts)
             warnings+=review_warnings
             if draft.claims:
                 draft=render_claims(draft,partial or draft.semantic_review.get('status')!='PASS')

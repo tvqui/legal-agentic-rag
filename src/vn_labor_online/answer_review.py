@@ -4,7 +4,7 @@ A model verdict is fallible. Exact quotations, complete ID accounting and hard
 guards are necessary checks, not a substitute for an approved legal evaluation.
 """
 from __future__ import annotations
-import json
+import json,re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 from .models import Claim, ProviderClaims
@@ -67,7 +67,11 @@ calculation steps and requested references. Repeated claims count once. Set
 question_fully_addressed false for any missing part even if provided tasks omit
 it. A technically valid citation or provisional warning cannot excuse a false
 claim. Return only schema-valid JSON. Do not approve your previous draft by
-default; reconstruct the entailment from source text independently."""
+default; reconstruct the entailment from source text independently. Write reasons,
+missing and missing_requirements in Vietnamese. Missing personal facts can require
+a conditional answer; they do not make a correctly qualified general rule absent.
+Never demand a Point for a Clause that has no Points, or invent a required reason
+for exercising a right when the cited rule grants it without that condition."""
 
 def texts(item):
     return [item.full_text or item.text, item.text]
@@ -188,6 +192,23 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
         json.dumps(compact,ensure_ascii=False),QuestionCoverage.model_json_schema()))
     return Review(claims=checks,**coverage.model_dump())
 
+def review_error_code(exc):
+    # Publish only fixed diagnostic labels, never provider URLs, keys or input.
+    message=str(exc)
+    if isinstance(exc,StructuredOutputError):
+        if re.fullmatch(r'[A-Z][A-Z0-9_]+',message): return message
+        labels={
+          'semantic review must judge each claim exactly once':'CLAIM_ACCOUNTING_MISMATCH',
+          'semantic review task accounting mismatch':'TASK_ACCOUNTING_MISMATCH',
+          'semantic grounding is not an exact cited-source quotation':'GROUNDING_QUOTE_MISMATCH',
+          'unsupported semantic PASS':'UNSUPPORTED_SEMANTIC_PASS',
+          'false completion verdict':'FALSE_COMPLETION_VERDICT',
+          'invalid answered task':'INVALID_TASK_COMPLETION',
+        }
+        return labels.get(message,'REVIEW_STRUCTURED_OUTPUT_INVALID')
+    return type(exc).__name__
+
+
 def review_answer(provider, draft, pack, repair_attempts=1):
     """Bounded draft -> independent review -> repair -> re-review.
 
@@ -242,6 +263,7 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 'ANSWER_SEMANTIC_REVIEW_INCOMPLETE' if kept else 'ANSWER_QUALITY_BLOCKED']
         except Exception as exc:
             return candidate.model_copy(update={'claims':[], 'semantic_review':{
-                'status':'ERROR','iterations':reports,'error':type(exc).__name__}}), [
+                'status':'ERROR','iterations':reports,'error':type(exc).__name__,
+                'error_code':review_error_code(exc)}}), [
                 'ANSWER_SEMANTIC_REVIEW_ERROR:'+type(exc).__name__, 'ANSWER_QUALITY_BLOCKED']
     raise AssertionError('unreachable')

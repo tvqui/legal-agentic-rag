@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import date,datetime,timezone
-import re
+import re,unicodedata
 from enum import Enum
 from typing import Any,Literal
 from pydantic import BaseModel,ConfigDict,Field,field_validator
@@ -24,6 +24,14 @@ class QueryRequest(BaseModel):
     conversation_id:str|None=Field(default=None,pattern=r'^[A-Za-z0-9_-]{1,100}$')
     message_id:str|None=Field(default=None,pattern=r'^[A-Za-z0-9_-]{1,100}$')
     conversation_turns:list[ConversationTurn]=Field(default_factory=list,max_length=20)
+    @field_validator('question')
+    @classmethod
+    def validate_question(cls,value):
+        normalized=' '.join(unicodedata.normalize('NFC',value).split())
+        if len(normalized)<2:
+            raise ValueError('question must contain at least two characters after whitespace and Unicode normalization')
+        # Keep exact user text for provenance; normalize only when analyzing it.
+        return value
     @field_validator('conversation_turns')
     @classmethod
     def unique_turns(cls,value):
@@ -193,6 +201,8 @@ class VerifiedEvidencePack(BaseModel):
     requested_outcome:Literal["LOOKUP","EXPLAIN","ASSESS_LEGALITY","COMPARE","FIND_CASE","OTHER"]="OTHER"
     coverage_state:EvidenceState; evidence:list[VerifiedEvidenceItem]
     answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
+    # Set only by the pipeline after an exact, complete scoped retrieval.
+    lookup_reference:ExplicitReference|None=None
 class AdjudicationDraft(BaseModel):
     model_config=ConfigDict(extra='forbid')
     answer_summary:str; claims:list[Claim]; applicable_law_versions:list[ApplicableLawVersion]
