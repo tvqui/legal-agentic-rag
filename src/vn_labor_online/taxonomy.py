@@ -125,9 +125,12 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('CONTRACT.CONTRACT_TYPES')
     if has('thử việc') and has('lương','85%','phần trăm'):
         add('CONTRACT.PROBATION_PAY')
-    if has('thử việc') and (has('thời gian','thời hạn','tối đa','bao lâu','mấy ngày','mấy tháng') or re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q)):
+    probation_repeat=has('thử việc') and (has('hai lần','2 lần','nhiều lần','lần hai','lần thứ hai','lần thứ 2','thử việc lại')
+      or bool(re.search(r'(?:thử việc[^.?!]{0,55}(?:thêm|tiếp|lại)[^.?!]{0,25}(?:lần|đợt)|thử việc[^.?!]{0,55}(?:lần|đợt)\s+nữa)',q)))
+    duration_request=has('tối đa','bao lâu','mấy ngày','mấy tháng') or bool(re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q))
+    if has('thử việc') and (duration_request or not probation_repeat and has('thời gian','thời hạn')):
         add('CONTRACT.PROBATION_DURATION')
-    if has('thử việc') and has('hai lần','2 lần','nhiều lần','lần hai','lần thứ hai','lần thứ 2','thử việc lại'):
+    if probation_repeat:
         add('CONTRACT.PROBATION_REPEAT')
     if has('thử việc') and has('chính thức','kết thúc','hết thử','đạt yêu cầu','không được nhận','không đạt','tiếp tục làm','kết quả thử'):
         add('CONTRACT.PROBATION_END')
@@ -197,7 +200,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         if annual and (not payment or quantity) and not travel_only: add('LEAVE.ANNUAL_LEAVE')
         if has('thâm niên') or annual and int(facts.get('service_years') or 0) >= 5:
             add('LEAVE.SENIORITY_BONUS')
-        if annual and (has('chưa đủ 12 tháng', 'theo tỷ lệ') or isinstance(facts.get('worked_months'), int) and facts['worked_months'] < 12):
+        if annual and (has('chưa đủ 12 tháng','chưa đủ mười hai tháng','chưa đủ một năm','chưa đủ 1 năm',
+          'dưới một năm','dưới 1 năm','dưới 12 tháng','theo tỷ lệ') or isinstance(facts.get('worked_months'), int) and facts['worked_months'] < 12):
             add('LEAVE.PRO_RATA_LEAVE')
         if intent == 'TRAVEL_TIME' or annual and has('đi đường', 'đi và về'):
             add('LEAVE.TRAVEL_DAYS')
@@ -220,6 +224,21 @@ def parent_issues(issues: list[str], subissues: list[str]) -> list[str]:
     return [value for value in values if value != 'GENERAL'] or ['GENERAL']
 
 
+def probation_duration_clauses(analysis, historical):
+    """Scope a job-specific question without dropping an explicit comparison."""
+    all_clauses=(1,2,3) if historical else (1,2,3,4)
+    group=analysis.facts.get('probation_work_group')
+    mapping={'COLLEGE':1,'INTERMEDIATE':2,'OTHER':3} if historical else {
+      'MANAGER':1,'COLLEGE':2,'INTERMEDIATE':3,'OTHER':4}
+    q=analysis.query_text.lower()
+    overview=any(term in q for term in ('so sánh','các nhóm','từng nhóm','mọi nhóm','tất cả','các trường hợp'))
+    mentioned=sum(any(term in q for term in terms) for terms in (
+      ('quản lý doanh nghiệp',),('cao đẳng',),('trung cấp','công nhân kỹ thuật','nhân viên nghiệp vụ'),
+      ('công việc khác','không yêu cầu trình độ')))
+    if group in mapping and not overview and mentioned<=1: return (mapping[group],)
+    return all_clauses
+
+
 def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLocator]]]:
     """All groups must have a verified match; locators within a group are alternatives.
 
@@ -238,7 +257,7 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
     for key in analysis.legal_subissues:
         if key=='CONTRACT.PROBATION_DURATION':
             article='27' if historical else '25'
-            require('probation_duration', *[[loc(article,str(i))] for i in ((1,2,3) if historical else (1,2,3,4))])
+            require('probation_duration', *[[loc(article,str(i))] for i in probation_duration_clauses(analysis,historical)])
         elif key=='CONTRACT.PROBATION_END':
             require('probation_end',[loc('29' if historical else '27','1')],
               [loc('29' if historical else '27','2')])

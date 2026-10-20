@@ -485,7 +485,9 @@ class LegalAdjudicator:
             return safe_fallback(),[]
         from .profile_generation import render_profile
         profile_answer=render_profile(pack,partial,assumptions)
-        if profile_answer and len(set(classify_subissues(pack.query,pack.facts,[])))<=1:
+        profile_keys=set(classify_subissues(pack.query,pack.facts,[]))
+        supported_composition=profile_keys=={'CONTRACT.PROBATION_DURATION','CONTRACT.PROBATION_PAY'}
+        if profile_answer and (len(profile_keys)<=1 or supported_composition):
             boundary_warning=['SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW'] if 'đoạn nguồn đang gộp khoản' in profile_answer.answer_summary else []
             return profile_answer,boundary_warning
         contract_answer=_contract_rule_answer(pack,partial,assumptions)

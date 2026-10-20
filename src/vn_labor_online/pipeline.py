@@ -143,7 +143,11 @@ class OnlinePipeline:
               applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               limitations=['out_of_scope'],warnings=warnings+['OUT_OF_LABOR_LAW_SCOPE'],facts=analysis.facts,
               build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
-        clarify_during_answer=bool(analysis.missing_facts and self.cfg.answer_while_clarifying and analysis.route!=Route.DIRECT)
+        # Explain general rules while clarifying, but do not decide a concrete
+        # case when the analyzer says a material prerequisite is unknown.
+        # Warnings appended after an unconditional verdict cannot repair it.
+        clarify_during_answer=bool(analysis.missing_facts and self.cfg.answer_while_clarifying
+          and analysis.route!=Route.DIRECT and analysis.requested_outcome!='ASSESS_LEGALITY')
         if clarify_during_answer:
             warnings.append('CONDITIONAL_EXPLANATION_PENDING_FACTS')
             assumptions.append('Chỉ giải thích có điều kiện đối với phần còn thiếu dữ kiện; không xác nhận điều kiện đó đã xảy ra.')

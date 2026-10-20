@@ -194,6 +194,8 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
 
 def review_error_code(exc):
     # Publish only fixed diagnostic labels, never provider URLs, keys or input.
+    code=getattr(exc,'safe_code',None)
+    if isinstance(code,str) and re.fullmatch(r'GEMINI_(?:HTTP_[45]\d{2}|TIMEOUT|CLIENT_ERROR)',code): return code
     message=str(exc)
     if isinstance(exc,StructuredOutputError):
         if re.fullmatch(r'[A-Z][A-Z0-9_]+',message): return message
@@ -220,12 +222,16 @@ def review_answer(provider, draft, pack, repair_attempts=1):
         description=pack.query, retrieval_query=pack.query)]
     reports = []
     candidate = draft
+    previous_validation_error=None
     for iteration in range(repair_attempts+1):
         payload = {'question':pack.query, 'query_date':pack.query_date,
             'confirmed_facts':pack.facts, 'tasks':[t.model_dump() for t in tasks],
             'claims':[c.model_dump() for c in candidate.claims],
             'evidence':[source_payload(e) for e in pack.evidence
                 if e.evidence_id in {uid for c in candidate.claims for uid in c.evidence_ids}]}
+        if previous_validation_error:
+            payload['previous_validation_error']=previous_validation_error
+            payload['retry_instruction']='Recheck the unchanged draft. Quote exact supplied text, without rewriting any character, and account for every claim and task exactly once.'
         try:
             review = audit_in_batches(provider,payload,candidate,pack,tasks)
             supported = validate_review(review,candidate,pack,tasks)
@@ -262,6 +268,12 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 'limitations':list(dict.fromkeys(candidate.limitations+['answer_coverage']))}), [
                 'ANSWER_SEMANTIC_REVIEW_INCOMPLETE' if kept else 'ANSWER_QUALITY_BLOCKED']
         except Exception as exc:
+            if isinstance(exc,StructuredOutputError) and iteration<repair_attempts:
+                # Re-request an invalid review within the same bounded budget;
+                # do not relax exact grounding or return an unchecked draft.
+                previous_validation_error=review_error_code(exc)
+                reports.append({'validation_error':previous_validation_error})
+                continue
             return candidate.model_copy(update={'claims':[], 'semantic_review':{
                 'status':'ERROR','iterations':reports,'error':type(exc).__name__,
                 'error_code':review_error_code(exc)}}), [

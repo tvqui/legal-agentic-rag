@@ -175,12 +175,21 @@ class GeminiProvider(BaseProvider):
                         max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
                         response_json_schema=schema))
             checkpoint()
+            candidates=getattr(response,'candidates',None) or []
+            if candidates:
+                reason=getattr(candidates[0],'finish_reason',None)
+                if getattr(reason,'value',reason)=='MAX_TOKENS':
+                    raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
+            if not response.text: raise StructuredOutputError('GEMINI_EMPTY_RESPONSE')
             return _decode_content(response.text)
         except (RequestStopped,StructuredOutputError):
             raise
         except Exception as exc:
             # SDK errors can include request URLs. Never surface credentials.
-            raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__) from None
+            status=getattr(exc,'code',None)
+            safe_code=f'GEMINI_HTTP_{status}' if type(status) is int and 400<=status<=599 else (
+              'GEMINI_TIMEOUT' if isinstance(exc,TimeoutError) else 'GEMINI_CLIENT_ERROR')
+            raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__,safe_code=safe_code) from None
 
     def readiness(self):
         from importlib.util import find_spec

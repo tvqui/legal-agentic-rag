@@ -116,4 +116,8 @@ The result improves retrieval recall and never counts as legal evidence. Return 
               'fact_candidates':all_candidates[:40],'answer_tasks':tasks})
             return updated,[]
         except Exception as exc:
-            return analysis,['RESEARCHER_PROVIDER_FALLBACK:'+type(exc).__name__]
+            from .answer_review import review_error_code
+            warnings=['RESEARCHER_PROVIDER_FALLBACK:'+type(exc).__name__]
+            code=review_error_code(exc)
+            if code.startswith('GEMINI_'): warnings.append('RESEARCHER_PROVIDER_ERROR:'+code)
+            return analysis,warnings

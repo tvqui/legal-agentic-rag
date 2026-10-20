@@ -58,6 +58,7 @@ class LegalApplicabilityAuditor:
           'DETERMINISTIC_MISINFORMATION_CHAIN','DETERMINISTIC_HARASSMENT_EXCEPTION',
           'DETERMINISTIC_WITHDRAWAL_RULE','DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN',
           'DETERMINISTIC_MUTUAL_AGREEMENT_RULE','DETERMINISTIC_LEAVE_RULE_CHAIN','DETERMINISTIC_PROFILE_RULE',
+          'DETERMINISTIC_PRO_RATA_BASE_PARAMETER',
           'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN','DETERMINISTIC_EXACT_LOOKUP'}
         locked={d.evidence_id:d for d in base_decisions if proven_reasons.intersection(d.reasons)}
         candidates=[item for item in items if item.unit_id not in hard and item.unit_id not in locked]
@@ -156,12 +157,23 @@ Do not infer missing facts, choose a different law version, create evidence, or 
               and isinstance(facts.get('notice_days'),int) and facts['notice_days']<45)
             intent=facts.get('query_intent'); basis=facts.get('termination_basis')
             exclusion=taxonomy_exclusion(item,subissues,facts)
+            proportional_base=('LEAVE.PRO_RATA_LEAVE' in subissues
+              and 'leave_calculation_rule' in profile_groups
+              and any(locator_matches(item,loc) for group in profile_groups.get('leave_base_rule',[]) for loc in group))
             if exclusion:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
                   reasons=[exclusion]+(['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'] if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36' else []))
             elif facts.get('worked_months') is not None and int(facts['worked_months'])>=12 and 'chua du 12 thang' in folded:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_UNDER_12_MONTH_RULE'])
+            elif proportional_base and facts.get('worked_months') is not None and int(facts['worked_months'])<12:
+                # The annual rate is an input to the pro-rata formula, not a
+                # claim that the worker has satisfied the full-year condition.
+                # Coverage still requires the separate proportional rule and
+                # calculation rule before producing a calculated entitlement.
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
+                  conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',
+                  reasons=['DETERMINISTIC_PRO_RATA_BASE_PARAMETER'])
             elif facts.get('worked_months') is not None and int(facts['worked_months'])<12 and 'du 12 thang' in folded and 'chua du 12 thang' not in folded:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_FULL_12_MONTH_RULE'])
             elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:

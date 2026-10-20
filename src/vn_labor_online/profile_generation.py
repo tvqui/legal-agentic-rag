@@ -8,7 +8,7 @@ import re
 from .analysis import analyze,intake,plan_evidence
 from .claim_validation import fold
 from .models import Claim,AdjudicationDraft,LegalLocator,RuleProposition
-from .taxonomy import locator_matches
+from .taxonomy import locator_matches,probation_duration_clauses
 
 PROFILE_KEYS={
     'CONTRACT.PROBATION_DURATION','CONTRACT.PROBATION_REPEAT','CONTRACT.PROBATION_SANCTION',
@@ -80,16 +80,38 @@ def render_profile(pack,partial,assumptions):
               ('2',''): 'hướng dẫn cách tính tiền lương làm thêm giờ vào ban đêm đối với người lao động hưởng lương theo sản phẩm, theo đơn giá và số sản phẩm làm thêm vào ban đêm.',
             }.get((item.clause or '',item.point or ''))
             if explanation: claim=claim.model_copy(update={'text':f'{location} ({item.instrument_number}) {explanation}'})
-        if keys=={'CONTRACT.PROBATION_DURATION'}:
+        if 'CONTRACT.PROBATION_DURATION' in keys and item.article==('27' if pack.query_date and pack.query_date<'2021-01-01' else '25'):
             m=re.search(r'khong qua (\d+) (ngay lam viec|ngay)',fold(text))
             if not m: return None
             claim=claim.model_copy(update={'proposition':RuleProposition(predicate='PROBATION_LIMIT',
               value=int(m.group(1)),unit='ngày làm việc' if m.group(2)=='ngay lam viec' else 'ngày',
               locator=LegalLocator(documents=[item.instrument_number],article=item.article,clause=item.clause))})
         claims.append(claim)
+    # Apply a known job category only to its source-derived limit. The public
+    # conclusion must be in a cited claim, not an uncited introductory sentence
+    # that disappears when semantic review re-renders the answer.
+    historical=bool(pack.query_date and pack.query_date<'2021-01-01')
+    scoped=probation_duration_clauses(analysis,historical)
+    duration=re.search(r'thu viec[^.]{0,50}\b(\d+)\s*(ngay lam viec|ngay|thang)\b',query)
+    if 'CONTRACT.PROBATION_DURATION' in keys and len(scoped)==1 and duration:
+        for i,claim in enumerate(claims):
+            if not claim.proposition or claim.proposition.locator.clause!=str(scoped[0]): continue
+            source_unit='ngay lam viec' if claim.proposition.unit=='ngày làm việc' else 'ngay'
+            if duration.group(2)!=source_unit: continue
+            count=int(duration.group(1)); limit=claim.proposition.value; unit=claim.proposition.unit
+            comparison=(f'vượt mức tối đa {limit} {unit}' if count>limit else f'không vượt mức tối đa {limit} {unit}')
+            claims[i]=claim.model_copy(update={'text':f'Về thời gian: với nhóm công việc bạn nêu, thử việc {count} {unit} {comparison}. '+claim.text})
+    if 'CONTRACT.PROBATION_PAY' in keys:
+        from .generation import probation_pay_application
+        application=probation_pay_application(pack.query)
+        for i,claim in enumerate(claims):
+            item=next(e for e in used if e.evidence_id==claim.evidence_ids[0])
+            if item.article==('28' if historical else '26') and '85%' in fold(item.text) and application:
+                claims[i]=claim.model_copy(update={'text':application+' '+claim.text})
     if keys=={'CONTRACT.PROBATION_DURATION'}:
         historical=all(item.instrument_number=='10/2012/QH13' for item in used)
-        expected={60,30,6} if historical else {180,60,30,6}
+        values={1:60,2:30,3:6} if historical else {1:180,2:60,3:30,4:6}
+        expected={values[index] for index in scoped}
         if {claim.proposition.value for claim in claims}!=expected: return None
         intro='Thời gian thử việc tối đa theo từng nhóm công việc được quy định như sau. Chỉ mức 06 ngày được tính theo ngày làm việc; các mức còn lại là ngày:'
         duration=re.search(r'thu viec[^.]{0,50}\b(\d+)\s*(ngay|thang)\b',query)
@@ -111,10 +133,7 @@ def render_profile(pack,partial,assumptions):
                   (f'vượt mức tối đa {limit} {unit}.' if count>limit else f'không vượt mức tối đa {limit} {unit}.')+
                   ' Kết luận này chỉ xét giới hạn thời gian, không xác nhận các điều kiện thử việc khác. Các căn cứ là:')
     elif 'CONTRACT.PROBATION_DURATION' in keys and 'CONTRACT.PROBATION_PAY' in keys:
-        from .generation import probation_pay_application
-        application=probation_pay_application(pack.query)
-        intro=('Phải kiểm tra riêng tiền lương và thời gian thử việc. Điều 26 yêu cầu ít nhất 85% mức lương của công việc đó. '+application+
-          ' Thời gian thử việc còn phụ thuộc nhóm công việc; không tự chuyển tháng thành một số ngày cố định hoặc kết luận thời gian hợp pháp khi chưa rõ nhóm. Các căn cứ cho cả hai phần là:')
+        intro='Thời gian và tiền lương thử việc phải được kiểm tra riêng theo các căn cứ sau:'
     elif 'CONTRACT.PROBATION_SANCTION' in keys:
         intro=('Quy định về thử việc nằm trong Bộ luật Lao động; chế tài và khắc phục là vấn đề khác, tại Nghị định 12/2022/NĐ-CP. '
           'Đọc mức phạt ở Điều 10 cùng khoản 1 Điều 6: mức phạt đối với tổ chức bằng hai lần mức phạt đối với cá nhân. '
