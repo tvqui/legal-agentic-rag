@@ -2,12 +2,12 @@ from __future__ import annotations
 import calendar,hashlib,json,re,unicodedata
 from datetime import date
 from .temporal import legal_regime_for
-from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison,affirmative_phrase
+from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison,affirmative_phrase,annual_leave_combination_only
 from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan,FactCandidate
 from .topics import TOPICS,detect_topics
 from .tasks import deterministic_tasks
 
-ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ ngay","nghỉ sau","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương","trợ cấp mất việc","hết hạn hợp đồng","hợp đồng hết hạn","thay đổi cơ cấu","thay đổi công nghệ","lý do kinh tế","tái cơ cấu","cắt giảm nhân sự","sáp nhập"],"WAGE":["tiền lương","lương","làm thêm"],
+ISSUES={"TERMINATION":["chấm dứt","sa thải","thôi việc","nghỉ việc","nghỉ ngay","nghỉ sau","nghỉ chính thức","báo trước","cho tôi nghỉ","cho nghỉ việc","buộc nghỉ","đơn phương","trợ cấp mất việc","hết hạn hợp đồng","hợp đồng hết hạn","thay đổi cơ cấu","thay đổi công nghệ","lý do kinh tế","tái cơ cấu","cắt giảm nhân sự","sáp nhập"],"WAGE":["tiền lương","lương"],
  "SOCIAL_INSURANCE":["bảo hiểm xã hội","bhxh"],"SAFETY":["an toàn lao động","tai nạn lao động"],
  "CONTRACT":["hợp đồng lao động","hđlđ","giao kết hợp đồng","thử việc","hợp đồng cộng tác viên"],"LEAVE":["nghỉ tối thiểu","nghỉ 12","nghỉ hằng năm","nghỉ hàng năm","nghỉ phép","phép năm","ngày phép","thâm niên làm việc","ngày thâm niên","ngày cơ bản","thời gian đi đường","nghỉ lễ","ngày lễ","nghỉ tết","quốc khánh","giỗ tổ","nghỉ việc riêng","nghỉ không hưởng lương","nghỉ không lương","kết hôn","đám cưới","cha mất","mẹ mất","bố mất"],
  "DISPUTE":["tranh chấp","tòa án"],"HARASSMENT":["quấy rối tình dục","quấy rối tại nơi làm việc"],
@@ -43,7 +43,8 @@ NOTICE_DAYS=re.compile(
     r'(?:(?:báo|thông báo)\s*trước(?:\s+cho\s+(?:tôi|người lao động))?|(?:muốn|dự định|sẽ)?\s*nghỉ(?:\s+\w+){0,2}\s+sau)\s*(\d+)\s*ngày',
     re.I)
 NO_NOTICE=re.compile(r'\b(?:không|chưa)\s+(?:hề\s+)?(?:báo|thông báo)\s*trước(?:\s+\d+\s*ngày)?|\bnghỉ\s+ngay\b',re.I)
-WORKED_MONTHS=re.compile(r'làm(?:\s+việc)?[^.]{0,50}?(\d+)\s*tháng',re.I)
+MONTH_NUMBER_WORDS={'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10,'mười một':11,'mười hai':12}
+WORKED_MONTHS=re.compile(r'làm(?:\s+việc)?[^.;?!]{0,50}?(\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín)\s*tháng',re.I)
 SERVICE_YEARS=re.compile(r'(?:(?:đã\s+)?làm(?:\s+việc)?(?:\s+liên\s+tục)?(?:\s+cho\s+(?:cùng\s+)?(?:công\s+ty(?:\s+này)?|người\s+sử\s+dụng\s+lao\s+động))?\s*(?:được\s*)?(\d+)\s*năm|năm\s+thứ\s+(\d+))',re.I)
 AGE=re.compile(r'(?<!\d)(\d{1,2})\s*tuổi',re.I)
 TRAVEL_DAYS=re.compile(r'(?:tổng\s+)?thời\s+gian\s+đi\s+và\s+về\s+(?:là\s+)?(\d+)\s*ngày',re.I)
@@ -98,6 +99,7 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     outcome='LOOKUP' if refs and any(w in lower for w in ('quy định gì','nội dung','tra cứu')) else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có hợp pháp','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường bao nhiêu','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
     if re.search(r'^(?:khi nào|thế nào là|định nghĩa|khái niệm|trường hợp nào)',lower):
         outcome='EXPLAIN'
+    if annual_leave_combination_only(lower): outcome='EXPLAIN'
     historical=legal_regime_for(query_date)=='BLLD_2012' if query_date else False
     temporal='HISTORICAL' if historical else 'EXPLICIT_DATE' if query_date else 'CURRENT' if any(w in lower for w in ('hiện nay','bây giờ','mới nhất')) else 'NONE'
     # A date constraint alone does not make a lookup or a single-issue question complex.
@@ -180,7 +182,7 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
 def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,query_date:str|None)->list[str]:
     missing=[]
     if 'LEAVE' in issues and facts.get('query_intent')=='ANNUAL_LEAVE_CALC':
-        if not isinstance(facts.get('worked_months'),int):
+        if not isinstance(facts.get('worked_months'),int) and not annual_leave_combination_only(query):
             missing.append('Trong năm đang xét, người lao động đã làm việc thực tế bao nhiêu tháng?')
         if not facts.get('work_category') and not facts.get('minor') and not facts.get('disabled'):
             missing.append('Công việc thuộc điều kiện bình thường, nặng nhọc/độc hại/nguy hiểm hay đặc biệt nặng nhọc/độc hại/nguy hiểm; người lao động có chưa thành niên hoặc khuyết tật không?')
@@ -242,7 +244,11 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if no_notice: facts['notice_days']=0
     elif notice: facts['notice_days']=int(notice.group(1))
     worked=WORKED_MONTHS.search(q)
-    if worked: facts['worked_months']=int(worked.group(1))
+    duration_prefix=q[worked.start():worked.start(1)] if worked else ''
+    approximate=bool(re.search(r'(?:chưa\s+(?:đủ|tới)|dưới|hơn|trên|khoảng|gần|ít\s+nhất|tối\s+đa)\s*$',duration_prefix))
+    if worked and not approximate:
+        number=worked.group(1).lower()
+        facts['worked_months']=int(number) if number.isdigit() else MONTH_NUMBER_WORDS[number]
     service=SERVICE_YEARS.search(q)
     if service: facts['service_years']=int(service.group(1) or service.group(2))
     age=AGE.search(q)
@@ -316,7 +322,7 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif 'trái pháp luật' in q and 'nghĩa vụ' in q and ('hai điều luật khác nhau' in q or 'định nghĩa' in q): facts['query_intent']='UNLAWFUL_DEFINITION_CONSEQUENCES'
     elif facts.get('mutual_termination_agreement'): facts['query_intent']='MUTUAL_TERMINATION'
     elif 'thời gian đi và về' in q or 'thời gian đi đường' in q: facts['query_intent']='TRAVEL_TIME'
-    elif (any(term in q for term in ('bao nhiêu ngày nghỉ','bao nhiêu ngày phép','bao nhiêu ngày','số ngày nghỉ hằng năm','tính quyền nghỉ','tính:','cách tính này')) or bool(re.search(r'\b\d+\s+ngày\b',q)) and any(term in q for term in ('có đúng','đúng không','có được'))) and (any(term in q for term in ('nghỉ hằng năm','nghỉ hàng năm','nghỉ phép','phép năm','ngày phép','thâm niên','ngày cơ bản')) or 'service_years' in facts and 'số ngày nghỉ' in q):
+    elif (any(term in q for term in ('bao nhiêu ngày nghỉ','bao nhiêu ngày phép','bao nhiêu ngày','số ngày nghỉ hằng năm','tính quyền nghỉ','tính:','cách tính này')) or bool(re.search(r'\b\d+\s+ngày\b',q)) and any(term in q for term in ('có đúng','đúng không','có được')) or bool(re.search(r'(?:tổng\s+)?số\s+ngày\s+(?:nghỉ|phép)[^.?;]{0,80}bao\s+nhiêu',q))) and (any(term in q for term in ('nghỉ hằng năm','nghỉ hàng năm','nghỉ phép','phép năm','ngày phép','thâm niên','ngày cơ bản')) or 'service_years' in facts and 'số ngày nghỉ' in q):
         specific=bool(facts.get('service_years') or facts.get('work_category') or facts.get('minor') or facts.get('disabled') or re.search(r'\b(?:tôi|[a-e])\b',q))
         facts['query_intent']='ANNUAL_LEAVE_CALC' if specific else 'ANNUAL_LEAVE_OVERVIEW'
     if re.search(r'\b(?:người lao động|nlđ|tôi)\s+phải báo trước',q): facts.setdefault('actor','EMPLOYEE')

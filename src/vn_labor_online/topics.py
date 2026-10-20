@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass,replace
 import re,unicodedata
 
-VERSION='labor-topics-v1'
+VERSION='labor-topics-v2'
 
 def fold(text):
     text=unicodedata.normalize('NFD',text.lower()).replace('đ','d')
@@ -97,7 +97,7 @@ ALIASES={
  'unlawful_exit':('nghỉ trái pháp luật','sa thải trái pháp luật'),
  'internal_rules':('đăng ký nội quy','sửa nội quy'),
  'material_liability':('thiệt hại tài sản','mất dụng cụ','hư hỏng tài sản'),
- 'equality':('phân biệt đối xử trong lao động','đối xử bất bình đẳng'),
+ 'equality':('phân biệt đối xử trong lao động','đối xử bất bình đẳng','chỉ tuyển nam','chỉ tuyển nữ','không tuyển nam','không tuyển nữ'),
  'older_workers':('người cao tuổi làm việc','đã hưởng lương hưu'),
  'labour_hire':('thuê lại người lao động',),
  'individual_dispute':('tranh chấp cá nhân','kiện công ty'),

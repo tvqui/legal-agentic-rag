@@ -82,16 +82,27 @@ QUESTIONS=[
  'Nếu hết thời gian đó mà công ty yêu cầu tôi thử việc thêm một lần nữa cho chính công việc ấy thì có được không?',
 ]
 
-def plan():
+def plan(question_file=None):
+    if question_file is not None:
+        rows=json.loads(Path(question_file).read_text(encoding='utf-8-sig'))
+        if not isinstance(rows,list) or not rows or any(not isinstance(row,dict) or not row.get('id') or not str(row.get('question','')).strip() for row in rows):
+            raise ValueError('Question file must contain a nonempty list of question objects with id and question')
+        if len({row['id'] for row in rows})!=len(rows): raise ValueError('Duplicate question IDs')
+        return rows
     rows=[{'id':f'USER-{i}','question':q,'batch':'USER_5','origin':'USER_QUESTION'} for i,q in enumerate(QUESTIONS,1)]
     rows+=json.loads((ROOT/'artifacts/online_benchmarks/labor_285_v4_20261009T124602Z.questions.json').read_text(encoding='utf-8-sig'))
     assert len(rows)==290 and len({row['id'] for row in rows})==290
     return rows
 
-def run(folder,ids,timeout,resume):
+def run(folder,ids,timeout,resume,question_file=None):
     folder.mkdir(parents=True,exist_ok=True)
-    rows=plan(); (folder/'questions.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding='utf-8')
+    rows=plan(question_file)
     selected=[row for row in rows if not ids or row['id'] in ids]
+    planned_path=folder/'questions.json'
+    if planned_path.exists() and (folder/'responses.jsonl').exists():
+        saved=json.loads(planned_path.read_text(encoding='utf-8-sig'))
+        if saved!=selected: raise ValueError('Question plan changed; use a new output folder')
+    planned_path.write_text(json.dumps(selected,ensure_ascii=False,indent=2),encoding='utf-8')
     result_path=folder/'responses.jsonl'
     existing=[json.loads(line) for line in result_path.read_text(encoding='utf-8').splitlines() if line.strip()] if result_path.exists() else []
     if ids-set(row['id'] for row in rows): raise ValueError('Unknown requested question ID')
@@ -104,7 +115,9 @@ def run(folder,ids,timeout,resume):
         if row['id'] in done: continue
         message_id='bench_'+secrets.token_hex(12)
         history=[]
-        if row['batch']=='USER_5':
+        if row.get('conversation_turns') is not None:
+            history=row['conversation_turns']
+        elif row.get('batch')=='USER_5':
             index=int(row['id'].split('-')[1])-1
             history=[{'turn_id':f'user_{i}','role':'user','content':q} for i,q in enumerate(QUESTIONS[:index],1)]
         body={'question':row['question'],'conversation_turns':history,
@@ -172,8 +185,9 @@ def export(folder):
               'quality_review':row.get('quality_review','PENDING_INDEPENDENT_REVIEW')})
     success=[row['elapsed_seconds'] for row in rows if row['http_status']==200]
     answer_times=sorted(row['elapsed_seconds'] for row in rows if row['http_status']==200 and row.get('response',{}).get('status') in {'SUFFICIENT','PARTIAL_ALLOWED'})
+    planned=json.loads((folder/'questions.json').read_text(encoding='utf-8-sig'))
     summary={'attempted':len(rows),'http_statuses':dict(collections.Counter(str(r['http_status']) for r in rows)),
-      'planned':len(plan()),'remaining':len({r['id'] for r in plan()}-{r['id'] for r in rows}),
+      'planned':len(planned),'remaining':len({r['id'] for r in planned}-{r['id'] for r in rows}),
       'answer_statuses':dict(collections.Counter(str((r.get('response')or{}).get('status')) for r in rows)),
       'http_200_p50_seconds':statistics.median(success) if success else None,
       'answers_only_p50_seconds':statistics.median(answer_times) if answer_times else None,
@@ -208,15 +222,17 @@ def main():
     parser=argparse.ArgumentParser(description='Sequential Kaggle benchmark, resumable results, no frontend or credential printing.')
     parser.add_argument('--out',type=Path,default=ROOT/'artifacts/online_benchmarks/reliability_20261020/candidate')
     parser.add_argument('--ids',nargs='*'); parser.add_argument('--resume',action='store_true')
+    parser.add_argument('--questions',type=Path,help='Optional reviewed question plan JSON; keeps the default 290-question plan unchanged')
     parser.add_argument('--timeout',type=int,default=230)
     parser.add_argument('--preflight-only',action='store_true')
     parser.add_argument('--require-fixed-backend',action='store_true')
     parser.add_argument('--require-reviewer',choices=['gemini','same'])
+    parser.add_argument('--require-taxonomy',help='Require the exact deployed taxonomy version before submitting answers')
     parser.add_argument('--require-feature',action='append',default=[],metavar='KEY=VALUE')
     parser.add_argument('--list',action='store_true')
     args=parser.parse_args()
     if args.list:
-        print(json.dumps({'total':len(plan()),'rows':[{'id':row['id'],'question':row['question']} for row in plan()]},ensure_ascii=False,indent=2)); return 0
+        print(json.dumps({'total':len(plan(args.questions)),'rows':[{'id':row['id'],'question':row['question']} for row in plan(args.questions)]},ensure_ascii=False,indent=2)); return 0
     initial=args.out/'preflight.json'
     previous=json.loads(initial.read_text(encoding='utf-8')) if initial.exists() else None
     checked=preflight(Connection(),args.out/'preflight_latest.json')
@@ -234,9 +250,11 @@ def main():
         print('Backend has not deployed the verified fix; no answer requests were submitted.'); return 2
     if args.require_reviewer and (ready.get('quality_policy') or {}).get('semantic_review_provider')!=args.require_reviewer:
         print('Backend reviewer differs from the requested comparison; no answer requests were submitted.'); return 2
+    if args.require_taxonomy and ready.get('taxonomy_version')!=args.require_taxonomy:
+        print('Backend taxonomy differs from the required deployment; no answer requests were submitted.'); return 2
     def signature(report):
         body=report.get('readiness',{}).get('body') or {}
-        return {'build':body.get('compatibility',{}).get('build_id'),'features':body.get('online_features'),
+        return {'build':body.get('compatibility',{}).get('build_id'),'taxonomy':body.get('taxonomy_version'),'features':body.get('online_features'),
           'policy':body.get('quality_policy'),
           'models':{key:{k:value.get(k) for k in ('provider','model')} for key,value in (body.get('components') or {}).items() if isinstance(value,dict)}}
     if (args.out/'responses.jsonl').exists() and (previous is None or signature(previous)!=signature(checked)):
@@ -245,7 +263,7 @@ def main():
         initial.write_text(json.dumps(checked,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     if args.preflight_only: return 0
     try:
-        completed=run(args.out,set(args.ids or []),args.timeout,args.resume)
+        completed=run(args.out,set(args.ids or []),args.timeout,args.resume,args.questions)
     finally:
         if (args.out/'responses.jsonl').exists():
             print(json.dumps({'summary':export(args.out)},ensure_ascii=False),flush=True)

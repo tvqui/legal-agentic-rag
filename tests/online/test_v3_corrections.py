@@ -53,7 +53,7 @@ class V3CorrectionTests(unittest.TestCase):
         self.assertEqual(loc.article,'27'); self.assertEqual(loc.documents,['10/2012/QH13'])
 
     def test_probation_pay_sanction_requires_both_instruments(self):
-        a=analysis('Thử việc trả lương dưới 85% bị xử phạt theo nghị định nào?')
+        a=analysis('Thử việc trả lương dưới 85% bị xử phạt theo nghị định nào, mức phạt và biện pháp khắc phục là gì?')
         self.assertIn('CONTRACT.PROBATION_SANCTION',a.legal_subissues)
         p=plan_evidence(a)
         self.assertIn('probation_pay',p.slot_requirements)

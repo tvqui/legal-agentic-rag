@@ -10,6 +10,18 @@ from .topics import detect_topics
 
 REQUEST=re.compile(r'\?|hãy|cho biết|giải thích|bao nhiêu|bao lâu|thế nào|đúng không|được không|hay không|căn cứ nào|quy định gì|có quyền|phải làm gì',re.I)
 
+def _leave_beneficiary_context(topic,spans,subissues):
+    """A protected worker category can qualify a leave task without adding all
+    rights of that worker category to the user's requested output.
+    """
+    if topic.key not in {'disabled_workers','minor_workers','older_workers'}: return False
+    if not any(key.startswith('LEAVE.') for key in subissues): return False
+    relevant=[span for span in spans if topic.key in {t.key for t in detect_topics(span)}]
+    if not relevant: return False
+    leave=re.compile(r'nghỉ\s+(?:hằng|hàng)\s+năm|nghỉ\s+phép|phép\s+năm|ngày\s+(?:nghỉ|phép)|\d+\s*ngày',re.I)
+    broader=re.compile(r'quyền\s+(?:lợi\s+)?khác|quyền\s+(?:đặc\s+thù|lao\s+động)|điều\s+kiện\s+lao\s+động|tuyển\s+dụng|làm\s+(?:thêm|đêm)|ngoài\s+(?:phép|nghỉ|số\s+ngày)',re.I)
+    return all(leave.search(span) and not broader.search(span) for span in relevant)
+
 def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
     # Internal callers may inspect short historical turns. Preserve the task
     # schema's minimum length instead of manufacturing padded legal requests.
@@ -34,6 +46,10 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
         if any(any(key.startswith(prefix) for prefix in topic.profile_prefixes) for key in subissues): continue
+        if _leave_beneficiary_context(topic,request_spans,subissues): continue
+        if topic.key=='remedies' and 'CONTRACT.PROBATION_SANCTION' in subissues:
+            from .taxonomy import sanction_instrument_lookup
+            if sanction_instrument_lookup(query): continue
         if tasks and topic.key not in explicit_topics: continue
         tasks.append(AnswerTask(task_id='topic_'+topic.key,request_quote=query,
           description=topic.label,retrieval_query=topic.label,legal_issues=[topic.issue],

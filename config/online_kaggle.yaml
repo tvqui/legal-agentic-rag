@@ -58,6 +58,7 @@ online:
     model: "qwen3:8b"
     timeout_seconds: 300
     max_queries: 4
+    max_output_tokens: 4096
   applicability:
     mode: hybrid
     provider: ollama

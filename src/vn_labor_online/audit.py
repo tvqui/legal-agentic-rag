@@ -132,7 +132,7 @@ def _claim_reference_supported(text:str,claim_items:list[Evidence])->list[str]:
         if url.rstrip('.,;') not in allowed_urls:
             problems.append('CLAIM_UNSUPPORTED_URL:'+url.rstrip('.,;'))
     return problems
-def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:list[Claim]|None=None)->tuple[bool,list[str]]:
+def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:list[Claim]|None=None,*,context_query:str='')->tuple[bool,list[str]]:
     ids={x.unit_id for x in items if x.verified}; problems=[]
     # Source-copy corruption is checked by the adjudicator; guard the final public surface too.
     problems.extend('ANSWER_TEXT_QUALITY:'+issue for issue in language_issues(answer,allow_admin=True))
@@ -182,7 +182,7 @@ def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:l
         elif set(claim.evidence_ids)-ids: problems.append('CLAIM_UNSUPPORTED:'+claim.claim_id)
         else:
             claim_items=[by_id[evidence_id] for evidence_id in claim.evidence_ids]
-            problems.extend(f'{issue}:{claim.claim_id}' for issue in semantic_issues(claim.text,claim_items)+proposition_issues(claim,claim_items))
+            problems.extend(f'{issue}:{claim.claim_id}' for issue in semantic_issues(claim.text,claim_items,context_query=context_query)+proposition_issues(claim,claim_items))
             if not any(_claim_supported(claim.text,item) for item in claim_items):
                 problems.append('CLAIM_CONTENT_UNSUPPORTED:'+claim.claim_id)
             problems.extend(f'{issue}:{claim.claim_id}' for issue in _claim_reference_supported(claim.text,claim_items))

@@ -12,7 +12,15 @@ def fold(value):
     value=unicodedata.normalize('NFD',str(value or '').lower()).replace('đ','d')
     return ' '.join(''.join(c for c in value if unicodedata.category(c)!='Mn').split())
 
-def semantic_issues(text, items):
+def _continued_work_context(query):
+    q=fold(query)
+    expression=r'\b(?:toi|nld|nguoi lao dong)\s+(?:van\s+(?:tiep tuc lam viec|di lam)|tiep tuc lam viec)\b'
+    for match in re.finditer(expression,q):
+        prefix=q[max(0,match.start()-50):match.start()]
+        if not re.search(r'(?:khong phai|khong dung la|chua the noi|khong the noi)\s*$',prefix): return True
+    return False
+
+def semantic_issues(text, items, *, context_query=''):
     q=fold(text); problems=[]
     for item in items:
         number=getattr(item,'document_number',None) or getattr(item,'instrument_number',None)
@@ -32,6 +40,13 @@ def semantic_issues(text, items):
                 if 'khong '+action in source and 'khong duoc '+action in q and 'khong duoc '+action not in source:
                     problems.append('CLAIM_OMISSION_DUTY_INVERTED')
         article=str(getattr(item,'article_number',None) or getattr(item,'article',None) or '')
+        if number in {'45/2019/QH14','18/VBHN-VPQH','10/2012/QH13'} and article in {'20','22'}:
+            context=fold(' '.join(str(value or '') for value in (getattr(item,'full_text',None),
+                getattr(item,'ancestor_context',None),getattr(item,'source_text',None),item.text)))
+            continued='van tiep tuc lam viec' in context
+            conversion=bool(re.search(r'\b30\s+ngay\b',q)) and bool(re.search(r'tro thanh|chuyen thanh|phai ky ket[^.;]{0,40}hop dong',q))
+            if continued and conversion and not _continued_work_context(context_query) and not any(term in q for term in ('tiep tuc lam viec','van di lam','tiep tuc thuc hien cong viec')):
+                problems.append('CLAIM_CONTRACT_CONTINUATION_CONDITION_LOST')
         if number in {'45/2019/QH14','18/VBHN-VPQH'} and article=='35':
             if re.search(r'(?<!khong )(?:neu|phai|can)\s+co\s+ly do chinh dang',q):
                 problems.append('CLAIM_EMPLOYEE_EXIT_INVENTED_REASON_REQUIREMENT')

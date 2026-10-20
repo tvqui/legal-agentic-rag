@@ -21,12 +21,18 @@ def extra_requirements(analysis):
     def has(*terms): return any(term in q for term in terms)
     if has('giao ket','ung vien','tuyen dung') and has('cung cap','thong tin','thong bao') and not facts.get('termination_basis'):
         clauses('employer_information',19 if old else 16,[1])
-    if has('hop dong thu ba','ba lan lien tiep','ky lai','tai ky','gia han hop dong','hop dong het han','hdld het han','hdld xac dinh thoi han 24 thang ba lan'):
+    expiry=has('hop dong het han','hdld het han','het han hop dong','het han hdld')
+    renewal=has('hop dong thu ba','ba lan lien tiep','ky lai','tai ky','gia han hop dong','hdld xac dinh thoi han 24 thang ba lan') or (
+        expiry and has('tiep tuc lam viec','van di lam','van tiep tuc','ky tiep','hop dong moi','loai hop dong','thuoc loai nao','moc thoi gian'))
+    if renewal:
         points('term_contract_renewal',22 if old else 20,2,['a','b','c'] if not old else [],docs)
         if old: clauses('term_contract_renewal',22,[2])
         else:
             # Exception targets are part of the rule, not proof that they apply.
             out['renewal_exceptions']=[[loc(149,1)],[loc(151,2)],[loc(177,4)]]
+    if expiry and has('mang thai','thai san','nuoi con'):
+        out['expiry_rule']=[[loc(36 if old else 34,1)]]
+        out['maternity_expiry_protection']=[[loc(155 if old else 137,3)]]
     if has('hop dong dao tao') and has('noi dung','phai co','bao gom','nhung gi'):
         points('training_contract_contents',62,2,['a','b','c','d','đ','e'])
         # Do not replace the contents question with repayment obligations.

@@ -100,6 +100,7 @@ class BenchmarkReviewRegressionTests(unittest.TestCase):
     def test_overlapping_leave_groups_choose_sixteen_then_add_seniority(self):
         evidence = [
             verified("special", "113", "1", "c", "16 ngày làm việc đối với công việc đặc biệt nặng nhọc."),
+            verified("protected", "113", "1", "b", "14 ngày làm việc đối với người lao động là người khuyết tật."),
             verified("seniority", "114", text="Cứ đủ 05 năm làm việc thì số ngày nghỉ hằng năm tăng thêm 01 ngày."),
         ]
         pack = VerifiedEvidencePack(
@@ -113,7 +114,7 @@ class BenchmarkReviewRegressionTests(unittest.TestCase):
                 "service_years": 11,
             },
             requested_outcome="EXPLAIN",
-            coverage_state=state(["special", "seniority"]),
+            coverage_state=state(["special", "protected", "seniority"]),
             evidence=evidence,
         )
         draft = adjudicate(pack, True, [])

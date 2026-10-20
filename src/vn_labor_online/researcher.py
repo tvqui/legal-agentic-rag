@@ -124,4 +124,5 @@ The result improves retrieval recall and never counts as legal evidence. Return 
             warnings=['RESEARCHER_PROVIDER_FALLBACK:'+type(exc).__name__]
             code=review_error_code(exc)
             if code.startswith('GEMINI_'): warnings.append('RESEARCHER_PROVIDER_ERROR:'+code)
+            elif type(exc).__name__=='StructuredOutputError': warnings.append('RESEARCHER_OUTPUT_INVALID:'+code)
             return analysis,warnings

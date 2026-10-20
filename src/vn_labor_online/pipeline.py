@@ -421,11 +421,11 @@ class OnlinePipeline:
         reference_items=[] if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS} else (
           [item for item in selected if item.unit_id in {citation.evidence_id for citation in refs}] if refs else selected)
         reference_audit_started=time.perf_counter()
-        ok,problems=reference_audit(answer,reference_items,refs,draft.claims)
+        ok,problems=reference_audit(answer,reference_items,refs,draft.claims,context_query=env.normalized_query)
         if not ok and draft.claims:
             repaired_answer,repaired_items,repaired_claims=_repair_references(selected,draft.claims)
             repaired_refs=citations(repaired_items)
-            repaired_ok,repaired_problems=reference_audit(repaired_answer,repaired_items,repaired_refs,repaired_claims)
+            repaired_ok,repaired_problems=reference_audit(repaired_answer,repaired_items,repaired_refs,repaired_claims,context_query=env.normalized_query)
             if repaired_ok:
                 answer=repaired_answer; selected=repaired_items; refs=repaired_refs; ok=True; problems=[]
                 draft=draft.model_copy(update={'claims':repaired_claims}); warnings.append('REFERENCE_AUDIT_REPAIRED')

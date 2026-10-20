@@ -8,7 +8,7 @@ import re
 from .analysis import analyze,intake,plan_evidence
 from .claim_validation import fold
 from .models import Claim,AdjudicationDraft,LegalLocator,RuleProposition
-from .taxonomy import locator_matches,probation_duration_clauses
+from .taxonomy import locator_matches,probation_duration_clauses,sanction_instrument_lookup
 
 PROFILE_KEYS={
     'CONTRACT.PROBATION_DURATION','CONTRACT.PROBATION_REPEAT','CONTRACT.PROBATION_SANCTION',
@@ -41,6 +41,25 @@ def render_profile(pack,partial,assumptions):
             chosen=matches[0]
             if chosen.evidence_id not in {item.evidence_id for item in used}: used.append(chosen)
     if not used: return None
+    if 'CONTRACT.PROBATION_SANCTION' in keys and sanction_instrument_lookup(pack.query):
+        # Instrument identity comes from actual cited metadata. Do not add a
+        # fine calculation whose subject/multiplier was not requested/verified.
+        from .generation import _versions
+        sources=[item for item in used if item.instrument_number=='12/2022/NĐ-CP']
+        if not sources: return None
+        claims=[]
+        for item in sources:
+            location='Điều '+item.article+((' khoản '+item.clause) if item.clause else '')+((' điểm '+item.point) if item.point else '')
+            claims.append(Claim(claim_id=f'claim_sanction_source_{len(claims)+1}',
+                text=f'Văn bản xử phạt cần kiểm tra là Nghị định {item.instrument_number}; căn cứ về hành vi đang hỏi nằm tại {location}.',
+                evidence_ids=[item.evidence_id]))
+        for item in used:
+            if item in sources: continue
+            claims.append(Claim(claim_id=f'claim_sanction_context_{len(claims)+1}',
+                text=f'Điều {item.article} ({item.instrument_number}): “'+ ' '.join(item.text.split())+'”',
+                evidence_ids=[item.evidence_id]))
+        return AdjudicationDraft(answer_summary='\n'.join(claim.text+' '+ ' '.join('['+uid+']' for uid in claim.evidence_ids) for claim in claims),
+            claims=claims,applicable_law_versions=_versions(used),assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
     if keys=={'CONTRACT.PROBATION_REPEAT'}:
         item=used[0]
         if 'mot lan' not in fold(item.text) or 'mot cong viec' not in fold(item.text): return None

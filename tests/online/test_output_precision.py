@@ -247,11 +247,11 @@ class SemanticPipelineGuards(unittest.TestCase):
             query='Công ty cung cấp sai địa điểm làm việc khi tuyển dụng khiến NLĐ muốn nghỉ ngay. Những điều luật nào phải được nối với nhau?'
             from vn_labor_online.audit import reference_audit
             calls=0
-            def audit(*args):
+            def audit(*args,**kwargs):
                 nonlocal calls
                 calls+=1
                 if force_reference_repair and calls==1: return False,['FORCED_REPAIR_FIXTURE']
-                return reference_audit(*args)
+                return reference_audit(*args,**kwargs)
             with patch('vn_labor_online.pipeline.deterministic_audit',side_effect=lambda _,values,*args:values),patch('vn_labor_online.pipeline.reference_audit',side_effect=audit):
                 return engine.ask(QueryRequest(question=query,query_date='2025-01-01'))
 

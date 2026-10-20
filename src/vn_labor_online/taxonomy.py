@@ -9,9 +9,35 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v6'
+TAXONOMY_VERSION = 'labor-subissues-v7'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
+
+def annual_leave_points(facts):
+    """Retain each applicable base category when overlapping grounds are compared.
+
+    This selects evidence locations, not entitlements or reviewed legal status.
+    The actual amount and non-cumulation claim still require the source and audit.
+    """
+    category=facts.get('work_category')
+    if category=='SPECIAL_HEAVY':
+        return ('b','c') if facts.get('minor') or facts.get('disabled') else ('c',)
+    if category=='HEAVY' or facts.get('minor') or facts.get('disabled'): return ('b',)
+    return ('a',) if category=='NORMAL' else ()
+
+def sanction_instrument_lookup(query):
+    """Finding an instrument is narrower than calculating/applying its penalty."""
+    q=query.lower()
+    identifies=bool(re.search(r'(?:văn\s+bản|nghị\s+định)[^.;?!]{0,55}\b(?:nào|gì)\b',q))
+    applies=bool(re.search(r'bao\s+nhiêu|mức\s+phạt|tiền\s+phạt|tính\s+phạt|phạt\s+thế\s+nào|khắc\s+phục|bồi\s+thường|thủ\s+tục|thời\s+hiệu',q))
+    return identifies and not applies
+
+def annual_leave_combination_only(query):
+    q=query.lower()
+    leave=any(term in q for term in ('ngày phép','phép năm','nghỉ hằng năm','nghỉ hàng năm'))
+    combination=bool(re.search(r'cộng\s+(?:thành|chồng|hai\s+mức|các\s+mức)|cộng[^.;?!]{0,90}\b14\s*\+\s*16',q))
+    concrete=bool(re.search(r'bao\s+nhiêu|tính\s+(?:tổng|số)|xác\s+định\s+số|số\s+ngày\s+thực\s+tế',q))
+    return leave and combination and not concrete
 
 # Mechanisms and remedies deliberately coexist rather than being exclusive siblings.
 SUBISSUES = {
@@ -90,6 +116,9 @@ def covered_profile_parents(analysis) -> set[str]:
     if keys: covered.add('CONTRACT')
     if analysis.facts.get('termination_basis'): covered.update({'WAGE','HARASSMENT'})
     if 'CONTRACT.PROBATION_PAY' in keys: covered.add('WAGE')
+    if 'LEAVE.ANNUAL_LEAVE' in keys:
+        if analysis.facts.get('disabled'): covered.add('DISABILITY')
+        if analysis.facts.get('minor'): covered.add('MINOR_WORKER')
     if 'TRAINING.RELATIONSHIP_COMPARISON' in keys: covered.update({'CONTRACT','TRAINING'})
     if 'TRAINING.COST_REPAYMENT' in keys and not any(key.startswith('TERMINATION.') for key in keys): covered.add('TERMINATION')
     wage_as_relationship_feature=bool(re.search(r'(?:yếu tố|dấu hiệu|nội dung)[^.?!]{0,100}tiền lương[^.?!]{0,80}(?:quản lý|giám sát)',q))
@@ -137,7 +166,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('CONTRACT.PROBATION_REPEAT')
     if has('thử việc') and has('chính thức','kết thúc','hết thử','đạt yêu cầu','không được nhận','không đạt','tiếp tục làm','kết quả thử'):
         add('CONTRACT.PROBATION_END')
-    if has('thử việc') and has('xử phạt','chế tài','phạt tiền','nghị định nào','văn bản nào khác'):
+    if has('thử việc') and has('xử phạt','chế tài','phạt tiền','mức phạt','tiền phạt','khắc phục','nghị định nào','văn bản nào khác'):
         add('CONTRACT.PROBATION_SANCTION')
     if relationship_comparison(q):
         add('TRAINING.RELATIONSHIP_COMPARISON')
@@ -159,7 +188,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     special_mechanism = False
     for label, terms in (
         ('MUTUAL_AGREEMENT', ('thỏa thuận chấm dứt', 'thoả thuận chấm dứt', 'đồng ý cho nghỉ sớm')),
-        ('EXPIRY', ('hết hạn hợp đồng', 'hợp đồng hết hạn', 'hết hạn hđlđ')),
+        ('EXPIRY', ('hết hạn hợp đồng', 'hợp đồng hết hạn', 'hết hạn hđlđ', 'hđlđ hết hạn')),
         ('DISMISSAL', ('sa thải',)),
         ('ECONOMIC_RESTRUCTURING', ('thay đổi cơ cấu', 'thay đổi công nghệ', 'lý do kinh tế', 'tái cơ cấu', 'cắt giảm nhân sự')),
         ('ENTERPRISE_TRANSFER', ('sáp nhập', 'chia tách doanh nghiệp', 'chuyển quyền sở hữu doanh nghiệp')),
@@ -275,6 +304,9 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             if 'CONTRACT.PROBATION_DURATION' in analysis.legal_subissues: points.append('b')
             if 'CONTRACT.PROBATION_PAY' in analysis.legal_subissues: points.append('c')
             if not points: points=['a','b','c']
+            if sanction_instrument_lookup(analysis.query_text):
+                require('probation_sanction',*[[loc('10','2',point,documents=['12/2022/NĐ-CP'])] for point in points])
+                continue
             require('probation_sanction',[loc('10','2',documents=['12/2022/NĐ-CP'],exact=True)],
               *[[loc('10','2',point,documents=['12/2022/NĐ-CP'])] for point in points])
             require('probation_remedy',[loc('10','3','a',documents=['12/2022/NĐ-CP'])])
@@ -385,9 +417,8 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key == 'LEAVE.ANNUAL_LEAVE':
             article = '111' if historical else '113'; facts = analysis.facts
             if facts.get('query_intent') == 'ANNUAL_LEAVE_CALC':
-                category = facts.get('work_category')
-                point = 'c' if category == 'SPECIAL_HEAVY' else 'b' if category == 'HEAVY' or facts.get('minor') or facts.get('disabled') else 'a' if category == 'NORMAL' else None
-                require('leave_base_rule', [loc(article, '1', point)])
+                points=annual_leave_points(facts)
+                require('leave_base_rule', *[[loc(article,'1',point)] for point in points] if points else [[loc(article,'1')]])
             else:
                 require('leave_base_rule', *[[loc(article, '1', point)] for point in ('a', 'b', 'c')])
         elif key == 'LEAVE.SENIORITY_BONUS': rule('seniority_rule', '114', '112')
@@ -529,8 +560,7 @@ def taxonomy_exclusion(item, subissues: list[str], facts: dict) -> str | None:
     if other_leave and not annual and article in ({'111', '112', '114'} if old else {'113', '114'}):
         return 'SUBISSUE_LEAVE_TYPE_MISMATCH'
     if annual and facts.get('query_intent') == 'ANNUAL_LEAVE_CALC' and article == ('111' if old else '113') and item.clause_number == '1':
-        category = facts.get('work_category')
-        expected = 'c' if category == 'SPECIAL_HEAVY' else 'b' if category == 'HEAVY' or facts.get('minor') or facts.get('disabled') else 'a' if category == 'NORMAL' else None
-        if expected and item.point_number and item.point_number != expected:
+        expected=annual_leave_points(facts)
+        if expected and item.point_number and item.point_number not in expected:
             return 'SUBISSUE_LEAVE_CATEGORY_MISMATCH'
     return None

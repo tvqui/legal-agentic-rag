@@ -76,16 +76,34 @@ Return a decisions object keyed by every candidate ID, with relevance, support a
 Do not infer missing facts, choose a different law version, create evidence, or override deterministic exclusions. Return only JSON matching the schema."""
         from .runtime import checkpoint,RequestStopped
         model_decisions={}; failed=set(); warnings=[]
-        for offset in range(0,len(eligible),self.cfg.max_items):
-            batch=eligible[offset:offset+self.cfg.max_items]
+        pending=list(eligible); model_calls=0
+        while pending and model_calls<self.cfg.max_batches:
+            batch=pending[:self.cfg.max_items]
+            # Match the provider's conservative context guard. Reduce the
+            # number of complete candidates, never truncate statutory text or
+            # discard the entire batch because one long source exceeds budget.
+            context=getattr(self.provider,'context_tokens',None)
+            output=getattr(self.provider,'max_output_tokens',0)
+            while True:
+                batch_payload={**payload,'candidates':[self._payload(item,query,issues,facts,requested_outcome) for item in batch]}
+                serialized=json.dumps(batch_payload,ensure_ascii=False)
+                bounded=type(context) is int and type(output) is int
+                too_large=bounded and len((system+serialized).encode('utf-8'))+256+output>context
+                if not too_large or len(batch)==1: break
+                batch=batch[:max(1,len(batch)//2)]
+            del pending[:len(batch)]
             ids=[x.unit_id for x in batch]
+            if too_large:
+                failed.update(ids)
+                warnings.append('APPLICABILITY_OUTPUT_INVALID:PROMPT_CONTEXT_BUDGET_EXCEEDED')
+                continue
             try:
                 checkpoint('applicability')
                 batch_schema={'type':'object','additionalProperties':False,'required':['decisions'],
                   'properties':{'decisions':{'type':'object','additionalProperties':False,'required':ids,
                     'properties':{uid:ProviderApplicability.model_json_schema() for uid in ids}}}}
-                batch_payload={**payload,'candidates':[self._payload(item,query,issues,facts,requested_outcome) for item in batch]}
-                raw=self.provider.structured(system,json.dumps(batch_payload,ensure_ascii=False),batch_schema)
+                model_calls+=1
+                raw=self.provider.structured(system,serialized,batch_schema)
                 values=raw.get('decisions')
                 if set(raw)!={'decisions'} or not isinstance(values,dict) or set(values)!=set(ids):
                     raise StructuredOutputError('applicability batch IDs do not exactly match candidates')
@@ -104,6 +122,12 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             except Exception as exc:
                 failed.update(ids)
                 warnings.append('APPLICABILITY_PROVIDER_ERROR:'+type(exc).__name__)
+                if isinstance(exc,StructuredOutputError):
+                    from .answer_review import review_error_code
+                    code=('APPLICABILITY_BATCH_IDS_MISMATCH' if str(exc)=='applicability batch IDs do not exactly match candidates'
+                          else review_error_code(exc))
+                    warnings.append('APPLICABILITY_OUTPUT_INVALID:'+code)
+        overflow+=pending
         merged=[]
         for item in items:
             uid=item.unit_id

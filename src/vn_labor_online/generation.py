@@ -7,7 +7,7 @@ from .claim_validation import semantic_issues
 from .answer_quality import clean_draft,clean_source_excerpt,draft_issues,guarded_language_edit,language_issues,render_claims
 from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
-from .taxonomy import classify_subissues,original_documents,profile_covers_issues
+from .taxonomy import classify_subissues,original_documents,profile_covers_issues,annual_leave_points,annual_leave_combination_only
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
 
 def _fold(value:str)->str:
@@ -190,6 +190,20 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
     try: worked_months=int(pack.facts.get('worked_months',-1))
     except (TypeError,ValueError): return None
     if intent=='ANNUAL_LEAVE_CALC':
+        if annual_leave_combination_only(pack.query) and {'b','c'}<=set(annual_leave_points(pack.facts)):
+            lower=_find(pack,'113','1','b'); upper=_find(pack,'113','1','c')
+            if not lower or not upper: return None
+            if not re.search(r'\b14\s+ngay\s+lam\s+viec',_fold(lower.text)) or not re.search(r'\b16\s+ngay\s+lam\s+viec',_fold(upper.text)): return None
+            beneficiary='người khuyết tật' if pack.facts.get('disabled') else 'người lao động chưa thành niên'
+            text=('Không cộng mức 14 ngày và mức 16 ngày thành 30 ngày. Điểm b và điểm c khoản 1 Điều 113 '
+                f'quy định các mức nghỉ cơ sở theo nhóm áp dụng. Nếu đồng thời là {beneficiary} và làm nghề, '
+                'công việc đặc biệt nặng nhọc, độc hại, nguy hiểm thì mức cơ sở tương ứng là 16 ngày làm việc '
+                'khi làm đủ 12 tháng; đây là mức cơ sở, chưa phải phép tính số ngày thực tế của một năm cụ thể '
+                'theo thời gian làm việc và thâm niên.')
+            ids=[lower.evidence_id,upper.evidence_id]
+            return AdjudicationDraft(answer_summary=text+' '+ ' '.join('['+uid+']' for uid in ids),
+                claims=[Claim(claim_id='claim_leave_combination',text=text,evidence_ids=ids)],
+                applicable_law_versions=_versions([lower,upper]),assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
         category=pack.facts.get('work_category')
         if category=='SPECIAL_HEAVY': base,point=16,'c'
         elif category=='NORMAL' and not pack.facts.get('minor') and not pack.facts.get('disabled'): base,point=12,'a'
@@ -198,6 +212,11 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
         seniority=_find(pack,'114') if bonus else None
         if not base_rule or bonus and not seniority: return None
         used=[base_rule]+([seniority] if seniority else []); evidence_ids=[item.evidence_id for item in used]
+        for other_point in annual_leave_points(pack.facts):
+            if other_point==point: continue
+            other_rule=_find(pack,'113','1',other_point)
+            if other_rule is None: return None
+            used.append(other_rule); evidence_ids.append(other_rule.evidence_id)
         if worked_months<0:
             conclusion=(f'Nếu làm đủ 12 tháng trong năm cho cùng người sử dụng lao động và thuộc nhóm đã nêu, mức nền là {base} ngày, '
               f'cộng {bonus} ngày cho {service_years} năm thâm niên: {base+bonus} ngày. Chưa có số tháng làm việc trong năm nên không xác nhận số ngày thực tế của năm đó.')
@@ -211,7 +230,7 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
         else:
             result=base+bonus; conclusion=f'Mức nền phù hợp là {base} ngày; thâm niên {service_years} năm làm tăng {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày.'
         if pack.facts.get('minor') or pack.facts.get('disabled') or category in {'HEAVY','SPECIAL_HEAVY'}:
-            conclusion='Các mức 12, 14 và 16 ngày tại khoản 1 Điều 113 là các mức thay thế theo từng nhóm, không cộng chồng. '+conclusion
+            conclusion='Mức nghỉ cơ sở được xác định theo nhóm áp dụng tại khoản 1 Điều 113; không cộng chồng các mức nghỉ vì tuổi, khuyết tật và điều kiện công việc. '+conclusion
         # Keep the evidence-audited claim focused on the supported legal rule
         # and calculation.  The direct yes/no sentence is a conclusion derived
         # from that calculation, rather than a quotation attributed to a source.
@@ -541,7 +560,7 @@ class LegalAdjudicator:
             by_evidence={item.evidence_id:item for item in pack.evidence}
             for claim in output.claims:
                 attached=[by_evidence[uid] for uid in claim.evidence_ids if uid in by_evidence]
-                if semantic_issues(claim.text,attached):
+                if semantic_issues(claim.text,attached,context_query=pack.query):
                     raise StructuredOutputError('SEMANTIC_CLAIM_REJECTED')
             draft=AdjudicationDraft(answer_summary='',claims=[Claim(claim_id=f'claim_{i:03d}',**claim.model_dump())
               for i,claim in enumerate(output.claims,1)],applicable_law_versions=[],assumptions=assumptions or [],limitations=pack.coverage_state.gaps)

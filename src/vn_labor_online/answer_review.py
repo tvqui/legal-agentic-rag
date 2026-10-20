@@ -72,14 +72,20 @@ default; reconstruct the entailment from source text independently. Write reason
 missing and missing_requirements in Vietnamese. Missing personal facts can require
 a conditional answer; they do not make a correctly qualified general rule absent.
 Never demand a Point for a Clause that has no Points, or invent a required reason
-for exercising a right when the cited rule grants it without that condition."""
+for exercising a right when the cited rule grants it without that condition.
+Judge each claim exactly once, including rejected claims. In coverage.claim_ids,
+list ONLY claims whose verdict is SUPPORTED; unsupported claims can never answer
+a task, even partially. An unanswered task must have a nonempty missing explanation.
+An ANSWERED task needs at least one supported claim and an empty missing string.
+question_fully_addressed can be true only when every task is ANSWERED and
+missing_requirements is empty. Do not omit a task merely because evidence is missing."""
 
 def texts(item):
     return [item.full_text or item.text, item.text]
 
-def hard_issues(claim, evidence):
+def hard_issues(claim, evidence, *, context_query=''):
     """Generic guards complement the semantic auditor; no benchmark IDs here."""
-    issues = list(semantic_issues(claim.text, evidence))
+    issues = list(semantic_issues(claim.text, evidence,context_query=context_query))
     source = ' '.join(fold(value) for item in evidence for value in texts(item))
     c = fold(claim.text)
     if any(term in source for term in ('bi nghiem cam', 'hanh vi bi cam')) and not any(
@@ -115,7 +121,7 @@ def validate_review(review, draft, pack, tasks):
                 grounding.quote in text for text in texts(by_evidence[grounding.evidence_id])):
                 raise StructuredOutputError('semantic grounding is not an exact cited-source quotation')
         if decision.verdict == 'SUPPORTED':
-            if not decision.grounding or hard_issues(claim, attached):
+            if not decision.grounding or hard_issues(claim, attached,context_query=getattr(pack,'query','')):
                 raise StructuredOutputError('unsupported semantic PASS')
             supported.add(claim.claim_id)
     for coverage in review.coverage:
@@ -207,6 +213,9 @@ def review_error_code(exc):
           'unsupported semantic PASS':'UNSUPPORTED_SEMANTIC_PASS',
           'false completion verdict':'FALSE_COMPLETION_VERDICT',
           'invalid answered task':'INVALID_TASK_COMPLETION',
+          'coverage depends on an unproved claim':'COVERAGE_USES_UNSUPPORTED_CLAIM',
+          'unanswered task requires explanation':'UNANSWERED_TASK_MISSING_EXPLANATION',
+          'unknown cited source':'UNKNOWN_CITED_SOURCE',
         }
         return labels.get(message,'REVIEW_STRUCTURED_OUTPUT_INVALID')
     return type(exc).__name__
@@ -232,7 +241,10 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 if e.evidence_id in {uid for c in candidate.claims for uid in c.evidence_ids}]}
         if previous_validation_error:
             payload['previous_validation_error']=previous_validation_error
-            payload['retry_instruction']='Recheck the unchanged draft. Quote exact supplied text, without rewriting any character, and account for every claim and task exactly once.'
+            payload['retry_instruction']=('Recheck the unchanged draft. Quote exact supplied text, without rewriting any character, '
+                'and account for every claim and task exactly once. Coverage may reference only SUPPORTED claims. '
+                'For PARTIAL/MISSING tasks give a nonempty missing explanation; ANSWERED requires at least one supported '
+                'claim and an empty missing string. Do not claim completion while any requirement is missing.')
         try:
             review = audit_in_batches(provider,payload,candidate,pack,tasks)
             supported = validate_review(review,candidate,pack,tasks)
