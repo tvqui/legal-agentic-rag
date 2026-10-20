@@ -127,3 +127,27 @@ git push
 Giữ nguyên hai biến chọn Gemini reviewer và Input result_14-10. Chỉ cần chạy lại cell cập nhật code và cell backend; không chạy lại OFFLINE. Nếu URL đổi, cập nhật `frontend/.env`. Lượt remote tiếp theo phải ghi vào `candidate2/` để không trộn số liệu của hai phiên bản.
 
 **Chưa hoàn tất kiểm thử remote toàn bộ 290 câu: đã đo 30, còn 260 câu chưa đo trong phiên bản này.** Chỉ tiếp tục mở rộng sau khi sửa các lỗi đã xác nhận và kiểm tra phiên bản triển khai. Không chứng nhận độ đúng luật chỉ bằng HTTP 200, số citation hoặc verdict tự động; các queue human review/Gold vẫn còn hiệu lực.
+
+## Gián đoạn khi khởi động lần 2: Ollama pull trả HTTP 503
+
+Người dùng đã commit `f00e743` và chạy lại trên Kaggle. Launcher dừng tại `ollama pull qwen3:8b` vì upstream trả HTTP 503, trước khi backend khởi động. Đây là lỗi tải model; chưa có phép đo remote nào của vòng candidate2. Không suy ra lỗi dữ liệu, ngrok hoặc Gemini từ traceback này.
+
+Đã sửa `kaggle/online_remote.py`:
+
+- Kiểm tra đúng model và đúng model cache của launcher bằng `ollama show`; nếu có sẵn thì không gọi lại registry để tải.
+- Khi chưa có model, tải tối đa ba lần trong ngân sách tải tổng cộng 600 giây; chờ 5 rồi 10 giây giữa các lần lỗi. Timeout/failure vẫn dừng rõ ràng, không treo vô hạn hoặc đổi sang model khác.
+- `--skip-pull` chỉ được dùng khi model có sẵn; nếu thiếu thì dừng ngay. Manifest có sẵn không chứng nhận chất lượng inference; các bước readiness/kiểm thử sau đó vẫn giữ.
+- Không xóa cache/model, không chạy lại OFFLINE, không thay Input dữ liệu.
+
+Các test mới giả lập cache, download thất bại rồi thành công, lỗi kéo dài, timeout, và lệnh kết thúc 0 nhưng model còn thiếu. Cập nhật launcher lên GitHub:
+
+Toàn bộ suite sau sửa launcher: **558/558 PASS**, 0 failure/error. Log: `artifacts/reports/reliability_20261020_launcher_tests.log`. Đây là kiểm thử mô phỏng đường lỗi, không phải xác nhận registry Ollama đã hết HTTP 503.
+
+```powershell
+cd D:\data_thô\legal-agentic-rag
+git add kaggle/online_remote.py tests/online/test_ollama_startup.py docs/online/reliability-review-20261020.md
+git commit --only kaggle/online_remote.py tests/online/test_ollama_startup.py docs/online/reliability-review-20261020.md -m "Reuse cached Ollama models and bound download retries"
+git push
+```
+
+Trên Kaggle giữ phiên hiện tại để giữ cache, chạy lại cell cập nhật code rồi cell backend hiện có. Không cần thêm biến môi trường, đổi lệnh backend hay tải lại dataset. Nếu model thực sự chưa có và registry tiếp tục lỗi thì vẫn cần đợi dịch vụ tải hoạt động trở lại; không có code nào bảo đảm một dịch vụ ngoài hệ thống luôn sẵn sàng.

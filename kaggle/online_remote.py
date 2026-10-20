@@ -99,6 +99,53 @@ def gpu_count() -> int:
         return 0
 
 
+def ensure_ollama_model(model: str, env: dict, *, skip_pull: bool = False,
+                        attempts: int = 3, total_seconds: float = 600) -> str:
+    """Reuse the exact local model; bound downloading by time and attempts.
+
+    A local manifest check is not an inference or model-quality certification.
+    Backend readiness and the subsequent request checks still run normally.
+    """
+    if attempts < 1 or total_seconds <= 0:
+        raise ValueError('Model download limits must be positive')
+    def available():
+        result = subprocess.run(['ollama', 'show', model], env=env,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                timeout=15, check=False)
+        return result.returncode == 0
+    if available():
+        print(f'Ollama model cached: {model}; skipping registry download.', flush=True)
+        return 'CACHED'
+    if skip_pull:
+        raise RuntimeError(f'--skip-pull requested but model is not available locally: {model}. '
+                           'Retry without --skip-pull when the Ollama registry is reachable.')
+    deadline = time.monotonic() + total_seconds
+    last_error = 'not started'
+    for attempt in range(1, attempts + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0: break
+        print(f'Ollama download {attempt}/{attempts}: {model}; remaining budget {remaining:.0f}s.', flush=True)
+        try:
+            result = subprocess.run(['ollama', 'pull', model], env=env,
+                                    timeout=remaining, check=False)
+            if result.returncode == 0:
+                if not available():
+                    raise RuntimeError(f'Ollama pull finished but the exact model is unavailable: {model}')
+                return 'PULLED'
+            last_error = f'exit code {result.returncode}'
+        except subprocess.TimeoutExpired:
+            last_error = 'download timeout'
+            break
+        if attempt < attempts:
+            delay = min(5 * attempt, max(0, deadline - time.monotonic()))
+            if delay <= 0: break
+            print(f'Ollama download failed ({last_error}); retry in {delay:.0f}s.', flush=True)
+            time.sleep(delay)
+    raise RuntimeError(f'Ollama model download failed after bounded attempts: {model} ({last_error}). '
+                       'Backend has not started. Keep the current model cache and retry later; '
+                       'no OFFLINE rebuild or artifact upload is required.')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact")
@@ -152,8 +199,7 @@ def main() -> int:
     listener = None
     try:
         wait_json("http://127.0.0.1:11434/api/tags", None, ollama, 60)
-        if not args.skip_pull:
-            subprocess.run(["ollama", "pull", args.model], env=ollama_env, check=True)
+        ensure_ollama_model(args.model, ollama_env, skip_pull=args.skip_pull)
         subprocess.run([sys.executable, "scripts/prepare_online_models.py", "--config", args.config],
                        cwd=ROOT, env=backend_env, check=True)
         backend = subprocess.Popen(
