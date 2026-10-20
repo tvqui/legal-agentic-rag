@@ -9,7 +9,7 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v7'
+TAXONOMY_VERSION = 'labor-subissues-v8'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -143,12 +143,12 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     has = lambda *terms: any(term in q for term in terms)
     intent = facts.get('query_intent')
     employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','nlđ','nsdlđ','công ty',
-      'doanh nghiệp','hợp đồng dịch vụ','hợp đồng cộng tác viên')
+      'doanh nghiệp','hợp đồng dịch vụ','hợp đồng cộng tác viên','cộng tác viên')
     if re.search(r'(?:thế nào là|định nghĩa|khái niệm|được hiểu[^.]{0,15})\s+(?:người lao động|người sử dụng lao động)',q):
         add('CONTRACT.PARTY_DEFINITIONS')
     if employment and (original_documents(q) or has('đặt cọc','bảo đảm bằng tiền','bảo đảm bằng tài sản')):
         add('CONTRACT.PROHIBITED_ACTS')
-    if employment and (has('thực tập sinh','hợp đồng dịch vụ','hợp đồng cộng tác viên','quan hệ lao động','không ký hợp đồng','không phải hợp đồng lao động')
+    if employment and (has('thực tập sinh','hợp đồng dịch vụ','hợp đồng cộng tác viên','cộng tác viên','quan hệ lao động','không ký hợp đồng','không phải hợp đồng lao động')
       or has('tên gọi','mang tên') and has('hợp đồng','thỏa thuận')):
         add('CONTRACT.RELATIONSHIP_QUALIFICATION')
     if employment and has('cung cấp thông tin','cung cấp những thông tin','cung cấp sai','thông tin không trung thực'):
@@ -188,7 +188,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     special_mechanism = False
     for label, terms in (
         ('MUTUAL_AGREEMENT', ('thỏa thuận chấm dứt', 'thoả thuận chấm dứt', 'đồng ý cho nghỉ sớm')),
-        ('EXPIRY', ('hết hạn hợp đồng', 'hợp đồng hết hạn', 'hết hạn hđlđ', 'hđlđ hết hạn')),
+        ('EXPIRY', ('hết hạn hợp đồng', 'hợp đồng hết hạn', 'hợp đồng lao động hết hạn', 'hết hạn hđlđ', 'hđlđ hết hạn')),
         ('DISMISSAL', ('sa thải',)),
         ('ECONOMIC_RESTRUCTURING', ('thay đổi cơ cấu', 'thay đổi công nghệ', 'lý do kinh tế', 'tái cơ cấu', 'cắt giảm nhân sự')),
         ('ENTERPRISE_TRANSFER', ('sáp nhập', 'chia tách doanh nghiệp', 'chuyển quyền sở hữu doanh nghiệp')),

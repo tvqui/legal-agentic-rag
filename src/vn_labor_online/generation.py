@@ -69,7 +69,7 @@ def _chain_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|N
         point,ref_article,ref_clause=locations[basis]; rule=_find(pack,'35','2',point); reference=_find(pack,ref_article,ref_clause) if ref_article else None
         if not rule or ref_article and not reference: return None
         if basis=='LATE_WAGE':
-            direct='Điểm b khoản 2 Điều 35 cho phép người lao động chấm dứt hợp đồng không cần báo trước khi không được trả đủ lương hoặc trả lương không đúng thời hạn.'
+            direct='Điểm b khoản 2 Điều 35 cho phép người lao động chấm dứt hợp đồng không cần báo trước khi không được trả đủ lương hoặc trả lương không đúng thời hạn, trừ trường hợp quy định tại khoản 4 Điều 97.'
             linked='Ngoại lệ được dẫn chiếu là khoản 4 Điều 97: trường hợp bất khả kháng, người sử dụng lao động đã tìm mọi biện pháp khắc phục nhưng vẫn không thể trả đúng hạn, với giới hạn chậm không quá 30 ngày.'
         elif basis=='EMPLOYER_MISINFORMATION':
             direct='Điểm g khoản 2 Điều 35 cho phép chấm dứt không cần báo trước khi người sử dụng lao động cung cấp thông tin không trung thực theo khoản 1 Điều 16 và việc đó ảnh hưởng đến thực hiện hợp đồng.'
@@ -505,7 +505,7 @@ class LegalAdjudicator:
         from .profile_generation import render_profile
         profile_answer=render_profile(pack,partial,assumptions)
         profile_keys=set(classify_subissues(pack.query,pack.facts,[]))
-        supported_composition=profile_keys=={'CONTRACT.PROBATION_DURATION','CONTRACT.PROBATION_PAY'}
+        supported_composition=bool(profile_keys) and all(key.startswith('CONTRACT.PROBATION_') for key in profile_keys)
         if profile_answer and (len(profile_keys)<=1 or supported_composition):
             boundary_warning=['SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW'] if 'đoạn nguồn đang gộp khoản' in profile_answer.answer_summary else []
             return profile_answer,boundary_warning
@@ -534,6 +534,9 @@ class LegalAdjudicator:
           'Exclude greetings, boilerplate and technical labels. Do not guess OCR corruption or missing facts. '
           'A sanction for failing to do X does NOT prohibit doing X. Preserve every negation and exception. '
           'Never invent a reason requirement or a training exception in Article 35. '
+          'For working-hour limits distinguish normal hours from total hours including overtime; a normal-hours cap alone does not prove every longer total schedule unlawful. '
+          'Preserve both lower and upper age boundaries for child-worker rules. '
+          'Answer only the requested issues, without repeating equivalent claims or volunteering fine amounts for a request asking only which instrument applies. '
           'Use supplied document_type, never guess it from a number. Avoid repeating claims.')
         payload={'query':pack.query,'query_date':pack.query_date,'confirmed_facts':pack.facts,
           'requested_outcome':pack.requested_outcome,'evidence':[{'evidence_id':item.evidence_id,

@@ -205,6 +205,12 @@ def review_error_code(exc):
     if isinstance(code,str) and re.fullmatch(r'GEMINI_(?:HTTP_[45]\d{2}|TIMEOUT|CLIENT_ERROR)',code): return code
     message=str(exc)
     if isinstance(exc,StructuredOutputError):
+        if message=='GEMINI_SCHEMA_VALIDATION_FAILED':
+            label={'maxItems':'MAX_ITEMS','minItems':'MIN_ITEMS','type':'TYPE','required':'REQUIRED',
+                'enum':'ENUM','additionalProperties':'EXTRA_FIELDS','minLength':'MIN_LENGTH',
+                'maxLength':'MAX_LENGTH','minimum':'MINIMUM','maximum':'MAXIMUM','const':'CONST',
+                'anyOf':'ANY_OF','oneOf':'ONE_OF'}.get(getattr(exc,'validation_keyword',None))
+            if label: return message+'_'+label
         if re.fullmatch(r'[A-Z][A-Z0-9_]+',message): return message
         labels={
           'semantic review must judge each claim exactly once':'CLAIM_ACCOUNTING_MISMATCH',

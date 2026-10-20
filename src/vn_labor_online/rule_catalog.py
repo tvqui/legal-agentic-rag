@@ -21,7 +21,7 @@ def extra_requirements(analysis):
     def has(*terms): return any(term in q for term in terms)
     if has('giao ket','ung vien','tuyen dung') and has('cung cap','thong tin','thong bao') and not facts.get('termination_basis'):
         clauses('employer_information',19 if old else 16,[1])
-    expiry=has('hop dong het han','hdld het han','het han hop dong','het han hdld')
+    expiry=has('hop dong het han','hop dong lao dong het han','hdld het han','het han hop dong','het han hdld')
     renewal=has('hop dong thu ba','ba lan lien tiep','ky lai','tai ky','gia han hop dong','hdld xac dinh thoi han 24 thang ba lan') or (
         expiry and has('tiep tuc lam viec','van di lam','van tiep tuc','ky tiep','hop dong moi','loai hop dong','thuoc loai nao','moc thoi gian'))
     if renewal:

@@ -180,6 +180,27 @@ def gemini_transport_schema(schema):
     return result
 
 
+def gemini_array_limits(schema):
+    """Communicate bounds omitted from the decoder schema without weakening
+    local validation or silently discarding generated tasks/claims.
+    """
+    limits=[]
+    def walk(node,path):
+        if not isinstance(node,dict): return
+        if node.get('type')=='array' and isinstance(node.get('maxItems'),int):
+            limits.append(f'{path}: at most {node["maxItems"]} items')
+        for key in ('properties','$defs','definitions'):
+            for name,value in (node.get(key) or {}).items():
+                walk(value,f'{path}.{name}' if key=='properties' else str(name))
+        walk(node.get('items'),path+'[]')
+        for key in ('allOf','anyOf','oneOf','prefixItems'):
+            for index,value in enumerate(node.get(key,[])): walk(value,f'{path}.{key}[{index}]')
+    walk(schema,'result')
+    return ('\nThe original response contract also enforces these array bounds. '
+        'Respect them when planning output; do not add redundant tasks or queries:\n'+
+        '\n'.join(limits)) if limits else ''
+
+
 class GeminiProvider(BaseProvider):
     """Optional official Google SDK, used for understanding, not source authority."""
     def __init__(self, model, api_key=None, timeout=20, max_output_tokens=2048):
@@ -209,7 +230,7 @@ class GeminiProvider(BaseProvider):
                         timeout=max(1, int(request_timeout(self.timeout)*1000)),
                         retry_options=types.HttpRetryOptions(attempts=1))) as client:
                     response=client.models.generate_content(model=self.model, contents=user,
-                        config=types.GenerateContentConfig(system_instruction=system, temperature=0,
+                        config=types.GenerateContentConfig(system_instruction=system+gemini_array_limits(schema), temperature=0,
                             max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
                             response_json_schema=gemini_transport_schema(schema)))
                 checkpoint()
@@ -221,8 +242,14 @@ class GeminiProvider(BaseProvider):
                 if not response.text: raise StructuredOutputError('GEMINI_EMPTY_RESPONSE')
                 decoded=_decode_content(response.text)
                 try: Draft202012Validator(schema).validate(decoded)
-                except ValidationError:
-                    raise StructuredOutputError('GEMINI_SCHEMA_VALIDATION_FAILED') from None
+                except ValidationError as exc:
+                    error=StructuredOutputError('GEMINI_SCHEMA_VALIDATION_FAILED')
+                    # Only the fixed validator keyword is diagnostic. Its
+                    # instance/message/path may contain private query data.
+                    allowed={'maxItems','minItems','type','required','enum','additionalProperties',
+                        'minLength','maxLength','minimum','maximum','const','anyOf','oneOf'}
+                    if exc.validator in allowed: error.validation_keyword=exc.validator
+                    raise error from None
                 return decoded
             except (RequestStopped,StructuredOutputError,ProviderRateLimited):
                 raise

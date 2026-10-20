@@ -45,7 +45,31 @@ NOTICE_DAYS=re.compile(
 NO_NOTICE=re.compile(r'\b(?:không|chưa)\s+(?:hề\s+)?(?:báo|thông báo)\s*trước(?:\s+\d+\s*ngày)?|\bnghỉ\s+ngay\b',re.I)
 MONTH_NUMBER_WORDS={'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10,'mười một':11,'mười hai':12}
 WORKED_MONTHS=re.compile(r'làm(?:\s+việc)?[^.;?!]{0,50}?(\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín)\s*tháng',re.I)
-SERVICE_YEARS=re.compile(r'(?:(?:đã\s+)?làm(?:\s+việc)?(?:\s+liên\s+tục)?(?:\s+cho\s+(?:cùng\s+)?(?:công\s+ty(?:\s+này)?|người\s+sử\s+dụng\s+lao\s+động))?\s*(?:được\s*)?(\d+)\s*năm|năm\s+thứ\s+(\d+))',re.I)
+_YEAR_NUMBER=r'\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín'
+_SERVICE_EMPLOYER=r'(?:công\s+ty(?:\s+này)?|người\s+sử\s+dụng\s+lao\s+động|nsdlđ)'
+SERVICE_YEARS=re.compile(
+    rf'(?:(?:đã\s+)?làm(?:\s+việc)?(?:\s+liên\s+tục)?'
+    rf'(?:\s+(?:cho\s+(?:cùng\s+)?|cùng\s+){_SERVICE_EMPLOYER})?'
+    rf'\s*(?:được\s+|đủ\s+)*(?P<count>{_YEAR_NUMBER})\s+năm\b'
+    rf'|\bthâm\s+niên\s*(?:là\s+|đủ\s+|được\s+)*(?P<tenure>{_YEAR_NUMBER})\s+năm\b'
+    rf'|\bnăm\s+thứ\s+(?P<ordinal>{_YEAR_NUMBER})\b)',re.I)
+
+
+def _service_duration(query):
+    """Return completed whole service years and their actual source span.
+
+    Being in year N establishes N-1 completed years, not N. Approximate or
+    negated durations cannot become exact calculation operands.
+    """
+    for match in SERVICE_YEARS.finditer(query):
+        prefix=query[max(0,match.start()-45):match.start()]
+        if re.search(r'\b(?:chưa|không)(?:\s+(?:hề|từng|đủ|được|có)){0,3}\s*$',prefix,re.I):
+            continue
+        value=next(value for value in match.groups() if value is not None).lower()
+        years=int(value) if value.isdigit() else MONTH_NUMBER_WORDS[value]
+        if match.group('ordinal') is not None: years-=1
+        if years>=0: return years,match
+    return None,None
 AGE=re.compile(r'(?<!\d)(\d{1,2})\s*tuổi',re.I)
 TRAVEL_DAYS=re.compile(r'(?:tổng\s+)?thời\s+gian\s+đi\s+và\s+về\s+(?:là\s+)?(\d+)\s*ngày',re.I)
 NOTICE_DATE_DMY=re.compile(r'ngày\s*(0?[1-9]|[12]\d|3[01])[/\-](0?[1-9]|1[0-2])[/\-](20\d{2})[^.]{0,80}(?:gửi|nộp)\s+(?:thông báo|đơn)',re.I)
@@ -99,6 +123,12 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     outcome='LOOKUP' if refs and any(w in lower for w in ('quy định gì','nội dung','tra cứu')) else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có hợp pháp','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường bao nhiêu','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
     if re.search(r'^(?:khi nào|thế nào là|định nghĩa|khái niệm|trường hợp nào)',lower):
         outcome='EXPLAIN'
+    framework=re.search(r'(?:kiểm tra|đối chiếu|kết hợp)[^.?!]{0,120}(?:quy định|điều luật|điều khoản|mốc thời gian|điều kiện|thủ tục)[^.?!]{0,100}(?:nào|ra sao|như thế nào)\s*[?!.]*$',lower)
+    concrete_verdict=any(term in lower for term in ('có hợp pháp','có đúng luật','có đúng quy định',
+        'đúng hay sai','phải bồi thường bao nhiêu','tôi có được','tôi có quyền'))
+    if framework and not concrete_verdict: outcome='EXPLAIN'
+    if re.search(r'(?:áp dụng|xử lý)[^.?!]{0,100}(?:giống|như)[^.?!]{0,100}(?:không|hay không)\s*[?!.]*$',lower):
+        outcome='COMPARE'
     if annual_leave_combination_only(lower): outcome='EXPLAIN'
     historical=legal_regime_for(query_date)=='BLLD_2012' if query_date else False
     temporal='HISTORICAL' if historical else 'EXPLICIT_DATE' if query_date else 'CURRENT' if any(w in lower for w in ('hiện nay','bây giờ','mới nhất')) else 'NONE'
@@ -145,7 +175,7 @@ def _needle_match(query,needles):
 
 def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
     """Attach exact current-turn spans to facts produced by deterministic parsing."""
-    patterns={'worked_months':WORKED_MONTHS,'service_years':SERVICE_YEARS,
+    patterns={'worked_months':WORKED_MONTHS,
       'age':AGE,'travel_days':TRAVEL_DAYS,'notice_date':NOTICE_DATE_DMY,
       'termination_date':TERMINATION_DATE_DMY,'contract_start_year':CONTRACT_START_YEAR}
     needles={
@@ -168,14 +198,14 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
       'misinformation_material_effect':('ảnh hưởng trực tiếp đến việc thực hiện hđlđ','ảnh hưởng đến việc thực hiện hđlđ','ảnh hưởng trực tiếp đến việc thực hiện hợp đồng','ảnh hưởng tới thực hiện hợp đồng')}
     result=[]
     for field,value in facts.items():
-        if field=='notice_days':
+        if field=='service_years':
+            _,match=_service_duration(query)
+        elif field=='notice_days':
             match=NO_NOTICE.search(query) if value==0 else NOTICE_DAYS.search(query)
         elif field=='mutual_termination_agreement' and value is False:
             match=re.search(r'\b(?:chưa|không|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên)){0,4}\s+(?:đồng ý|thỏa thuận|thoả thuận)[^.;?!]{0,45}',query,re.I)
         else:
             match=patterns[field].search(query) if field in patterns else _needle_match(query,needles.get(field,()))
-        if field=='service_years' and match is None:
-            match=re.search(r'(?:làm|làm việc|cùng công ty|thâm niên)(?:\s+\w+){0,4}?\s+(một|hai|ba|bốn|năm|sáu|bảy|tám|chín|mười)\s+năm\b',query,re.I)
         if match: result.append(_fact_candidate(field,value,query,match))
     return result
 
@@ -187,10 +217,12 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
         if not facts.get('work_category') and not facts.get('minor') and not facts.get('disabled'):
             missing.append('Công việc thuộc điều kiện bình thường, nặng nhọc/độc hại/nguy hiểm hay đặc biệt nặng nhọc/độc hại/nguy hiểm; người lao động có chưa thành niên hoặc khuyết tật không?')
     subissues=classify_subissues(query,facts,issues)
+    independent_wage=any(term in query for term in ('lương tối thiểu','trả lương chậm','trả lương trễ',
+        'đòi lương','tính lương','tính tiền lương'))
     if 'TRAINING.INTERN_PAY' not in subissues and outcome!='ASSESS_LEGALITY': return sorted(set(missing))
     if 'TRAINING.INTERN_PAY' in subissues and not (facts.get('employment_paid_work') and facts.get('employment_management')):
         return sorted(set(missing+['Bạn thực tập theo chương trình của trường, học/tập nghề để làm việc cho công ty, thử việc, hay đang làm việc có trả công và chịu sự quản lý của công ty?']))
-    if subissues and all(key.startswith('CONTRACT.') for key in subissues) and set(issues)<={'CONTRACT','WAGE','GENERAL'}:
+    if subissues and all(key.startswith('CONTRACT.') for key in subissues) and set(issues)<={'CONTRACT','WAGE','GENERAL'} and not independent_wage:
         return sorted(set(missing))
     if facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY':
         # A hypothetical premise is not a finding about a real dispute.
@@ -229,7 +261,18 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
         if any(term in query for term in ('bao nhiêu tiền','tính tiền','mức bồi thường')) and facts.get('training_costs') is None:
             missing.append('Có chi phí đào tạo phải hoàn trả theo Điều 62 hay không; nếu có thì số tiền và thỏa thuận đào tạo là gì?')
     else:
+        topics={topic.key for topic in detect_topics(query)}
+        material_only=('material_liability' in topics and not any(term in query for term in
+            ('kỷ luật','sa thải','khiển trách','cách chức','nâng lương')))
+        relationship_only=('CONTRACT.RELATIONSHIP_QUALIFICATION' in subissues and
+            not any(term in query for term in ('lương tối thiểu','mức lương','bao nhiêu tiền',
+                'trả lương chậm','trả lương trễ','đòi lương','tính lương','tính tiền lương')))
         for issue in issues:
+            # Broad routing parents are not procedural findings: property
+            # compensation is not automatically a disciplinary sanction, and
+            # paid work can be a relationship criterion rather than a wage claim.
+            if issue=='DISCIPLINE' and material_only: continue
+            if issue=='WAGE' and relationship_only: continue
             for field,prompt in FACTS.get(issue,{}).items():
                 if not _fact_present(field,query,query_date,facts): missing.append(prompt)
     return sorted(set(missing))
@@ -249,8 +292,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if worked and not approximate:
         number=worked.group(1).lower()
         facts['worked_months']=int(number) if number.isdigit() else MONTH_NUMBER_WORDS[number]
-    service=SERVICE_YEARS.search(q)
-    if service: facts['service_years']=int(service.group(1) or service.group(2))
+    service_years,service=_service_duration(q)
+    if service is not None: facts['service_years']=service_years
     age=AGE.search(q)
     if age:
         facts['age']=int(age.group(1)); facts['minor']=int(age.group(1))<18
@@ -260,9 +303,6 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif any(term in q for term in ('nặng nhọc, độc hại, nguy hiểm','nghề nặng nhọc','công việc nặng nhọc')): facts['work_category']='HEAVY'
     elif any(term in q for term in ('điều kiện bình thường','công việc bình thường','nhân viên văn phòng','công việc văn phòng')): facts['work_category']='NORMAL'
     if 'chưa thành niên' in q: facts['minor']=True
-    if 'service_years' not in facts:
-        word_years=re.search(r'(?:làm|làm việc|cùng công ty|thâm niên)(?:\s+\w+){0,4}?\s+(một|hai|ba|bốn|năm|sáu|bảy|tám|chín|mười)\s+năm\b',q)
-        if word_years: facts['service_years']={'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10}[word_years.group(1)]
     if any(t in q for t in ('nhận lương cố định','làm việc có trả công','làm công việc có trả công')): facts['employment_paid_work']=True
     if any(t in q for t in ('chịu kpi','chịu sự quản lý','chịu sự điều hành','được quản lý như nhân viên')): facts['employment_management']=True
     if 'khuyết tật' in q: facts['disabled']=True

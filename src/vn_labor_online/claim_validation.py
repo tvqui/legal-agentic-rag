@@ -27,6 +27,11 @@ def semantic_issues(text, items, *, context_query=''):
         title=getattr(item,'document_title',None)
         typ=document_type(number,title,getattr(item,'document_type',None))
         source=fold(getattr(item,'source_text',None) or item.text)
+        payment_minimum=('tro cap' in source and 'it nhat bang' in source and
+            bool(re.search(r'\d+\s*%',source)))
+        deduction=bool(re.search(r'(?<!khong )\b(?:bi tru|bi khau tru|bi giam)\b',q))
+        if payment_minimum and deduction and not any(term in source for term in ('khau tru','bi tru','bi giam')):
+            problems.append('CLAIM_BENEFIT_PAYMENT_INVERTED_TO_DEDUCTION')
         if number and typ:
             # Match the type next to this specific number, not an unrelated law
             # title that happens to occur elsewhere in a multi-source claim.
@@ -40,6 +45,20 @@ def semantic_issues(text, items, *, context_query=''):
                 if 'khong '+action in source and 'khong duoc '+action in q and 'khong duoc '+action not in source:
                     problems.append('CLAIM_OMISSION_DUTY_INVERTED')
         article=str(getattr(item,'article_number',None) or getattr(item,'article',None) or '')
+        if number in {'45/2019/QH14','18/VBHN-VPQH'} and article=='105':
+            source_context=fold(' '.join(str(value or '') for value in (getattr(item,'full_text',None),source)))
+            numeric_hours=bool(re.search(r'\b\d+\s+gio',q))
+            adverse=any(term in q for term in ('vi pham','trai phap luat','khong hop phap'))
+            scoped='binh thuong' in q or 'binh thuong' in fold(context_query)
+            if 'thoi gio lam viec binh thuong' in source_context and numeric_hours and adverse and not scoped:
+                problems.append('CLAIM_NORMAL_HOURS_SCOPE_LOST')
+        source_context=fold(' '.join(str(value or '') for value in (getattr(item,'full_text',None),source)))
+        age_band=re.search(r'tu du (\d+) tuoi den (?:chua du|duoi) (\d+) tuoi',source_context)
+        if age_band and 'cong viec nhe' in source_context:
+            lower,upper=age_band.groups()
+            broad=f'duoi {upper} tuoi' in q and 'cong viec nhe' in q
+            if broad and not re.search(r'\b'+re.escape(lower)+r'\b',q):
+                problems.append('CLAIM_MINOR_AGE_SCOPE_LOST')
         if number in {'45/2019/QH14','18/VBHN-VPQH','10/2012/QH13'} and article in {'20','22'}:
             context=fold(' '.join(str(value or '') for value in (getattr(item,'full_text',None),
                 getattr(item,'ancestor_context',None),getattr(item,'source_text',None),item.text)))
@@ -52,6 +71,21 @@ def semantic_issues(text, items, *, context_query=''):
                 problems.append('CLAIM_EMPLOYEE_EXIT_INVENTED_REASON_REQUIREMENT')
             if 'dao tao' in q and 'khong can bao truoc' in q and 'dao tao' not in source:
                 problems.append('CLAIM_EMPLOYEE_EXIT_INVENTED_EXCEPTION')
+            context=fold(' '.join(str(value or '') for value in (getattr(item,'full_text',None),
+                getattr(item,'ancestor_context',None),source)))
+            late_wage_rule=('tra luong khong dung thoi han' in context or 'khong duoc tra du luong' in context)
+            linked_exception=bool(re.search(r'khoan\s+4\s+dieu\s+97',context))
+            no_notice=any(term in q for term in ('khong can bao truoc','khong phai bao truoc','duoc nghi ngay'))
+            qualified=any(term in q for term in ('bat kha khang','khoan 4 dieu 97','tru truong hop',
+                'kiem tra ngoai le','xac minh ngoai le','chua the ket luan'))
+            # Absence of the exception must be stated, never inferred from a
+            # 20-day delay alone (the referenced rule permits some delays).
+            query=fold(context_query)
+            excluded=bool(re.search(r'khong co\s+(?:(?:su kien|ly do)\s+)?bat kha khang',query))
+            negative=any(term in q for term in ('khong co quyen nghi','khong duoc nghi ngay',
+                'khong duoc cham dut','khong duoc don phuong'))
+            if late_wage_rule and linked_exception and no_notice and not (qualified or excluded or negative):
+                problems.append('CLAIM_LATE_WAGE_EXCEPTION_LOST')
         if number in {'45/2019/QH14','18/VBHN-VPQH','10/2012/QH13'} and article in {'25','27'}:
             # 180/60/30 are calendar days. Only 06 is stated as working days.
             for days in (180,60,30):
