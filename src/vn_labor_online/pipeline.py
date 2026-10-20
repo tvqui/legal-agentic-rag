@@ -8,7 +8,7 @@ from .audit import deterministic_audit,citations,reference_audit
 from .config import OnlineConfig,AdjudicationConfig
 from .evidence import state_for,build_verified_pack,detect_authoritative_conflicts,select_for_plan,extend_plan_for_evidence
 from .generation import LegalAdjudicator
-from .errors import IndexUnavailable
+from .errors import IndexUnavailable,ProviderRateLimited
 from .graph import GraphExplorer
 from .models import QueryRequest,AnswerResponse,Trace,Stop,Route,SlotStatus,AdjudicationDraft
 from .retrieval import Retriever,authority_filter,temporal_filter,rerank
@@ -107,6 +107,13 @@ class OnlinePipeline:
         researcher_started=time.perf_counter()
         researcher_path=self.researcher.execution_path(analysis)
         analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
+        if ('RESEARCHER_PROVIDER_ERROR:GEMINI_HTTP_429' in research_warnings
+          and self.cfg.adjudication.review_provider=='gemini' and self.cfg.adjudication.semantic_review
+          and self.cfg.adjudication.mode!='deterministic'):
+            # Compatibility guard for providers returning warning codes. Gemini
+            # now paces and retries transient limits before surfacing an error;
+            # exhausted limits must not be mislabeled as missing legal evidence.
+            raise ProviderRateLimited('GEMINI_HTTP_429')
         checkpoint('planning')
         plan=plan_evidence(analysis)
         trace=Trace(trace_id='trace_'+hashlib.sha256((env.query_id+str(time.time_ns())).encode()).hexdigest()[:16],query_id=env.query_id,
@@ -182,6 +189,7 @@ class OnlinePipeline:
             probe_plan=extend_plan_for_evidence(plan,proved,analysis.facts,analysis.query_date)
             probe_state=state_for(proved,probe_plan,analysis.query_date,allow_fallback)
             recognized={'DETERMINISTIC_PROFILE_RULE','DETERMINISTIC_RULE_MATCH','DETERMINISTIC_LEAVE_RULE_CHAIN',
+              'DETERMINISTIC_PRO_RATA_BASE_PARAMETER',
               'DETERMINISTIC_SPECIAL_OCCUPATION_RULE_MATCH','DETERMINISTIC_SPECIAL_OCCUPATION_DELEGATION_MATCH',
               'DETERMINISTIC_LATE_WAGE_CHAIN','DETERMINISTIC_MISINFORMATION_CHAIN','DETERMINISTIC_HARASSMENT_EXCEPTION',
               'DETERMINISTIC_WITHDRAWAL_RULE','DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN','DETERMINISTIC_MUTUAL_AGREEMENT_RULE',
@@ -350,6 +358,8 @@ class OnlinePipeline:
         else:
             checkpoint('generation')
             draft,generation_warnings=self.adjudicator.generate(pack,partial,assumptions)
+            if draft.semantic_review.get('error_code')=='GEMINI_HTTP_429':
+                raise ProviderRateLimited('GEMINI_HTTP_429')
             checkpoint()
             # Retrieval completeness does not establish answer completeness.
             # The public claims must actually cite every mandatory locator group.

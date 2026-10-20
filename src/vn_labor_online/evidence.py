@@ -143,7 +143,11 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
             probe=state_for([item],EvidencePlan(mandatory_slots=[slot]),query_date,allow_document_temporal_fallback).slots[slot]
             if probe.status in {SlotStatus.FOUND_VERIFIED,SlotStatus.FOUND}:
                 ranked.append((probe.status==SlotStatus.FOUND_VERIFIED,item.score,item))
-        ranked.sort(key=lambda row:(not row[0],-row[1],row[2].unit_id))
+        # A found slot needs another passage only if it upgrades verification.
+        # Otherwise an unreviewed high-score duplicate can reintroduce OCR
+        # errors after the profile already chose a cleaner dated source.
+        if existing.status==SlotStatus.FOUND: ranked=[row for row in ranked if row[0]]
+        ranked.sort(key=lambda row:(not row[0],_source_penalty(row[2]),-row[1],row[2].unit_id))
         if ranked and ranked[0][2].unit_id not in selected_ids and len(selected)<limit:
             selected.append(ranked[0][2]); selected_ids.add(ranked[0][2].unit_id)
     # Profiles define the complete mandatory legal chain; don't pad that chain

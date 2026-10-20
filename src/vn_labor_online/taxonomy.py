@@ -92,7 +92,9 @@ def covered_profile_parents(analysis) -> set[str]:
     if 'CONTRACT.PROBATION_PAY' in keys: covered.add('WAGE')
     if 'TRAINING.RELATIONSHIP_COMPARISON' in keys: covered.update({'CONTRACT','TRAINING'})
     if 'TRAINING.COST_REPAYMENT' in keys and not any(key.startswith('TERMINATION.') for key in keys): covered.add('TERMINATION')
-    if 'CONTRACT.RELATIONSHIP_QUALIFICATION' in keys and not any(term in q for term in ('đòi lương','lương tối thiểu','mức lương','bao nhiêu tiền','trả lương','tiền lương')):
+    wage_as_relationship_feature=bool(re.search(r'(?:yếu tố|dấu hiệu|nội dung)[^.?!]{0,100}tiền lương[^.?!]{0,80}(?:quản lý|giám sát)',q))
+    wage_request=any(term in q for term in ('đòi lương','lương tối thiểu','mức lương','bao nhiêu tiền','trả lương','tính lương','tính tiền lương'))
+    if 'CONTRACT.RELATIONSHIP_QUALIFICATION' in keys and not wage_request and ('tiền lương' not in q or wage_as_relationship_feature):
         covered.update({'WAGE','TRAINING','WORKING_TIME'})
     if 'WORKING_TIME.OVERTIME_LIMITS' in keys and not any(term in q for term in ('tiền lương','trả lương','tiền làm thêm')): covered.add('WAGE')
     if 'WAGE.NIGHT_PAY' in keys and not any(term in q for term in ('nghỉ giữa giờ','lịch làm việc','thời giờ nghỉ')): covered.add('WORKING_TIME')
@@ -111,13 +113,14 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         if label not in found: found.append(label)
     has = lambda *terms: any(term in q for term in terms)
     intent = facts.get('query_intent')
-    employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','nlđ','nsdlđ','công ty')
+    employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','nlđ','nsdlđ','công ty',
+      'doanh nghiệp','hợp đồng dịch vụ','hợp đồng cộng tác viên')
     if re.search(r'(?:thế nào là|định nghĩa|khái niệm|được hiểu[^.]{0,15})\s+(?:người lao động|người sử dụng lao động)',q):
         add('CONTRACT.PARTY_DEFINITIONS')
     if employment and (original_documents(q) or has('đặt cọc','bảo đảm bằng tiền','bảo đảm bằng tài sản')):
         add('CONTRACT.PROHIBITED_ACTS')
     if employment and (has('thực tập sinh','hợp đồng dịch vụ','hợp đồng cộng tác viên','quan hệ lao động','không ký hợp đồng','không phải hợp đồng lao động')
-      or has('tên gọi') and has('hợp đồng','thỏa thuận')):
+      or has('tên gọi','mang tên') and has('hợp đồng','thỏa thuận')):
         add('CONTRACT.RELATIONSHIP_QUALIFICATION')
     if employment and has('cung cấp thông tin','cung cấp những thông tin','cung cấp sai','thông tin không trung thực'):
         add('CONTRACT.EMPLOYER_INFORMATION')

@@ -9,7 +9,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 from .models import Claim, ProviderClaims
 from .claim_validation import fold, semantic_issues
-from .errors import StructuredOutputError
+from .errors import StructuredOutputError,ProviderRateLimited
+from .runtime import RequestStopped
 
 class Grounding(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -255,6 +256,8 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                     candidate = candidate.model_copy(update={'claims':[Claim(claim_id=f'claim_{i:03d}',
                         **claim.model_dump()) for i,claim in enumerate(repair.claims,1)]})
                     continue
+                except (ProviderRateLimited,RequestStopped):
+                    raise
                 except Exception as exc:
                     # A failed repair does not invalidate already checked parts.
                     # It also cannot revive a rejected claim or claim completion.
@@ -267,6 +270,8 @@ def review_answer(provider, draft, pack, repair_attempts=1):
             return candidate.model_copy(update={'claims':kept,'semantic_review':report,
                 'limitations':list(dict.fromkeys(candidate.limitations+['answer_coverage']))}), [
                 'ANSWER_SEMANTIC_REVIEW_INCOMPLETE' if kept else 'ANSWER_QUALITY_BLOCKED']
+        except (ProviderRateLimited,RequestStopped):
+            raise
         except Exception as exc:
             if isinstance(exc,StructuredOutputError) and iteration<repair_attempts:
                 # Re-request an invalid review within the same bounded budget;

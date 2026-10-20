@@ -5,6 +5,8 @@ from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION,profile_
 from .config import ResearcherConfig
 from .models import FactCandidate,QueryAnalysis,ResearcherResult,Route
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
+from .errors import ProviderRateLimited
+from .runtime import RequestStopped
 from .tasks import merge_tasks
 from .topics import TOPICS
 
@@ -115,6 +117,8 @@ The result improves retrieval recall and never counts as legal evidence. Return 
               'retrieval_queries':queries[:self.cfg.max_queries],'ontology_features':result.ontology,
               'fact_candidates':all_candidates[:40],'answer_tasks':tasks})
             return updated,[]
+        except (ProviderRateLimited,RequestStopped):
+            raise
         except Exception as exc:
             from .answer_review import review_error_code
             warnings=['RESEARCHER_PROVIDER_FALLBACK:'+type(exc).__name__]

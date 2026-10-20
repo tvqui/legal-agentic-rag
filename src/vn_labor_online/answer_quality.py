@@ -60,7 +60,9 @@ def language_issues(text: str, *, allow_admin: bool = False) -> list[str]:
         issues.append('CORRUPTED_CHARACTERS')
     if _OCR_WORD.search(text) or _OCR_START.search(text):
         issues.append('SUSPECT_OCR_WORD')
-    if re.search(r'(?i)\b(?:điều|khoản)\s+[lI]\b', text):
+    folded=''.join(c for c in unicodedata.normalize('NFD',text).lower().replace('đ','d') if unicodedata.category(c)!='Mn')
+    if re.search(r'(?i)\b(?:điều|khoản)\s+[lI]\b', text) or re.search(
+      r'\b(?:dieu|khoan)\s+(?:\d+[il|]\d+|[il|]+\d+)\b',folded):
         issues.append('SUSPECT_LEGAL_LOCATOR')
     unquoted = _QUOTE.sub('', text)
     if not allow_admin and re.search(r'(?i)\bkính\s+gửi\s*:', unquoted):

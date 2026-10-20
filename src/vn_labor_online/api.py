@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-import hashlib, json, logging, os, re, secrets, threading, uuid
+import hashlib, json, logging, math, os, re, secrets, threading, uuid
 from datetime import date
 from .runtime import RequestRegistry,RequestStopped,request_budget
 from .config import load_config
-from .errors import OnlineError
+from .errors import OnlineError,ProviderRateLimited
 from .models import AnswerResponse,QueryRequest
 from .pipeline import OnlinePipeline
 from .taxonomy import TAXONOMY_VERSION
@@ -91,6 +91,20 @@ def create_app(config_path:str|Path|None=None):
         )
         return JSONResponse(status_code=exc.status_code, content=payload)
 
+    @app.exception_handler(ProviderRateLimited)
+    async def provider_rate_handler(request:Request,exc:ProviderRateLimited):
+        retry=exc.retry_after_seconds
+        details={'provider':'gemini','reason':'GEMINI_HTTP_429','quota_kind':exc.quota_kind}
+        headers={}
+        if retry is not None:
+            details['retry_after_seconds']=max(1,math.ceil(retry))
+            headers['Retry-After']=str(details['retry_after_seconds'])
+        message=('Dịch vụ AI đã chạm hạn mức ngày hoặc hạn mức không khả dụng. Chưa có kết luận pháp lý.'
+                 if exc.quota_kind in {'DAILY','QUOTA_DISABLED'} else
+                 'Dịch vụ AI đang giới hạn lượt gọi hoặc lượng token; đã hết số lần thử/thời gian chờ cho yêu cầu này. Vui lòng thử lại sau.')
+        payload=_error_envelope(503,'PROVIDER_RATE_LIMIT',message,details=details)
+        return JSONResponse(status_code=503,content=payload,headers=headers)
+
     @app.exception_handler(OnlineError)
     async def online_error_handler(request: Request, exc: OnlineError):
         eid = f"ERR_{uuid.uuid4().hex[:12].upper()}"
@@ -153,6 +167,7 @@ def create_app(config_path:str|Path|None=None):
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'literal_source_lookup':'verified-excerpt-v1',
             'assessment_fact_gate':'critical-facts-v1','probation_scope':'dated-job-group-v1',
+            'gemini_schema_contract':'local-validation-v1','provider_capacity':'paced-retry-v2',
             'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'cooperative_cancel':True,'idempotent_retry':True},
           'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
           'semantic_review_provider':pipeline.cfg.adjudication.review_provider,

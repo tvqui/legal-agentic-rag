@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import json
 import time
+from copy import deepcopy
 from functools import cached_property
 import urllib.error
 import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 
-from .errors import LLMProviderError,StructuredOutputError
+from .errors import LLMProviderError,StructuredOutputError,ProviderRateLimited
 from .runtime import checkpoint,request_timeout,RequestStopped
+from .gemini_quota import GeminiRatePolicy,get_gemini_limiter,quota_info
 
 def _unique_object(pairs):
     result={}
@@ -153,43 +155,85 @@ class OllamaProvider(BaseProvider):
                     "error": type(exc).__name__}
 
 
+def gemini_transport_schema(schema):
+    """Avoid decoder-state blowups; enforce original array limits locally.
+
+    Model types, required keys, enums, references and minimum lengths stay on
+    the wire. Never mutate the caller's schema or delete a property whose name
+    happens to be a JSON Schema keyword.
+    """
+    result=deepcopy(schema)
+    def walk(node):
+        if not isinstance(node,dict): return
+        node.pop('maxItems',None)
+        for key in ('properties','$defs','definitions','patternProperties','dependentSchemas'):
+            for value in (node.get(key) or {}).values(): walk(value)
+        for key in ('items','additionalProperties','contains','not','if','then','else','propertyNames'):
+            walk(node.get(key))
+        for key in ('allOf','anyOf','oneOf','prefixItems'):
+            for value in node.get(key,[]): walk(value)
+    walk(result)
+    return result
+
+
 class GeminiProvider(BaseProvider):
     """Optional official Google SDK, used for understanding, not source authority."""
     def __init__(self, model, api_key=None, timeout=20, max_output_tokens=2048):
         self.model, self.api_key = model, api_key
         self.timeout, self.max_output_tokens = timeout, max_output_tokens
+        self.rate_policy=GeminiRatePolicy.from_env()
+        self.rate_limiter=get_gemini_limiter(model,self.rate_policy)
 
     def structured(self, system, user, schema):
         if not self.model or not self.api_key:
             raise LLMProviderError('GEMINI_CONFIGURATION_MISSING')
-        checkpoint()
-        try:
-            from google import genai
-            from google.genai import types
-            # Per-call client keeps deadlines scoped; do not mutate a shared timeout.
-            with genai.Client(api_key=self.api_key, http_options=types.HttpOptions(
-                    timeout=max(1, int(request_timeout(self.timeout)*1000)),
-                    retry_options=types.HttpRetryOptions(attempts=1))) as client:
-                response=client.models.generate_content(model=self.model, contents=user,
-                    config=types.GenerateContentConfig(system_instruction=system, temperature=0,
-                        max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
-                        response_json_schema=schema))
+        wait_remaining=self.rate_policy.max_wait_seconds
+        for attempt in range(self.rate_policy.max_retries+1):
             checkpoint()
-            candidates=getattr(response,'candidates',None) or []
-            if candidates:
-                reason=getattr(candidates[0],'finish_reason',None)
-                if getattr(reason,'value',reason)=='MAX_TOKENS':
-                    raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
-            if not response.text: raise StructuredOutputError('GEMINI_EMPTY_RESPONSE')
-            return _decode_content(response.text)
-        except (RequestStopped,StructuredOutputError):
-            raise
-        except Exception as exc:
-            # SDK errors can include request URLs. Never surface credentials.
-            status=getattr(exc,'code',None)
-            safe_code=f'GEMINI_HTTP_{status}' if type(status) is int and 400<=status<=599 else (
-              'GEMINI_TIMEOUT' if isinstance(exc,TimeoutError) else 'GEMINI_CLIENT_ERROR')
-            raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__,safe_code=safe_code) from None
+            wait_remaining=max(0,wait_remaining-self.rate_limiter.acquire(wait_remaining))
+            try:
+                from google import genai
+                from google.genai import types
+                from jsonschema import Draft202012Validator,ValidationError
+                # Exactly one SDK attempt: all actual retries must reacquire a
+                # shared project/model slot and respect the request deadline.
+                with genai.Client(api_key=self.api_key, http_options=types.HttpOptions(
+                        timeout=max(1, int(request_timeout(self.timeout)*1000)),
+                        retry_options=types.HttpRetryOptions(attempts=1))) as client:
+                    response=client.models.generate_content(model=self.model, contents=user,
+                        config=types.GenerateContentConfig(system_instruction=system, temperature=0,
+                            max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
+                            response_json_schema=gemini_transport_schema(schema)))
+                checkpoint()
+                candidates=getattr(response,'candidates',None) or []
+                if candidates:
+                    reason=getattr(candidates[0],'finish_reason',None)
+                    if getattr(reason,'value',reason)=='MAX_TOKENS':
+                        raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
+                if not response.text: raise StructuredOutputError('GEMINI_EMPTY_RESPONSE')
+                decoded=_decode_content(response.text)
+                try: Draft202012Validator(schema).validate(decoded)
+                except ValidationError:
+                    raise StructuredOutputError('GEMINI_SCHEMA_VALIDATION_FAILED') from None
+                return decoded
+            except (RequestStopped,StructuredOutputError,ProviderRateLimited):
+                raise
+            except Exception as exc:
+                status=getattr(exc,'code',None)
+                if status==429:
+                    info=quota_info(exc)
+                    delay=(info.retry_after_seconds if info.retry_after_seconds is not None else 60) if info.retryable else None
+                    if info.retryable:
+                        self.rate_limiter.defer(delay,info.kind)
+                    if not info.retryable or attempt>=self.rate_policy.max_retries:
+                        raise ProviderRateLimited('GEMINI_HTTP_429',quota_kind=info.kind,
+                            retry_after_seconds=delay) from None
+                    continue
+                # SDK errors can include request URLs. Never surface credentials.
+                safe_code=f'GEMINI_HTTP_{status}' if type(status) is int and 400<=status<=599 else (
+                  'GEMINI_TIMEOUT' if isinstance(exc,TimeoutError) else 'GEMINI_CLIENT_ERROR')
+                raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__,safe_code=safe_code) from None
+        raise AssertionError('unreachable')
 
     def readiness(self):
         from importlib.util import find_spec
@@ -207,4 +251,8 @@ class GeminiProvider(BaseProvider):
             except Exception:
                 ready=False
         return {'status':'READY' if ready else 'DEGRADED',
-                'provider':'gemini','model':self.model,'check':'INFERENCE_PROBE'}
+                'provider':'gemini','model':self.model,'check':'INFERENCE_PROBE',
+                'rate_limit':{'requests_per_minute':self.rate_limiter.rpm,
+                    'max_retries':self.rate_policy.max_retries,
+                    'max_wait_seconds':self.rate_policy.max_wait_seconds,
+                    'scope':'SHARED_PROCESS_PROJECT_MODEL'}}
