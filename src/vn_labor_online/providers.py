@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from .errors import LLMProviderError,StructuredOutputError,ProviderRateLimited
 from .runtime import checkpoint,request_timeout,RequestStopped
 from .gemini_quota import GeminiRatePolicy,get_gemini_limiter,quota_info
+from .gemini_diagnostics import classify_error,public_diagnostics
 
 def _unique_object(pairs):
     result={}
@@ -290,7 +291,8 @@ class GeminiProvider(BaseProvider):
                 # SDK errors can include request URLs. Never surface credentials.
                 safe_code=f'GEMINI_HTTP_{status}' if type(status) is int and 400<=status<=599 else (
                   'GEMINI_TIMEOUT' if isinstance(exc,TimeoutError) else 'GEMINI_CLIENT_ERROR')
-                raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__,safe_code=safe_code) from None
+                raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__,safe_code=safe_code,
+                    safe_diagnostics=classify_error(exc)) from None
         raise AssertionError('unreachable')
 
     def readiness(self):
@@ -346,6 +348,7 @@ class GeminiProvider(BaseProvider):
                 else:
                     code=getattr(exc,'safe_code',None)
                     details['error_code']=code if isinstance(code,str) and re.fullmatch(r'GEMINI_(?:HTTP_[45]\d\d|TIMEOUT|CLIENT_ERROR)',code) else 'GEMINI_PROBE_ERROR'
+                    details.update(public_diagnostics(getattr(exc,'safe_diagnostics',None)))
                 delay=details.get('retry_after_seconds',5)
                 self._probe_next_at=time.monotonic()+delay
                 self._probe_failure=details

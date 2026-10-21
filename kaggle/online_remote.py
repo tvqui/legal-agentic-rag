@@ -54,10 +54,12 @@ def wait_json(url: str, token: str | None, process: subprocess.Popen, timeout: i
 
 def readiness_diagnostics(snapshot):
     """Allowlisted startup diagnostics, never raw SDK errors or configuration."""
+    from vn_labor_online.gemini_diagnostics import public_diagnostics
     values={}
     for name in ('researcher','auditor','adjudicator','answer_reviewer'):
         component=snapshot.get('components',{}).get(name,{})
         values[name]={key:component[key] for key in ('status','provider','error_code','quota_kind','retry_after_seconds') if key in component}
+        values[name].update(public_diagnostics(component))
     return values
 
 
