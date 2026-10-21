@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import random
 import re
 import threading
@@ -217,6 +218,16 @@ def _wait_service_retry(seconds):
         time.sleep(min(.25,remaining))
 
 
+def gemini_probe_timeout():
+    """Cold-start inference probe only; normal answer deadlines are unchanged."""
+    try: seconds=int(os.getenv('VN_LABOR_GEMINI_PROBE_TIMEOUT_SECONDS','20'))
+    except (TypeError,ValueError):
+        raise ValueError('Gemini probe timeout must be an integer from 1 to 60 seconds.') from None
+    if not 1<=seconds<=60:
+        raise ValueError('Gemini probe timeout must be an integer from 1 to 60 seconds.')
+    return seconds
+
+
 class GeminiProvider(BaseProvider):
     """Optional official Google SDK, used for understanding, not source authority."""
     def __init__(self, model, api_key=None, timeout=20, max_output_tokens=2048):
@@ -298,9 +309,14 @@ class GeminiProvider(BaseProvider):
     def readiness(self):
         from importlib.util import find_spec
         from .runtime import request_budget
+        try: probe_seconds=min(gemini_probe_timeout(),self.timeout)
+        except ValueError:
+            return {'status':'DEGRADED','provider':'gemini','model':self.model,
+                    'check':'INFERENCE_PROBE','error_code':'GEMINI_PROBE_TIMEOUT_CONFIGURATION_INVALID'}
         def report(ready=False, **details):
             return {'status':'READY' if ready else 'DEGRADED',
                 'provider':'gemini','model':self.model,'check':'INFERENCE_PROBE',
+                'probe_timeout_seconds':probe_seconds,
                 'rate_limit':{'requests_per_minute':self.rate_limiter.rpm,
                     'max_retries':self.rate_policy.max_retries,
                     'max_wait_seconds':self.rate_policy.max_wait_seconds,
@@ -318,10 +334,10 @@ class GeminiProvider(BaseProvider):
             if remaining>0:
                 return report(**{**self._probe_failure,'retry_after_seconds':max(1,math.ceil(remaining))})
             try:
-                # A probe can wait briefly for pacing, but cannot block /ready
-                # for the whole 70s quota budget. The launcher retries readiness
-                # across cooldowns instead of spawning overlapping long probes.
-                with request_budget(min(20,self.timeout)):
+                # Default 20s; Kaggle may explicitly allow <=60s for a cold
+                # model. This bounds the entire probe, including pacing/retries.
+                # The launcher's HTTP timeout covers sequential role probes.
+                with request_budget(probe_seconds):
                     result=self.structured('Return the requested JSON only.','Set ready to true.',
                       {'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False})
                 if result!={'ready':True}: raise StructuredOutputError('GEMINI_PROBE_RESPONSE_MISMATCH')

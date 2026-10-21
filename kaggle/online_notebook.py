@@ -4,11 +4,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from textwrap import dedent
 
 
-def make_notebook():
+def make_notebook(gemini_model='gemini-3.5-flash-lite'):
+    if not isinstance(gemini_model,str) or not re.fullmatch(r'(?:models/)?gemini-[A-Za-z0-9._-]{1,100}',gemini_model):
+        raise ValueError('Invalid Gemini model identifier; credentials do not belong here.')
     cells=[]
     def add(kind,name,value):
         cell={'cell_type':kind,'id':'online-'+str(len(cells)).zfill(2),
@@ -44,12 +47,13 @@ def make_notebook():
     GEMINI_MODEL = 'gemini-3.5-flash-lite'  # model bạn đang sử dụng
     OLLAMA_MODEL = 'qwen3:8b'
     GEMINI_RPM = 13
-    READY_TIMEOUT_SECONDS = 180
+    GEMINI_PROBE_TIMEOUT_SECONDS = 60  # chỉ probe khởi động; mỗi câu hỏi vẫn có ngân sách riêng
+    READY_TIMEOUT_SECONDS = 240
     CONFIG = Path('/kaggle/working/online_pinned.yaml')
     WORKING = Path('/kaggle/working/vn_labor_online')
     PYTHON = Path('/tmp/vn_labor_online_env/bin/python')
     NOTEBOOK_VALIDATED = False
-    ''')
+    '''.replace("GEMINI_MODEL = 'gemini-3.5-flash-lite'",f'GEMINI_MODEL = {gemini_model!r}'))
     add('code','helpers',r'''
     import importlib.metadata
     import json
@@ -230,6 +234,7 @@ def make_notebook():
         'VN_LABOR_ADJUDICATION_REVIEW_MODEL':GEMINI_MODEL,
         'VN_LABOR_GEMINI_RPM':str(GEMINI_RPM),'VN_LABOR_GEMINI_RATE_RETRIES':'2',
         'VN_LABOR_GEMINI_RATE_MAX_WAIT_SECONDS':'70',
+        'VN_LABOR_GEMINI_PROBE_TIMEOUT_SECONDS':str(globals().get('GEMINI_PROBE_TIMEOUT_SECONDS',60)),
         'VN_LABOR_APPLICABILITY_MODE':'hybrid','VN_LABOR_APPLICABILITY_PROVIDER':'ollama',
         'VN_LABOR_ADJUDICATION_MODE':'ollama','VN_LABOR_REQUEST_TIMEOUT_SECONDS':'180',
         'VN_LABOR_MAX_CONCURRENT_ANSWERS':'1','TOKENIZERS_PARALLELISM':'false',
@@ -269,6 +274,10 @@ def make_notebook():
     api_source=(ROOT/'src/vn_labor_online/api.py').read_text(encoding='utf-8')
     if 'diagnostic-probe-v2' not in api_source or not (ROOT/'kaggle/check_gemini.py').is_file():
         raise RuntimeError('main chưa có bản sửa Gemini readiness. Push code local rồi chạy lại cell này.')
+    if not (ROOT/'src/vn_labor_online/gemini_diagnostics.py').is_file():
+        raise RuntimeError('main chưa có chẩn đoán lỗi Gemini; push bản sửa rồi cập nhật lại.')
+    if '--probe-timeout' not in (ROOT/'kaggle/check_gemini.py').read_text(encoding='utf-8'):
+        raise RuntimeError('main chưa có probe timeout cấu hình được; push bản sửa mới rồi cập nhật lại.')
     constraints=[]
     for package in ('torch','torchvision','torchaudio'):
         try: constraints.append(package+'=='+importlib.metadata.version(package))
@@ -333,6 +342,8 @@ def make_notebook():
             and profile['applicability']=='hybrid' and profile['adjudication']=='ollama'
             and all(profile[name] for name in ('dense','bm25','reranker','graph'))):
         raise RuntimeError('Profile thực tế không đúng cấu hình đầy đủ của notebook.')
+    if profile['researcher_model']!=GEMINI_MODEL or profile['reviewer_model']!=GEMINI_MODEL:
+        raise RuntimeError('Model thực tế của Researcher/reviewer không khớp GEMINI_MODEL đã chọn.')
     print('Effective ONLINE profile:',json.dumps(profile,ensure_ascii=False),flush=True)
     print('Pinned build:',pin_report['build_id'],flush=True)
     ''')
@@ -340,11 +351,14 @@ def make_notebook():
     ## 4. Kiểm Gemini trước khi tải BGE/Qwen
     Đây là probe kết nối nhỏ, không chứng nhận câu trả lời pháp lý đúng. Nếu lỗi, mã lỗi
     được in an toàn; sửa Secrets/model/quota rồi chạy lại từ cell cần thiết.
+    Cho phép tối đa 60 giây cho probe cold start. Lỗi 400 sẽ có thêm chẩn đoán plain probe,
+    không tự đổi model, bỏ JSON hay coi lỗi là PASS. Nếu timeout, không chạy tiếp backend.
     Không chạy notebook/benchmark khác dùng cùng quota trong lúc kiểm.
     ''')
     add('code','gemini_check',r'''
     NOTEBOOK_VALIDATED=False
-    run_step([PYTHON,'-u','kaggle/check_gemini.py','--config',CONFIG,'--model',GEMINI_MODEL],
+    run_step([PYTHON,'-u','kaggle/check_gemini.py','--config',CONFIG,'--model',GEMINI_MODEL,
+              '--probe-timeout',str(globals().get('GEMINI_PROBE_TIMEOUT_SECONDS',60)),'--diagnose'],
              'gemini_check',timeout=120,cwd=ROOT)
     NOTEBOOK_VALIDATED=True
     print('Các bước chuẩn bị đã đạt. Cell tiếp theo sẽ giữ backend chạy.',flush=True)
@@ -376,9 +390,9 @@ def make_notebook():
     return notebook
 
 
-def write_notebook(path:Path):
+def write_notebook(path:Path,gemini_model='gemini-3.5-flash-lite'):
     path.parent.mkdir(parents=True,exist_ok=True)
-    payload=json.dumps(make_notebook(),ensure_ascii=False,indent=2)+'\n'
+    payload=json.dumps(make_notebook(gemini_model),ensure_ascii=False,indent=2)+'\n'
     data=payload.encode('utf-8')
     path.write_bytes(data)
     sha=hashlib.sha256(data).hexdigest()
@@ -390,4 +404,6 @@ def write_notebook(path:Path):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,default=Path(__file__).with_name('ONLINE_Backend.ipynb'))
-    print(json.dumps(write_notebook(parser.parse_args().output),ensure_ascii=False))
+    parser.add_argument('--gemini-model',default='gemini-3.5-flash-lite')
+    args=parser.parse_args()
+    print(json.dumps(write_notebook(args.output,args.gemini_model),ensure_ascii=False))

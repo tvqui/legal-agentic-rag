@@ -64,19 +64,23 @@ def readiness_diagnostics(snapshot):
 
 
 def wait_ready(url, token, process, timeout=180):
+    from vn_labor_online.providers import gemini_probe_timeout
+    probe_timeout=gemini_probe_timeout()
     deadline=time.monotonic()+timeout
     last={}
     last_error=None
     last_print=-float('inf')
     permanent={'GEMINI_API_KEY_MISSING','GEMINI_MODEL_MISSING','GEMINI_SDK_MISSING',
-               'GEMINI_HTTP_400','GEMINI_HTTP_401','GEMINI_HTTP_403','GEMINI_HTTP_404'}
+               'GEMINI_HTTP_400','GEMINI_HTTP_401','GEMINI_HTTP_403','GEMINI_HTTP_404',
+               'GEMINI_PROBE_TIMEOUT_CONFIGURATION_INVALID'}
     while time.monotonic()<deadline:
         exit_code=process.poll()
         if exit_code is not None:
             raise RuntimeError(f'Backend exited during readiness with code {exit_code}; see logs/backend.log')
         try:
-            # /ready may perform two sequential inference probes, each <=20s.
-            last=get_json(url,token,timeout=min(45,max(.1,deadline-time.monotonic())))
+            # /ready may perform two sequential Gemini probes. Cover their
+            # configured budgets without exceeding the total startup deadline.
+            last=get_json(url,token,timeout=min(2*probe_timeout+5,max(.1,deadline-time.monotonic())))
             if not isinstance(last,dict): raise ValueError('Invalid readiness response')
             components=last.get('components',{})
             required=('researcher','auditor','adjudicator','answer_reviewer')

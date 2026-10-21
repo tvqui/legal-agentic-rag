@@ -8,7 +8,7 @@ from pathlib import Path
 
 from online_remote import secret
 from vn_labor_online.config import load_config
-from vn_labor_online.providers import GeminiProvider
+from vn_labor_online.providers import GeminiProvider,gemini_probe_timeout
 from vn_labor_online.gemini_diagnostics import classify_error
 from vn_labor_online.runtime import request_budget, request_timeout
 
@@ -37,13 +37,19 @@ def plain_probe(provider):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model')
+    parser.add_argument('--probe-timeout',type=int,choices=range(1,61),metavar='1..60',
+                        help='Total inference-probe budget; defaults to configured value or 20s.')
     parser.add_argument('--diagnose',action='store_true',help='After HTTP 400 only, try one plain synthetic request. This does not bypass the failed readiness check.')
     parser.add_argument('--config',type=Path,default=Path('config/online_kaggle.yaml'))
     args=parser.parse_args()
+    if args.probe_timeout is not None:
+        os.environ['VN_LABOR_GEMINI_PROBE_TIMEOUT_SECONDS']=str(args.probe_timeout)
+    try: probe_seconds=gemini_probe_timeout()
+    except ValueError as exc: parser.error(str(exc))
     cfg=load_config(args.config)
     model=args.model or os.getenv('GEMINI_MODEL') or cfg.adjudication.review_model
     if not model and cfg.researcher.mode=='gemini': model=cfg.researcher.model
-    provider=GeminiProvider(model,secret('GEMINI_API_KEY',required=False),timeout=20,max_output_tokens=1024)
+    provider=GeminiProvider(model,secret('GEMINI_API_KEY',required=False),timeout=probe_seconds,max_output_tokens=1024)
     try:
         report=provider.readiness()
         print(json.dumps(report,ensure_ascii=False),flush=True)

@@ -62,6 +62,25 @@ class KaggleOnlineNotebookTests(unittest.TestCase):
         self.assertEqual(report['sha256'], hashlib.sha256(target.read_bytes()).hexdigest())
         self.assertTrue(Path(str(target)+'.sha256').is_file())
 
+    def test_selected_model_is_preserved_and_cannot_inject_code(self):
+        notebook=generator.make_notebook('gemini-3.1-flash-lite')
+        settings=next(''.join(c['source']) for c in notebook['cells'] if c['metadata']['name']=='settings')
+        scope={}; exec(settings,scope)
+        self.assertEqual(scope['GEMINI_MODEL'],'gemini-3.1-flash-lite')
+        self.assertEqual(scope['GEMINI_PROBE_TIMEOUT_SECONDS'],60)
+        for invalid in ('', 'gemini-x\nraise Exception()', "gemini-x'; print('bad')"):
+            with self.assertRaises(ValueError): generator.make_notebook(invalid)
+
+    def test_probe_cell_requests_bounded_diagnostics_before_backend(self):
+        run=Mock()
+        self.scope.update(PYTHON=Path('/python'),CONFIG=Path('/config'),GEMINI_MODEL='gemini-3.1-flash-lite',
+            ROOT=self.root,GEMINI_PROBE_TIMEOUT_SECONDS=60,run_step=run)
+        with contextlib.redirect_stdout(io.StringIO()): exec(self.code['gemini_check'],self.scope)
+        args=run.call_args.args[0]
+        self.assertEqual(args[args.index('--probe-timeout')+1],'60')
+        self.assertIn('--diagnose',args)
+        self.assertEqual(run.call_args.kwargs['timeout'],120)
+
     def test_select_complete_unpacked_artifact(self):
         expected = self.artifact()
         self.assertEqual(self.scope['select_artifact'](self.root), expected)
@@ -190,8 +209,9 @@ class KaggleOnlineNotebookTests(unittest.TestCase):
         (repo/'.git').mkdir(parents=True)
         (repo/'src/vn_labor_online').mkdir(parents=True)
         (repo/'src/vn_labor_online/api.py').write_text('diagnostic-probe-v2',encoding='utf-8')
+        (repo/'src/vn_labor_online/gemini_diagnostics.py').write_text('# fixture',encoding='utf-8')
         (repo/'kaggle').mkdir()
-        (repo/'kaggle/check_gemini.py').write_text('# fixture',encoding='utf-8')
+        (repo/'kaggle/check_gemini.py').write_text('--probe-timeout',encoding='utf-8')
         calls = []
         def git_output(args, **kwargs):
             return {'remote':'https://github.com/tvqui/legal-agentic-rag.git\n',
