@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import random
 import re
 import threading
 import time
@@ -170,6 +171,11 @@ def gemini_transport_schema(schema):
     def walk(node):
         if not isinstance(node,dict): return
         node.pop('maxItems',None)
+        # A singleton enum has the same accepted values as scalar const, while
+        # giving the structured-output decoder an explicit choice list. The
+        # original schema (including const) is still validated locally.
+        if 'const' in node and 'enum' not in node and isinstance(node['const'],(str,int,float,bool,type(None))):
+            node['enum']=[node.pop('const')]
         for key in ('properties','$defs','definitions','patternProperties','dependentSchemas'):
             for value in (node.get(key) or {}).values(): walk(value)
         for key in ('items','additionalProperties','contains','not','if','then','else','propertyNames'):
@@ -199,6 +205,15 @@ def gemini_array_limits(schema):
     return ('\nThe original response contract also enforces these array bounds. '
         'Respect them when planning output; do not add redundant tasks or queries:\n'+
         '\n'.join(limits)) if limits else ''
+
+
+def _wait_service_retry(seconds):
+    until=time.monotonic()+seconds
+    while True:
+        checkpoint('gemini_service_retry')
+        remaining=until-time.monotonic()
+        if remaining<=0: return
+        time.sleep(min(.25,remaining))
 
 
 class GeminiProvider(BaseProvider):
@@ -264,6 +279,14 @@ class GeminiProvider(BaseProvider):
                         raise ProviderRateLimited('GEMINI_HTTP_429',quota_kind=info.kind,
                             retry_after_seconds=delay) from None
                     continue
+                if status in {408,500,502,503,504} and attempt<self.rate_policy.max_retries:
+                    # SDK retry is disabled so every actual attempt reacquires
+                    # the shared RPM gate. A service outage is not a quota error.
+                    delay=max(2**attempt+random.uniform(0,.25),quota_info(exc).retry_after_seconds or 0)
+                    if delay<=wait_remaining and request_timeout(delay+.01)>=delay:
+                        _wait_service_retry(delay)
+                        wait_remaining=max(0,wait_remaining-delay)
+                        continue
                 # SDK errors can include request URLs. Never surface credentials.
                 safe_code=f'GEMINI_HTTP_{status}' if type(status) is int and 400<=status<=599 else (
                   'GEMINI_TIMEOUT' if isinstance(exc,TimeoutError) else 'GEMINI_CLIENT_ERROR')

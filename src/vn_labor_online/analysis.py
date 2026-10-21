@@ -114,6 +114,15 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
     topics=detect_topics(q)
     issues=list(dict.fromkeys([item for item in issues if item!='GENERAL']+[topic.issue for topic in topics])) or ['GENERAL']
+    unemployment_framework=('unemployment' in {topic.key for topic in topics}
+        and facts.get('actor') is None
+        and not re.search(r'\b(?:tôi|của tôi|trường hợp của|anh [a-z]|chị [a-z])\b',lower)
+        and any(term in lower for term in ('chỉ cần','chắc chắn','bất kể','có luôn','mọi người','tất cả')))
+    if unemployment_framework:
+        # Departure is background to a benefits-policy question, not a request
+        # to adjudicate an employer's termination of a specific worker.
+        issues=[issue for issue in issues if issue!='TERMINATION']
+        topics=[topic for topic in topics if topic.issue!='TERMINATION']
     subissues=classify_subissues(q,facts,issues)
     # A retention deadline is not a request to assess an employee's resignation.
     if original_documents(lower) and not re.search(r'(?:tôi|người lao động|nlđ)\s+(?:muốn|xin|sẽ|đơn phương|chỉ báo|báo trước)|thời hạn báo trước|hậu quả.*(?:nghỉ|chấm dứt)',lower):
@@ -130,6 +139,7 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     if re.search(r'(?:áp dụng|xử lý)[^.?!]{0,100}(?:giống|như)[^.?!]{0,100}(?:không|hay không)\s*[?!.]*$',lower):
         outcome='COMPARE'
     if annual_leave_combination_only(lower): outcome='EXPLAIN'
+    if unemployment_framework: outcome='EXPLAIN'
     historical=legal_regime_for(query_date)=='BLLD_2012' if query_date else False
     temporal='HISTORICAL' if historical else 'EXPLICIT_DATE' if query_date else 'CURRENT' if any(w in lower for w in ('hiện nay','bây giờ','mới nhất')) else 'NONE'
     # A date constraint alone does not make a lookup or a single-issue question complex.
@@ -267,12 +277,13 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
         relationship_only=('CONTRACT.RELATIONSHIP_QUALIFICATION' in subissues and
             not any(term in query for term in ('lương tối thiểu','mức lương','bao nhiêu tiền',
                 'trả lương chậm','trả lương trễ','đòi lương','tính lương','tính tiền lương')))
+        incidental_wage=bool(topics.intersection({'suspension','job_transfer','material_liability'})) and not independent_wage
         for issue in issues:
             # Broad routing parents are not procedural findings: property
             # compensation is not automatically a disciplinary sanction, and
             # paid work can be a relationship criterion rather than a wage claim.
             if issue=='DISCIPLINE' and material_only: continue
-            if issue=='WAGE' and relationship_only: continue
+            if issue=='WAGE' and (relationship_only or incidental_wage): continue
             for field,prompt in FACTS.get(issue,{}).items():
                 if not _fact_present(field,query,query_date,facts): missing.append(prompt)
     return sorted(set(missing))
@@ -385,7 +396,10 @@ def _fact_present(field:str,q:str,query_date:str|None,facts:dict)->bool:
 def evidence_slots(analysis:QueryAnalysis)->list[str]:
     return plan_evidence(analysis).mandatory_slots
 def plan_evidence(analysis:QueryAnalysis)->EvidencePlan:
-    return plan_with_profiles(analysis,_legacy_plan_evidence(analysis))
+    plan=plan_with_profiles(analysis,_legacy_plan_evidence(analysis))
+    resolved=getattr(analysis,'resolved_rule_requirements',{})
+    return plan.model_copy(update={'slot_requirements':{slot:resolved.get(slot,groups)
+        for slot,groups in plan.slot_requirements.items()}})
 
 def _legacy_plan_evidence(analysis:QueryAnalysis)->EvidencePlan:
     mandatory=['governing_rule','official_source']

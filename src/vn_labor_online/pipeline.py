@@ -116,11 +116,14 @@ class OnlinePipeline:
             raise ProviderRateLimited('GEMINI_HTTP_429')
         checkpoint('planning')
         plan=plan_evidence(analysis)
+        plan,container_notes=self.retriever.resolve_article_plan(plan,analysis.query_date,analysis.query_date_end)
+        analysis=analysis.model_copy(update={'resolved_rule_requirements':plan.slot_requirements})
         trace=Trace(trace_id='trace_'+hashlib.sha256((env.query_id+str(time.time_ns())).encode()).hexdigest()[:16],query_id=env.query_id,
           build_id=self.store.report.build_id or '',route=analysis.route,route_reason=analysis.route_reason,
           config_fingerprint=hashlib.sha256(json.dumps(self.cfg.model_dump(mode='json'),sort_keys=True).encode()).hexdigest())
         trace.timings_ms['analysis']=analysis_ms
         trace.timings_ms['researcher']=round((time.perf_counter()-researcher_started)*1000,2)
+        if container_notes: trace.events.append({'event':'article_content_plan','resolved':container_notes})
         warnings=list(research_warnings); assumptions=[]
         if self.cfg.provisional_mode: warnings+=['Dữ liệu chưa hoàn tất human legal review.']+self.store.report.provisional_reasons
         if defaulted_query_date:
@@ -345,7 +348,7 @@ class OnlinePipeline:
                 warnings.append('INDEPENDENT_TASK_RULES_ONLY')
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome)
-        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks})
+        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements})
         if (exact_only and lookup_scope_complete and len(analysis.explicit_references)==1
           and not conflicts and not analysis.facts and not analysis.legal_subissues
           and len(pack.evidence)==len(items)==len(selected)):
@@ -396,11 +399,19 @@ class OnlinePipeline:
                     quality_gap='answer_completeness'
                     answer='Câu trả lời còn thiếu nội dung pháp lý bắt buộc của câu hỏi. Cần bổ sung chuỗi căn cứ trước khi kết luận.'
                 elif any(warning.startswith('ANSWER_SEMANTIC_REVIEW_ERROR:') for warning in generation_warnings):
-                    quality_gap='semantic_verification'
-                    answer='Chưa xác minh được ý nghĩa pháp lý của câu trả lời. Không thể coi việc có trích dẫn là đủ để kết luận.'
+                    from .answer_review import review_service_unavailable
+                    if review_service_unavailable(draft.semantic_review):
+                        quality_gap='review_service_unavailable'
+                        answer='Dịch vụ kiểm tra câu trả lời tạm thời không phản hồi hoặc gặp lỗi. Chưa thể trả kết luận đã xác minh; vui lòng thử lại sau.'
+                    else:
+                        quality_gap='semantic_verification'
+                        answer='Chưa xác minh được ý nghĩa pháp lý của câu trả lời. Không thể coi việc có trích dẫn là đủ để kết luận.'
                 elif any(warning.startswith('SOURCE_TEXT_QUALITY:') for warning in generation_warnings):
                     quality_gap='source_text_quality'
                     answer='Nội dung nguồn có lỗi đọc chữ đáng ngờ. Cần đối chiếu bản gốc trước khi kết luận.'
+                elif draft.semantic_review.get('status')=='FAIL':
+                    quality_gap='semantic_support'
+                    answer='Bước kiểm tra nội dung chưa xác nhận được kết luận từ các nguồn đã chọn. Chưa thể trả một câu trả lời pháp lý đáng tin cậy.'
                 else:
                     quality_gap='answer_text_quality'
                     answer='Câu trả lời chưa đạt kiểm tra câu chữ. Chưa thể đưa ra kết luận đáng tin cậy.'
@@ -434,6 +445,7 @@ class OnlinePipeline:
                 state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+preserved_gaps))})
                 pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
                   [x for x in decisions if x.evidence_id in {item.unit_id for item in selected}],analysis.requested_outcome)
+                pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements})
                 sufficient=bool(selected) and not state.gaps
                 actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
                 partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial

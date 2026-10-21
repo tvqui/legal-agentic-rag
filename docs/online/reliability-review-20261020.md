@@ -151,3 +151,8 @@ git push
 ```
 
 Trên Kaggle giữ phiên hiện tại để giữ cache, chạy lại cell cập nhật code rồi cell backend hiện có. Không cần thêm biến môi trường, đổi lệnh backend hay tải lại dataset. Nếu model thực sự chưa có và registry tiếp tục lỗi thì vẫn cần đợi dịch vụ tải hoạt động trở lại; không có code nào bảo đảm một dịch vụ ngoài hệ thống luôn sẵn sàng.
+
+
+## Lượt đo sau khi khởi động lại thành công
+
+Đã xác nhận bản 227b48a, đo lại 5 câu và mở rộng đến 33 câu. Báo cáo mới nhất và hướng dẫn cập nhật Gemini nằm tại [reliability-run2-20261020.md](reliability-run2-20261020.md). Còn 257 câu chưa đo; chưa chứng nhận chất lượng toàn bộ bộ câu hỏi.

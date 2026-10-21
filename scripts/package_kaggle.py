@@ -36,13 +36,13 @@ def write_notebook():
 def build():
     DEST.mkdir(parents=True, exist_ok=True)
     files = {}
-    for folder, suffixes in [('src', {'.py'}), ('config', {'.yaml', '.json'}), ('review/templates', {'.json', '.jsonl'}),
+    for folder, suffixes in [('src', {'.py'}), ('config', {'.yaml', '.json', '.owl'}), ('review/templates', {'.json', '.jsonl'}),
                              ('kaggle', {'.py', '.txt'}),
                              ('tests', {'.py'}), ('review/attachments', {'.pdf'}), ('data', {'.pdf', '.doc', '.docx', '.html', '.htm', '.txt', '.json'})]:
         for p in sorted((ROOT / folder).rglob('*')):
             if p.is_file() and not p.is_symlink() and p.suffix.lower() in suffixes and '__pycache__' not in p.parts:
                 files[p.relative_to(ROOT).as_posix()] = p
-    for name in ['docs/kaggle/offline-ai-enrichment.md', 'pyproject.toml', 'scripts/prepare_dense_model.py', 'scripts/validate_outputs.py', 'scripts/package_kaggle.py',
+    for name in ['docs/kaggle/offline-ai-enrichment.md', 'docs/architecture/external-corpora-and-ontology.md', 'pyproject.toml', 'scripts/prepare_dense_model.py', 'scripts/validate_outputs.py', 'scripts/package_kaggle.py',
                  'scripts/prepare_source_attachments.py', 'scripts/review_kaggle_extraction.py',
                  'docs/kaggle/offline-quality-upgrade-20261012.md',
                  'docs/kaggle/offline-provenance-fix-20261012.md',

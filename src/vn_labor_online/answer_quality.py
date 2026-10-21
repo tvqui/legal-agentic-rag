@@ -64,6 +64,8 @@ def language_issues(text: str, *, allow_admin: bool = False) -> list[str]:
     if re.search(r'(?i)\b(?:điều|khoản)\s+[lI]\b', text) or re.search(
       r'\b(?:dieu|khoan)\s+(?:\d+[il|]\d+|[il|]+\d+)\b',folded):
         issues.append('SUSPECT_LEGAL_LOCATOR')
+    from .claim_validation import invalid_clause_locator
+    if invalid_clause_locator(text): issues.append('SUSPECT_LEGAL_LOCATOR')
     unquoted = _QUOTE.sub('', text)
     if not allow_admin and re.search(r'(?i)\bkính\s+gửi\s*:', unquoted):
         issues.append('ADMINISTRATIVE_BOILERPLATE')
@@ -85,6 +87,9 @@ def clean_draft(draft: AdjudicationDraft, query: str) -> AdjudicationDraft:
     unique=[]; by_text={}
     for claim in claims:
         key=' '.join(claim.text.lower().split())
+        # A neutral connective adds no legal proposition. All remaining words,
+        # numbers and qualifications must still match exactly to deduplicate.
+        key=re.sub(r'^ngoài ra,\s*','',key)
         if key in by_text:
             index=by_text[key]; previous=unique[index]
             unique[index]=previous.model_copy(update={'evidence_ids':list(dict.fromkeys(previous.evidence_ids+claim.evidence_ids))})

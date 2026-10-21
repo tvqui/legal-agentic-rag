@@ -8,7 +8,9 @@ class ScopedFactQuestionTests(unittest.TestCase):
     def test_property_compensation_does_not_ask_for_disciplinary_sanction(self):
         result=self.analysis('Tôi vô ý làm hỏng thiết bị của công ty. Công ty có được khấu trừ toàn bộ vào lương không?')
         self.assertNotIn('Hình thức kỷ luật là gì?',result.missing_facts)
-        self.assertIn('Thời điểm phát sinh tiền lương là khi nào?',result.missing_facts)
+        # This requests the deduction rule, not a dated minimum-wage amount.
+        # Independent wage disputes below must still keep their own fact gate.
+        self.assertNotIn('Thời điểm phát sinh tiền lương là khi nào?',result.missing_facts)
 
     def test_explicit_discipline_alongside_damage_keeps_relevant_facts(self):
         result=self.analysis('Tôi làm hỏng tài sản công ty và bị xử lý kỷ luật. Công ty có được làm vậy không?')

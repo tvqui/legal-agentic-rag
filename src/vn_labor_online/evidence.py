@@ -6,6 +6,7 @@ from .answer_quality import language_issues
 from .legal_metadata import document_type,norm_role
 from .compression import compress_evidence
 from .taxonomy import requirement_evidence,locator_matches
+from .article_content import heading_only
 from .models import ApplicabilityDecision,Evidence,EvidencePlan,EvidenceState,EvidenceSlot,SlotStatus,VerifiedEvidenceItem,VerifiedEvidencePack
 
 DELEGATION_PHRASES=(
@@ -43,7 +44,7 @@ def state_for(items:list[Evidence],plan:EvidencePlan|list[str],query_date:str|No
         ids=[]; fallback_ids=[]
         if isinstance(plan,EvidencePlan) and slot in plan.slot_requirements:
             ids=requirement_evidence(verified,plan.slot_requirements[slot])
-        elif slot=='governing_rule': ids=[x.unit_id for x in verified if x.provision_version_id and x.kind=='PROVISION']
+        elif slot=='governing_rule': ids=[x.unit_id for x in verified if x.provision_version_id and x.kind=='PROVISION' and not heading_only(x)]
         elif slot in {'authority','official_source'}:
             ids=[x.unit_id for x in verified if x.official_source and x.source_catalog_status=='VERIFIED']
             fallback_ids=[x.unit_id for x in verified if x.authority_rank>0 and x.source_url] if allow_document_temporal_fallback else []
@@ -119,7 +120,7 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
             for alternatives in plan.slot_requirements[slot]:
                 if any(any(locator_matches(item,locator) for locator in alternatives) for item in selected):
                     continue
-                matches=[item for item in ordered if item.verified and any(locator_matches(item,locator) for locator in alternatives)]
+                matches=[item for item in ordered if item.verified and not heading_only(item) and any(locator_matches(item,locator) for locator in alternatives)]
                 matches.sort(key=lambda item:(not item.provision_temporal_verified,
                   not (item.official_source and item.source_catalog_status=='VERIFIED'),
                   _source_penalty(item),item.document_number!='18/VBHN-VPQH',-item.authority_rank,-item.score,item.unit_id))

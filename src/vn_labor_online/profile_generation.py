@@ -18,12 +18,13 @@ PROFILE_KEYS={
 }
 
 def _matches(item, locator):
-    return locator_matches({'kind':'PROVISION','document_number':item.instrument_number,
+    return locator_matches({'kind':'PROVISION','unit_id':item.evidence_id,'document_number':item.instrument_number,
       'article_number':item.article,'clause_number':item.clause,'point_number':item.point,
       'source_text':item.text,'text':item.text},locator)
 
 def render_profile(pack,partial,assumptions):
     analysis=analyze(intake(pack.query,[],pack.query_date,pack.facts),pack.query_date,pack.facts)
+    analysis=analysis.model_copy(update={'resolved_rule_requirements':getattr(pack,'resolved_rule_requirements',{})})
     keys=set(analysis.legal_subissues)
     if not keys.intersection(PROFILE_KEYS): return None
     # Do not shortcut a question with a separate issue needing adjudication.

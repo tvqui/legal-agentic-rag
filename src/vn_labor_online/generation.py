@@ -64,6 +64,10 @@ def _chain_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|N
         claims=[claim]; used=[agreement]; lines=[
           'Không. Với dữ kiện công ty đã đồng ý bằng văn bản cho chấm dứt sớm, phải đánh giá việc chấm dứt trước hết theo thỏa thuận của hai bên; không thể tự động áp hậu quả của việc người lao động đơn phương chấm dứt trái pháp luật.',
           f'- {claim.text} [{agreement.evidence_id}]']
+        if pack.facts.get('mutual_termination_agreement') is True:
+            conclusion=Claim(claim_id='claim_mutual_assessment',text='Với dữ kiện hai bên thỏa thuận chấm dứt hợp đồng lao động theo khoản 3 Điều 34, không tự động coi đây là người lao động đơn phương chấm dứt trái pháp luật do thiếu báo trước.',evidence_ids=[agreement.evidence_id])
+            claims.append(conclusion)
+            lines.append(f'- {conclusion.text} [{agreement.evidence_id}]')
     elif basis in {'LATE_WAGE','EMPLOYER_MISINFORMATION','SEXUAL_HARASSMENT'}:
         locations={'LATE_WAGE':('b','97','4'),'EMPLOYER_MISINFORMATION':('g','16','1'),'SEXUAL_HARASSMENT':('d',None,None)}
         point,ref_article,ref_clause=locations[basis]; rule=_find(pack,'35','2',point); reference=_find(pack,ref_article,ref_clause) if ref_article else None
@@ -85,7 +89,15 @@ def _chain_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|N
         lines=['Người lao động có quyền nghỉ không cần báo trước theo dữ kiện đã cung cấp.' if conclusive else 'Quy định trực tiếp và ngoại lệ cần kiểm tra là:']
         lines += [f'- {claim.text} '+ ' '.join(f'[{eid}]' for eid in claim.evidence_ids) for claim in claims]
         if conclusive:
-            lines.append('Nếu các dữ kiện này được xác nhận và thỏa mãn điều kiện của ngoại lệ, chỉ riêng việc không báo trước không đủ để coi việc chấm dứt là trái pháp luật hoặc buộc bồi thường vì thiếu báo trước. Cần kiểm tra bằng chứng thực tế của ngoại lệ.')
+            conditions={'LATE_WAGE':'Nếu dữ kiện không thuộc ngoại lệ tại khoản 4 Điều 97 được xác nhận',
+                'EMPLOYER_MISINFORMATION':'Nếu thông tin không trung thực theo khoản 1 Điều 16 thực sự ảnh hưởng đến việc thực hiện hợp đồng',
+                'SEXUAL_HARASSMENT':'Nếu người lao động thực sự bị quấy rối tình dục tại nơi làm việc'}
+            conclusion=Claim(claim_id='claim_notice_assessment',text=conditions[basis]+
+                ', người lao động thuộc trường hợp được chấm dứt không cần báo trước tại điểm '+point+
+                ' khoản 2 Điều 35. Vì vậy, không thể chỉ dựa vào việc không báo trước theo thời hạn thông thường để kết luận việc chấm dứt trái pháp luật hoặc buộc bồi thường vì thiếu báo trước.',
+                evidence_ids=[item.evidence_id for item in used])
+            claims.append(conclusion)
+            lines.append('- '+conclusion.text+' '+' '.join('['+uid+']' for uid in conclusion.evidence_ids))
     else:
         return None
     if partial: lines.append('Kết quả còn giới hạn vì metadata nguồn hoặc hiệu lực ở cấp điều khoản đang chờ người có chuyên môn duyệt.')
@@ -546,6 +558,7 @@ class LegalAdjudicator:
         schema=ProviderClaims.model_json_schema()
         from .analysis import analyze,intake,plan_evidence
         analysis=analyze(intake(pack.query,[],pack.query_date,pack.facts),pack.query_date,pack.facts)
+        analysis=analysis.model_copy(update={'resolved_rule_requirements':pack.resolved_rule_requirements})
         plan=plan_evidence(analysis)
         required_groups=sum(len(groups) for groups in plan.slot_requirements.values())
         simple=profile_covers_issues(analysis) and len(analysis.legal_subissues)==1 and required_groups<=2

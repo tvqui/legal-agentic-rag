@@ -61,7 +61,15 @@ Do not invent facts, sources or legal principles absent from evidence. A rule
 explanation may explain an unknown condition; it must not assert it is met.
 For SUPPORTED claims, quote the actual cited supporting text (including necessary
 context); each quote must be an exact substring of that evidence's full_text or
-text. Quotation presence alone is not support. Check whether EVERY requested
+text. Quotation presence alone is not support. Faithful paraphrases, exact
+arithmetic and logically warranted conditional applications may be supported
+even when the final conclusion is not stated verbatim in the law. Quote every
+necessary normative premise and use only confirmed facts; do not demand an extra
+provision merely repeating the query's wording. Conversely, silence alone proves
+neither a right nor a prohibition. Do not assume all sibling clauses are
+alternatives: distinguish alternative rates of one base entitlement from
+independent cumulative duties or additions using the supplied text and its
+structure, and disclose genuine ambiguity. Check whether EVERY requested
 part of the original question is answered substantively, not just cited. Check
 complete lists, both sides of comparisons, counterconditions, consequences,
 calculation steps and requested references. Repeated claims count once. Set
@@ -88,6 +96,10 @@ def hard_issues(claim, evidence, *, context_query=''):
     issues = list(semantic_issues(claim.text, evidence,context_query=context_query))
     source = ' '.join(fold(value) for item in evidence for value in texts(item))
     c = fold(claim.text)
+    from .article_content import heading_only
+    if evidence and all(heading_only(item) for item in evidence) and not any(
+        c==fold(item.full_text or item.text) for item in evidence):
+        issues.append('HEADING_ONLY_SUPPORT')
     if any(term in source for term in ('bi nghiem cam', 'hanh vi bi cam')) and not any(
         term in c for term in ('cam', 'khong duoc', 'khong hop phap', 'trai phap luat', 'khong phai')):
         issues.append('INHERITED_PROHIBITION_LOST')
@@ -227,6 +239,12 @@ def review_error_code(exc):
     return type(exc).__name__
 
 
+def review_service_unavailable(report):
+    """Distinguish a failed verifier service from a substantive rejection."""
+    code=report.get('error_code','')
+    return bool(re.fullmatch(r'GEMINI_HTTP_5\d{2}|GEMINI_TIMEOUT|TimeoutError|ConnectionError',code))
+
+
 def review_answer(provider, draft, pack, repair_attempts=1):
     """Bounded draft -> independent review -> repair -> re-review.
 
@@ -239,6 +257,7 @@ def review_answer(provider, draft, pack, repair_attempts=1):
     reports = []
     candidate = draft
     previous_validation_error=None
+    checked_partial=None
     for iteration in range(repair_attempts+1):
         payload = {'question':pack.query, 'query_date':pack.query_date,
             'confirmed_facts':pack.facts, 'tasks':[t.model_dump() for t in tasks],
@@ -260,6 +279,12 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 if t.status != 'ANSWERED']))
             if not rejected and review.question_fully_addressed:
                 return candidate.model_copy(update={'semantic_review':{'status':'PASS','iterations':reports}}), []
+            # Bind a supported subset to this exact draft, before a repair can
+            # replace its claims or reuse their IDs with different meanings.
+            kept = [c for c in candidate.claims if c.claim_id in supported]
+            if kept:
+                checked_partial=(candidate.model_copy(deep=True,update={'claims':kept}),
+                    list(missing),list(rejected),len(reports)-1)
             if iteration < repair_attempts:
                 repair_system = ('Repair the answer using only the supplied dated evidence and explicit facts. '
                     'Address every requested part, remove unsupported/unrelated/repeated claims, preserve '
@@ -273,6 +298,10 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                         ProviderClaims.model_json_schema()))
                     candidate = candidate.model_copy(update={'claims':[Claim(claim_id=f'claim_{i:03d}',
                         **claim.model_dump()) for i,claim in enumerate(repair.claims,1)]})
+                    # A repair is another untrusted draft. Apply the same safe
+                    # cleanup before the reviewer accounts for its exact IDs.
+                    from .answer_quality import clean_draft
+                    candidate=clean_draft(candidate,pack.query)
                     continue
                 except (ProviderRateLimited,RequestStopped):
                     raise
@@ -297,6 +326,15 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 previous_validation_error=review_error_code(exc)
                 reports.append({'validation_error':previous_validation_error})
                 continue
+            if checked_partial is not None:
+                checked,missing,rejected,review_index=checked_partial
+                return checked.model_copy(update={'semantic_review':{
+                    'status':'PARTIAL','iterations':reports,'missing':missing,
+                    'rejected_claim_ids':rejected,'retained_review_index':review_index,
+                    'error':type(exc).__name__,'error_code':review_error_code(exc)},
+                    'limitations':list(dict.fromkeys(checked.limitations+['answer_coverage']))}), [
+                    'ANSWER_SEMANTIC_REVIEW_ERROR:'+type(exc).__name__,
+                    'ANSWER_SEMANTIC_REVIEW_INCOMPLETE']
             return candidate.model_copy(update={'claims':[], 'semantic_review':{
                 'status':'ERROR','iterations':reports,'error':type(exc).__name__,
                 'error_code':review_error_code(exc)}}), [

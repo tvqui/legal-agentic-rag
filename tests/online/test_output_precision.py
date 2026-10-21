@@ -209,6 +209,7 @@ class OutputPrecisionTests(unittest.TestCase):
             engine.store=SimpleNamespace(report=SimpleNamespace(build_id='test',provisional_reasons=[]))
             engine.researcher=LegalResearcher(ResearcherConfig())
             engine.retriever=Mock(); engine.retriever.policy_anchor.return_value=items
+            engine.retriever.resolve_article_plan.side_effect=lambda plan,*dates:(plan,[])
             engine.applicability=LegalApplicabilityAuditor(ApplicabilityConfig())
             engine.adjudicator=Mock(); engine.graph=Mock()
             engine.adjudicator.generate.return_value=(AdjudicationDraft(answer_summary='Thông tin khi giao kết.',
@@ -222,7 +223,7 @@ class OutputPrecisionTests(unittest.TestCase):
             engine.retriever.dense.assert_not_called(); engine.retriever.neural_rerank.assert_not_called()
 
 class SemanticPipelineGuards(unittest.TestCase):
-    def run_checked_answer(self, include_exit, force_reference_repair=False):
+    def run_checked_answer(self, include_exit, force_reference_repair=False, review_error=None, review_status='ERROR'):
         from types import SimpleNamespace
         from vn_labor_online.config import OnlineConfig,RetrievalConfig,RerankerConfig
         from vn_labor_online.pipeline import OnlinePipeline
@@ -238,12 +239,17 @@ class SemanticPipelineGuards(unittest.TestCase):
             engine.store=SimpleNamespace(report=SimpleNamespace(build_id='test',provisional_reasons=[]))
             engine.researcher=LegalResearcher(ResearcherConfig())
             engine.retriever=Mock(); engine.retriever.policy_anchor.return_value=items
+            engine.retriever.resolve_article_plan.side_effect=lambda plan,*dates:(plan,[])
             engine.applicability=LegalApplicabilityAuditor(ApplicabilityConfig())
             engine.adjudicator=Mock(); engine.graph=Mock()
             from vn_labor_online.answer_quality import render_claims
             draft=AdjudicationDraft(answer_summary='',claims=claims,applicable_law_versions=[],semantic_review={'status':'PARTIAL' if include_exit else 'PASS'})
             draft=render_claims(draft,include_exit)
             engine.adjudicator.generate.return_value=(draft,['ANSWER_SEMANTIC_REVIEW_INCOMPLETE'] if include_exit else [])
+            if review_error:
+                engine.adjudicator.generate.return_value=(draft.model_copy(update={
+                    'claims':[],'semantic_review':{'status':review_status,'error_code':review_error}}),
+                    (['ANSWER_SEMANTIC_REVIEW_ERROR:LLMProviderError'] if review_status=='ERROR' else [])+['ANSWER_QUALITY_BLOCKED'])
             query='Công ty cung cấp sai địa điểm làm việc khi tuyển dụng khiến NLĐ muốn nghỉ ngay. Những điều luật nào phải được nối với nhau?'
             from vn_labor_online.audit import reference_audit
             calls=0
@@ -266,5 +272,26 @@ class SemanticPipelineGuards(unittest.TestCase):
         self.assertIn('REFERENCE_AUDIT_REPAIRED',response.warnings)
         self.assertEqual(response.status.value,'PARTIAL_ALLOWED')
         self.assertIn('answer_coverage',response.limitations)
+
+    def test_verifier_service_failure_has_distinct_public_reason_and_no_claims(self):
+        response=self.run_checked_answer(False,review_error='GEMINI_HTTP_504')
+        self.assertEqual(response.status.value,'INSUFFICIENT_EVIDENCE')
+        self.assertIn('review_service_unavailable',response.limitations)
+        self.assertIn('Dịch vụ kiểm tra',response.answer)
+        self.assertFalse(response.claims)
+        self.assertFalse(response.citations)
+
+    def test_failed_semantic_validation_is_not_reported_as_network_failure(self):
+        response=self.run_checked_answer(False,review_error='UNSUPPORTED_SEMANTIC_PASS')
+        self.assertIn('semantic_verification',response.limitations)
+        self.assertNotIn('review_service_unavailable',response.limitations)
+
+    def test_substantive_rejection_is_not_reported_as_bad_grammar(self):
+        response=self.run_checked_answer(False,review_error='SEMANTIC_REJECTED',review_status='FAIL')
+        self.assertIn('semantic_support',response.limitations)
+        self.assertNotIn('answer_text_quality',response.limitations)
+        self.assertNotIn('câu chữ',response.answer)
+        self.assertFalse(response.claims)
+        self.assertFalse(response.citations)
 
 if __name__=='__main__': unittest.main()

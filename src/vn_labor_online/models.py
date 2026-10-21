@@ -115,6 +115,7 @@ class QueryAnalysis(BaseModel):
     query_text:str=''
     answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
     routing_topics:list[str]=Field(default_factory=list,max_length=50)
+    resolved_rule_requirements:dict[str,list[list['LegalLocator']]]=Field(default_factory=dict)
 
 class AnswerPart(BaseModel):
     task_id:str
@@ -130,6 +131,7 @@ class AnswerPart(BaseModel):
 class LegalLocator(BaseModel):
     exact_level:bool=False
     text_contains:list[str]=Field(default_factory=list)
+    unit_ids:list[str]=Field(default_factory=list)
     model_config=ConfigDict(extra='forbid')
     documents:list[str]=Field(min_length=1); article:str
     clause:str|None=None; point:str|None=None
@@ -201,6 +203,7 @@ class VerifiedEvidencePack(BaseModel):
     requested_outcome:Literal["LOOKUP","EXPLAIN","ASSESS_LEGALITY","COMPARE","FIND_CASE","OTHER"]="OTHER"
     coverage_state:EvidenceState; evidence:list[VerifiedEvidenceItem]
     answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
+    resolved_rule_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
     # Set only by the pipeline after an exact, complete scoped retrieval.
     lookup_reference:ExplicitReference|None=None
 class AdjudicationDraft(BaseModel):

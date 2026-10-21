@@ -253,6 +253,10 @@ class Retriever:
           str(unit.get('clause_number') or ''),str(unit.get('point_number') or ''),unit['unit_id']))
         return [as_evidence(unit,1.0,'policy',index,{'policy':1.0}) for index,unit in enumerate(ordered,1)]
 
+    def resolve_article_plan(self,plan,query_date=None,query_date_end=None):
+        from .article_content import resolve_article_requirements
+        return resolve_article_requirements(plan,self._profile_units,query_date,query_date_end)
+
     def case_law(self,query:str,k:int|None=None)->list[Evidence]:
         """Dedicated judicial channel so case questions do not depend on a global top-k."""
         terms={term for term in re.findall(r'\w+',query.lower()) if len(term)>2}

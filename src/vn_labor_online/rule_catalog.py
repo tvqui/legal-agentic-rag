@@ -74,6 +74,14 @@ def extra_requirements(analysis):
         insurance=['41/2024/QH15'] if after else ['58/2014/QH13']
         out['social_insurance_subjects']=[[loc(2,1,documents=insurance,exact=True)],
             [loc(2,1,'a',insurance)]]
+    if not old and has('tu choi','roi bo noi lam viec') and has('nguy hiem','nguy co','khong an toan','de doa'):
+        out['dangerous_work_refusal_labour_code']=[[loc(5,1,'d')]]
+        out['dangerous_work_refusal_safety_law']=[[loc(6,1,'đ',documents=['84/2015/QH13'])]]
+    if has('bhtn','bao hiem that nghiep','tro cap that nghiep') and has('huong','nhan','dieu kien','tro cap'):
+        if not analysis.query_date or analysis.query_date>='2026-01-01':
+            points('unemployment_eligibility',38,1,['a','b','c','d'],['74/2025/QH15'])
+        elif analysis.query_date>='2015-01-01':
+            out['unemployment_eligibility']=[[loc(49,c,documents=['38/2013/QH13'])] for c in (1,2,3,4)]
     if has('bhyt','bao hiem y te') and not has('chi phi dao tao','trong thoi gian dao tao'):
         # These documents may be absent. Article 13 BLLD cannot fill this slot.
         out['health_insurance_subjects']=[[loc(12,documents=['25/2008/QH12','46/2014/QH13'])]]

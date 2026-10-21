@@ -1,3 +1,9 @@
+# Vocabulary only: never import the sample rules/checklists in this OWL.
+ontology_vocabulary:
+  enabled: true
+  path: config/labor_ontology_v3.owl
+  sha256: 2cba5c1babf3708803ea452ae2e5f1ea692d0144c2831a5f2cec5830c4603221
+
 issues:
   LaborContract:
     label_vi: Hợp đồng lao động

@@ -7,7 +7,22 @@ from .evidence import locate_evidence, locate_document_evidence
 
 def load_issue_config(project_root: Path) -> dict:
     p = project_root / "config" / "issues.yaml"
-    return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("issues", {})
+    raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    issues = raw.get("issues", {})
+    vocabulary = raw.get('ontology_vocabulary') or {}
+    if vocabulary.get('enabled', False):
+        from .ontology_vocabulary import lexical_aliases
+        path = (project_root / vocabulary['path']).resolve()
+        if not path.is_relative_to(project_root.resolve()):
+            raise ValueError('Ontology vocabulary must remain inside the project')
+        aliases, _ = lexical_aliases(path, vocabulary['sha256'])
+        for issue_key, keywords in aliases.items():
+            if issue_key not in issues:
+                raise ValueError(f'Unknown OFFLINE ontology crosswalk target: {issue_key}')
+            existing = issues[issue_key].get('keywords', [])
+            combined = dict.fromkeys(str(word).casefold() for word in [*existing, *keywords])
+            issues[issue_key]['keywords'] = list(combined)
+    return issues
 
 
 def score_issues(text: str, issues: dict, min_score: int = 1) -> list[dict]:
@@ -22,6 +37,15 @@ def score_issues(text: str, issues: dict, min_score: int = 1) -> list[dict]:
 
 def build_issue_assignments(provisions: list[dict], cases: list[dict], cfg: dict, output_dir: Path) -> tuple[list[dict], list[dict]]:
     issues = load_issue_config(cfg["project_root"])
+    raw_config = yaml.safe_load((cfg['project_root'] / 'config/issues.yaml').read_text(encoding='utf-8')) or {}
+    vocabulary = raw_config.get('ontology_vocabulary') or {}
+    if vocabulary.get('enabled', False):
+        from .ontology_vocabulary import lexical_aliases
+        import json
+        _, audit = lexical_aliases(cfg['project_root'] / vocabulary['path'], vocabulary['sha256'])
+        report = output_dir / 'reports/ontology_vocabulary.json'
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding='utf-8')
     min_score = int(cfg["knowledge"].get("issue_min_score", 1))
     nodes = [{"issue_id": stable_id(k, prefix="issue"), "issue_key": k, "label_vi": v.get("label_vi", k)} for k,v in issues.items()]
     segments = {s["segment_id"]:s["text"] for s in read_jsonl(output_dir/'03_structure/segments.jsonl')}

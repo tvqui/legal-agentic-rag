@@ -20,8 +20,23 @@ def _continued_work_context(query):
         if not re.search(r'(?:khong phai|khong dung la|chua the noi|khong the noi)\s*$',prefix): return True
     return False
 
+
+def invalid_clause_locator(text):
+    for match in re.finditer(r'\bkhoản\s+([a-zđ])\b',str(text),re.I):
+        prefix=str(text)[max(0,match.start()-50):match.start()]
+        if not re.search(r"(?:không\s+(?:có|phải|tồn tại)|ghi\s+sai(?:\s+là)?)\s*['\"“‘]?\s*$",prefix,re.I):
+            return True
+    return False
+
+
 def semantic_issues(text, items, *, context_query=''):
     q=fold(text); problems=[]
+    if invalid_clause_locator(text): problems.append('CLAIM_CLAUSE_POINT_CONFUSION')
+    absence=re.search(r'\bkhong (?:phai(?: duoc quy dinh)?|duoc quy dinh|co quy dinh|nam) (?:trong|tai) (?:bo luat|luat|nghi dinh|thong tu)\b',q)
+    if absence and not any(q in fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text) for item in items):
+        # A positive finding in one statute cannot prove absence from another.
+        # Prefer a supported positive answer to an ungrounded universal negative.
+        problems.append('CLAIM_STATUTORY_ABSENCE_NOT_GROUNDED')
     for item in items:
         number=getattr(item,'document_number',None) or getattr(item,'instrument_number',None)
         title=getattr(item,'document_title',None)

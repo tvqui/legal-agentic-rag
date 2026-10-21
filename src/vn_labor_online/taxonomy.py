@@ -9,7 +9,7 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v8'
+TAXONOMY_VERSION = 'labor-subissues-v9'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -450,6 +450,7 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
 def locator_matches(item, locator: LegalLocator) -> bool:
     get = item.get if isinstance(item, dict) else lambda key: getattr(item, key, None)
     return (get('kind') == 'PROVISION' and get('document_number') in locator.documents
+        and (not locator.unit_ids or get('unit_id') in locator.unit_ids)
         and str(get('article_number') or '') == locator.article
         and (locator.clause is None or str(get('clause_number') or '') == locator.clause)
         and (locator.point is None or str(get('point_number') or '').lower() == locator.point)
@@ -460,9 +461,10 @@ def locator_matches(item, locator: LegalLocator) -> bool:
 
 
 def requirement_evidence(items, groups) -> list[str]:
+    from .article_content import heading_only
     found = []
     for alternatives in groups:
-        matches = [item.unit_id for item in items if any(locator_matches(item, locator) for locator in alternatives)]
+        matches = [item.unit_id for item in items if not heading_only(item) and any(locator_matches(item, locator) for locator in alternatives)]
         if not matches: return []
         found.extend(matches)
     return list(dict.fromkeys(found))

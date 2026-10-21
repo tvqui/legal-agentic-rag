@@ -99,7 +99,12 @@ def _norm_reference(value:str)->str:
 def _claim_supported(text:str,evidence:Evidence)->bool:
     stop={'theo','được','của','và','hoặc','một','những','các','trong','tại','điều','khoản','điểm'}
     claim={x for x in re.findall(r'\w+',text.lower()) if len(x)>2 and x not in stop}
-    source={x for x in re.findall(r'\w+',' '.join(y for y in (evidence.source_text,evidence.text,evidence.breadcrumb) if y).lower()) if len(x)>2 and x not in stop}
+    # This is only a relevance screen. Instrument identity can be supported by
+    # actual metadata even when a clause body does not repeat its own title or
+    # number. Semantic entailment and claim-specific locator checks still run.
+    source={x for x in re.findall(r'\w+',' '.join(y for y in (
+        evidence.source_text,evidence.text,evidence.breadcrumb,evidence.document_number,
+        evidence.document_title,evidence.document_type) if y).lower()) if len(x)>2 and x not in stop}
     return bool(claim) and len(claim&source)/len(claim)>=.35
 
 def _claim_reference_supported(text:str,claim_items:list[Evidence])->list[str]:
