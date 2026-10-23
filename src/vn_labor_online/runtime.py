@@ -11,6 +11,7 @@ import threading
 import time
 
 from .errors import OnlineError
+from .demo_progress import ProgressLog
 
 
 class RequestStopped(OnlineError):
@@ -27,6 +28,7 @@ class RequestBudget:
     started: float = field(default_factory=time.monotonic)
     stage: str = 'intake'
     timings: dict = field(default_factory=dict)
+    progress: ProgressLog = field(default_factory=ProgressLog)
 
     def remaining(self):
         if self.cancelled.is_set():

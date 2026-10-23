@@ -312,6 +312,31 @@ class Retriever:
         ordered=sorted(scores,key=lambda uid:(-scores[uid],uid))[:self.cfg.retrieval.fusion_top_k]
         return [by_id[uid].model_copy(update={'score':scores[uid],'rank':i,'retrieval_method':'hybrid','component_scores':components[uid]}) for i,uid in enumerate(ordered,1)]
 
+def retain_required_anchors(items,anchors,plan,limit):
+    """Reserve recall for required groups within the existing candidate budget.
+
+    Anchors must pass the same date/authority filters as semantic candidates
+    before this function. A protected source is still unverified until audited.
+    """
+    groups=[group for slot,values in plan.slot_requirements.items() if slot in plan.mandatory_slots for group in values]
+    existing={item.unit_id:item for item in items}; chosen={}
+    for group in groups:
+        if any(any(locator_matches(item,loc) for loc in group) for item in chosen.values()): continue
+        candidates=[item for item in anchors if any(locator_matches(item,loc) for loc in group)]
+        if not candidates or len(chosen)>=limit: continue
+        anchor=candidates[0]; item=existing.get(anchor.unit_id,anchor)
+        chosen[item.unit_id]=item.model_copy(update={'component_scores':{**item.component_scores,'policy':1.0}})
+    protected=list(chosen)
+    for item in items:
+        if len(chosen)>=limit: break
+        chosen.setdefault(item.unit_id,item)
+    result=list(chosen.values())
+    missing=[i for i,group in enumerate(groups) if not any(any(locator_matches(item,loc) for loc in group) for item in result)]
+    return result,{'required_groups':len(groups),'protected_ids':protected,
+        'restored_ids':[uid for uid in protected if uid not in existing],
+        'unrepresented_group_indexes':missing,'candidate_limit':limit}
+
+
 def temporal_filter(items:list[Evidence],query_date:str|None,strict:bool=True,query_date_end:str|None=None)->tuple[list[Evidence],list[str]]:
     if not query_date: return items,[]
     range_start=date.fromisoformat(query_date); range_end=date.fromisoformat(query_date_end or query_date); out=[]; removed=[]

@@ -11,10 +11,11 @@ from .generation import LegalAdjudicator
 from .errors import IndexUnavailable,ProviderRateLimited
 from .graph import GraphExplorer
 from .models import QueryRequest,AnswerResponse,Trace,Stop,Route,SlotStatus,AdjudicationDraft
-from .retrieval import Retriever,authority_filter,temporal_filter,rerank
+from .retrieval import Retriever,authority_filter,temporal_filter,rerank,retain_required_anchors
 from .researcher import LegalResearcher
 from .trace import persist
 from .taxonomy import TAXONOMY_VERSION
+from .demo_progress import call as observed,Step,skip as skip_step,skip_after_gate,evidence_summary,audit_summary,graph_summary,execution_snapshot
 
 def _actionable_gaps(gaps,items,provisional):
     result=[]
@@ -53,14 +54,17 @@ class OnlinePipeline:
         from .conversation import resolve_context
         from .runtime import request_budget,checkpoint
         with request_budget(self.cfg.request_timeout_seconds):
-            resolved=resolve_context(request)
+            resolved=observed('context',resolve_context,request,summary=lambda r:{'luot_ngu_canh':len(r.used_turns),'can_hoi_lai':bool(r.clarification),'truong_du_kien':sorted(r.facts)})
             checkpoint('understanding')
             if resolved.clarification:
+                Step('scope_gate').finish({'ket_qua':'NEED_MORE_FACTS','ly_do':'Chưa rõ chủ đề hỏi nối tiếp'},'WARNING')
+                skip_after_gate('Chưa rõ chủ đề nối tiếp; cần người dùng làm rõ trước')
                 env=intake(request.question,request.conversation_context,request.query_date,request.facts)
                 trace=Trace(trace_id='trace_'+hashlib.sha256(str(time.time_ns()).encode()).hexdigest()[:16],
                   query_id=env.query_id,build_id=self.store.report.build_id or '',route=Route.STANDARD,
                   route_reason='ambiguous follow-up',stop_reason=Stop.NEED_MORE_FACTS,
                   events=[{'event':'context_clarification','model_calls':0}])
+                snapshot=execution_snapshot(); trace.execution_steps=snapshot['steps']; trace.execution_steps_dropped=snapshot['dropped']
                 persist(trace,self.cfg.trace_dir)
                 return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,
                   answer='Cần xác định chủ đề của câu hỏi nối tiếp trước khi tra cứu.',
@@ -76,6 +80,7 @@ class OnlinePipeline:
             from .runtime import measured_timings
             if response.trace:
                 response.trace.timings_ms.update(measured_timings())
+                snapshot=execution_snapshot(); response.trace.execution_steps=snapshot['steps']; response.trace.execution_steps_dropped=snapshot['dropped']
                 persist(response.trace,self.cfg.trace_dir)
             response.legal_status=getattr(self.store.report,'legal_status','PROVISIONAL')
             if response.legal_status=='PROVISIONAL':
@@ -94,7 +99,7 @@ class OnlinePipeline:
         checkpoint('analysis')
         start=time.perf_counter(); stage=time.perf_counter()
         env=intake(request.question,request.conversation_context,request.query_date,request.facts)
-        analysis=analyze(env,request.query_date,request.facts)
+        analysis=observed('analysis',analyze,env,request.query_date,request.facts,summary=lambda a:{'van_de':a.legal_issues,'van_de_con':a.legal_subissues,'truong_du_kien':sorted(a.facts),'so_y_can_tra_loi':len(a.answer_tasks),'thieu_du_kien':len(a.missing_facts),'tuyen':a.route.value})
         snapshot=self.cfg.corpus_snapshot_as_of
         defaulted_query_date=False
         if analysis.query_date is None and snapshot:
@@ -106,7 +111,10 @@ class OnlinePipeline:
         checkpoint('understanding')
         researcher_started=time.perf_counter()
         researcher_path=self.researcher.execution_path(analysis)
-        analysis,research_warnings=self.researcher.enrich(analysis,env.normalized_query,env.conversation_context)
+        analysis,research_warnings=observed('researcher',self.researcher.enrich,analysis,env.normalized_query,env.conversation_context,
+          technology='Python · quy tắc / taxonomy' if researcher_path!='MODEL_REQUESTED' else 'Researcher · yêu cầu model (xem lượt provider)',
+          summary=lambda r:{'nhanh':researcher_path,'so_query':len(r[0].retrieval_queries),'so_task':len(r[0].answer_tasks),'so_canh_bao':len(r[1])},
+          status=lambda r:'SKIPPED' if researcher_path!='MODEL_REQUESTED' else 'WARNING' if r[1] else 'DONE')
         if ('RESEARCHER_PROVIDER_ERROR:GEMINI_HTTP_429' in research_warnings
           and self.cfg.adjudication.review_provider=='gemini' and self.cfg.adjudication.semantic_review
           and self.cfg.adjudication.mode!='deterministic'):
@@ -115,7 +123,7 @@ class OnlinePipeline:
             # exhausted limits must not be mislabeled as missing legal evidence.
             raise ProviderRateLimited('GEMINI_HTTP_429')
         checkpoint('planning')
-        plan=plan_evidence(analysis)
+        plan=observed('planning',plan_evidence,analysis,summary=lambda v:{'o_bat_buoc':v.mandatory_slots,'o_co_dieu_kien':v.conditional_slots,'so_nhom_can_cu':sum(len(g) for g in v.slot_requirements.values()),'ngay_tra_cuu':analysis.query_date})
         plan,container_notes=self.retriever.resolve_article_plan(plan,analysis.query_date,analysis.query_date_end)
         analysis=analysis.model_copy(update={'resolved_rule_requirements':plan.slot_requirements})
         trace=Trace(trace_id='trace_'+hashlib.sha256((env.query_id+str(time.time_ns())).encode()).hexdigest()[:16],query_id=env.query_id,
@@ -146,6 +154,8 @@ class OnlinePipeline:
         trace.events.append({'event':'freshness','corpus_snapshot_as_of':snapshot,'warning':freshness_relevant and 'CORPUS_MAY_BE_STALE' in warnings})
         trace.events.append({'event':'evidence_plan','mandatory_slots':plan.mandatory_slots,'conditional_slots':plan.conditional_slots,'slot_requirements':{slot:[[locator.model_dump(mode='json') for locator in group] for group in groups] for slot,groups in plan.slot_requirements.items()}})
         if not analysis.in_scope:
+            Step('scope_gate').finish({'ket_qua':'ABSTAIN','ly_do':'Ngoài phạm vi pháp luật lao động'},'WARNING')
+            skip_after_gate('Câu hỏi ngoài phạm vi; không truy xuất hoặc tạo kết luận lao động')
             trace.stop_reason=Stop.ABSTAIN; trace.reference_audit='PASS'; trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2)
             trace.events.append({'event':'scope_gate','status':'ABSTAIN','reason':'OUT_OF_LABOR_LAW_SCOPE'}); persist(trace,self.cfg.trace_dir)
             return AnswerResponse(query_id=env.query_id,status=Stop.ABSTAIN,
@@ -162,26 +172,32 @@ class OnlinePipeline:
             warnings.append('CONDITIONAL_EXPLANATION_PENDING_FACTS')
             assumptions.append('Chỉ giải thích có điều kiện đối với phần còn thiếu dữ kiện; không xác nhận điều kiện đó đã xảy ra.')
         if analysis.missing_facts and not clarify_during_answer:
+            Step('scope_gate').finish({'ket_qua':'NEED_MORE_FACTS','so_thong_tin_can_bo_sung':len(analysis.missing_facts)},'WARNING')
+            skip_after_gate('Thiếu dữ kiện quyết định; cần hỏi lại trước khi tìm sâu')
             trace.stop_reason=Stop.NEED_MORE_FACTS; trace.reference_audit='NOT_RUN'; trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2)
             trace.events.append({'event':'fact_gate','status':'NEED_MORE_FACTS','missing':analysis.missing_facts}); persist(trace,self.cfg.trace_dir)
             return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,answer='Cần bổ sung dữ kiện trước khi tra cứu chuyên sâu.',questions=analysis.missing_facts,
               evidence_status='NOT_RETRIEVED',applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               warnings=warnings,facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+        Step('scope_gate').finish({'ket_qua':'Tiếp tục tra cứu','giai_thich_co_dieu_kien':clarify_during_answer},'WARNING' if clarify_during_answer else 'DONE')
         checkpoint('retrieval')
         audit_outcome='EXPLAIN' if clarify_during_answer else analysis.requested_outcome
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         lookup_scope_complete=False
         if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
-            exact=self.retriever.exact(analysis.explicit_references)
+            exact=observed('exact',self.retriever.exact,analysis.explicit_references,summary=lambda v:evidence_summary(v,self.store))
             descendant_limit=max(0,self.cfg.max_verified_units-len(exact))
             descendants=self.retriever.hierarchy_descendants(exact,descendant_limit)
             lookup_scope_complete=bool(descendant_limit and len(descendants)<descendant_limit)
             lists.append(exact+descendants)
         exact_only=bool(analysis.route==Route.DIRECT and lists and lists[0])
         profile_only=False
+        if not analysis.explicit_references or not self.cfg.retrieval.exact_lookup:
+            skip_step('exact','Không có định vị Điều/Khoản/Điểm hoặc exact lookup đã tắt')
         policy=[]
         if not exact_only and self.cfg.retrieval.profile_fast_path and plan.slot_requirements:
+            profile_step=Step('profile')
             probe_started=time.perf_counter()
             policy=self.retriever.policy_anchor(analysis.legal_issues,analysis.facts,plan)
             probe,_=temporal_filter(policy,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
@@ -203,44 +219,70 @@ class OnlinePipeline:
             trace.timings_ms['profile_probe']=round((time.perf_counter()-probe_started)*1000,2)
             trace.events.append({'event':'profile_fast_path','used':profile_only,'missing':probe_state.gaps,
               'proved_ids':sorted(proved_ids),'reason':'KNOWN_RULE_CHAIN_COMPLETE' if profile_only else 'FULL_RETRIEVAL_REQUIRED'})
+            profile_step.finish({'du_chuoi':profile_only,'so_nguon_PASS':len(proved),'o_con_thieu':probe_state.gaps},'DONE' if profile_only else 'WARNING')
             if profile_only:
                 lists.append(proved); plan=probe_plan
+        if exact_only or not self.cfg.retrieval.profile_fast_path or not plan.slot_requirements:
+            skip_step('profile','Exact lookup đã dùng, hoặc profile fast path không áp dụng')
         if not exact_only:
-            policy=policy or self.retriever.policy_anchor(analysis.legal_issues,analysis.facts,plan)
+            policy=policy or observed('policy',self.retriever.policy_anchor,analysis.legal_issues,analysis.facts,plan,summary=lambda v:evidence_summary(v,self.store))
         if not exact_only and not profile_only:
             if policy: lists.append(policy)
             retrieval_queries=[env.normalized_query]+analysis.retrieval_queries
             if self.cfg.retrieval.bm25_enabled:
                 channel_started=time.perf_counter()
-                for retrieval_query in retrieval_queries: lists.append(self.retriever.bm25(retrieval_query))
+                for retrieval_query in retrieval_queries: lists.append(observed('bm25',self.retriever.bm25,retrieval_query,summary=lambda v:evidence_summary(v,self.store)))
+                from .query_support import task_bm25_channels
+                task_channels,task_report=observed('bm25',task_bm25_channels,self.retriever,analysis.answer_tasks,retrieval_queries,technology='BM25S · bổ sung theo task',summary=lambda r:{'so_kenh_bo_sung':len(r[0]),'so_nguon':sum(len(c) for c in r[0])})
+                lists.extend(task_channels)
+                trace.events.append({'event':'task_scoped_retrieval',**task_report})
                 trace.timings_ms['bm25']=round((time.perf_counter()-channel_started)*1000,2)
             if self.cfg.retrieval.dense_enabled:
                 channel_started=time.perf_counter()
                 for retrieval_query in retrieval_queries:
                     try:
-                        lists.append(self.retriever.dense(retrieval_query))
+                        lists.append(observed('dense',self.retriever.dense,retrieval_query,technology=self.cfg.embedding_model+' · FAISS',summary=lambda v:evidence_summary(v,self.store)))
                     except IndexUnavailable as exc:
                         warnings.append('DENSE_RETRIEVAL_UNAVAILABLE')
                         trace.events.append({'event':'dense_retrieval','status':'DEGRADED',
                           'error':type(exc.__cause__ or exc).__name__})
                         break
                 trace.timings_ms['dense']=round((time.perf_counter()-channel_started)*1000,2)
-            if self.cfg.retrieval.issue_anchor_enabled: lists.append(self.retriever.issue_anchor(analysis.legal_issues))
+            if self.cfg.retrieval.issue_anchor_enabled: lists.append(observed('issue',self.retriever.issue_anchor,analysis.legal_issues,summary=lambda v:evidence_summary(v,self.store)))
             case_query=analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues
-            if self.cfg.retrieval.case_law_enabled and case_query: lists.append(self.retriever.case_law(env.normalized_query))
-            if self.cfg.retrieval.community_enabled and case_query: lists.append(self.retriever.community_cases(env.normalized_query))
+            if self.cfg.retrieval.case_law_enabled and case_query: lists.append(observed('cases',self.retriever.case_law,env.normalized_query,summary=lambda v:evidence_summary(v,self.store)))
+            else: skip_step('cases','Không cần kênh vụ án hoặc kênh đã tắt')
+            if self.cfg.retrieval.community_enabled and case_query: lists.append(observed('community',self.retriever.community_cases,env.normalized_query,summary=lambda v:evidence_summary(v,self.store)))
+            else: skip_step('community','Không cần cộng đồng vụ án hoặc kênh đã tắt')
+        if exact_only or profile_only:
+            for key in ('bm25','dense','issue','cases','community'):
+                skip_step(key,'Exact/profile đã đủ căn cứ; không yêu cầu kênh này')
+        else:
+            if not self.cfg.retrieval.bm25_enabled: skip_step('bm25','BM25 đã tắt trong cấu hình')
+            if not self.cfg.retrieval.dense_enabled: skip_step('dense','Dense đã tắt trong cấu hình')
+            if not self.cfg.retrieval.issue_anchor_enabled: skip_step('issue','Kênh issue đã tắt trong cấu hình')
         fusion_started=time.perf_counter()
-        nonempty=[x for x in lists if x]; items=nonempty[0] if len(nonempty)==1 else self.retriever.fusion(nonempty) if nonempty else []
+        nonempty=[x for x in lists if x]
+        items=observed('fusion',lambda:nonempty[0] if len(nonempty)==1 else self.retriever.fusion(nonempty) if nonempty else [],
+          technology='RRF' if len(nonempty)>1 else 'Python · một kênh hoặc không có nguồn',
+          summary=lambda v:{**evidence_summary(v,self.store),'so_kenh':len(nonempty)})
         trace.timings_ms['fusion']=round((time.perf_counter()-fusion_started)*1000,2)
         trace.seed_results=sum(len(x) for x in lists)
-        items,removed=temporal_filter(items,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
-        items,authority_removed=authority_filter(items,strict=not self.cfg.provisional_mode)
+        items,removed=observed('temporal',temporal_filter,items,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end,summary=lambda r:{'giu_lai':len(r[0]),'loai':len(r[1]),'ngay_tra_cuu':analysis.query_date,'cho_fallback_cap_van_ban':allow_fallback})
+        items,authority_removed=observed('authority',authority_filter,items,strict=not self.cfg.provisional_mode,summary=lambda r:{'giu_lai':len(r[0]),'loai':len(r[1]),'provisional':self.cfg.provisional_mode})
+        if policy and not (exact_only or profile_only):
+            anchors,_=temporal_filter(policy,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
+            anchors,_=authority_filter(anchors,strict=not self.cfg.provisional_mode)
+            items,retention=retain_required_anchors(items,anchors,plan,self.cfg.retrieval.fusion_top_k)
+            trace.events.append({'event':'required_anchor_retention',**retention})
         reranker_started=time.perf_counter()
         if self.cfg.reranker.enabled and not exact_only and not profile_only:
-            try: items=self.retriever.neural_rerank(items,env.normalized_query)
+            try: items=observed('reranker',self.retriever.neural_rerank,items,env.normalized_query,technology=self.cfg.reranker.model,summary=lambda v:evidence_summary(v,self.store))
             except IndexUnavailable as exc:
                 warnings.append('NEURAL_RERANKER_UNAVAILABLE')
                 trace.events.append({'event':'neural_reranker','status':'DEGRADED','error':type(exc.__cause__ or exc).__name__})
+        if not self.cfg.reranker.enabled or exact_only or profile_only:
+            skip_step('reranker','Exact/profile đã dùng hoặc reranker đã tắt')
         trace.timings_ms['neural_reranker']=round((time.perf_counter()-reranker_started)*1000,2)
         trace.events.append({'event':'retrieval_execution','path':'EXACT' if exact_only else 'PROFILE' if profile_only else 'HYBRID',
           'bm25_requested':self.cfg.retrieval.bm25_enabled and not (exact_only or profile_only),
@@ -249,11 +291,11 @@ class OnlinePipeline:
         items=rerank(items,self.cfg)
         trace.timings_ms['seed_retrieval']=round((time.perf_counter()-stage)*1000,2)
         audit_started=time.perf_counter()
-        audited=deterministic_audit(self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end)
+        audited=observed('source_audit',deterministic_audit,self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end,summary=lambda v:{'vuot_kiem_tra_may':sum(x.verified for x in v),'co_loi_cung':sum(not x.verified for x in v),'so_nguon_co_canh_bao':sum(bool(x.audit_warnings) for x in v)},status=lambda v:'WARNING' if any(x.audit_warnings or not x.verified for x in v) else 'DONE')
         trace.timings_ms['deterministic_audit']=round((time.perf_counter()-audit_started)*1000,2)
         applicability_started=time.perf_counter()
         checkpoint('applicability')
-        verified,decisions,app_warnings=self.applicability.audit([x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome)
+        verified,decisions,app_warnings=observed('auditor',self.applicability.audit,[x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,technology='Python · '+self.cfg.applicability.mode+'; xem lượt model nếu có',summary=audit_summary,status=lambda r:'WARNING' if r[2] or any(d.audit_status=='UNRESOLVED' for d in r[1]) else 'DONE')
         checkpoint()
         trace.timings_ms['applicability_audit']=round((time.perf_counter()-applicability_started)*1000,2)
         warnings+=app_warnings
@@ -261,7 +303,7 @@ class OnlinePipeline:
         if extended_plan.mandatory_slots!=plan.mandatory_slots:
             plan=extended_plan
             trace.events.append({'event':'evidence_plan_extended','mandatory_slots':plan.mandatory_slots})
-        state=state_for(verified,plan,analysis.query_date,allow_fallback)
+        state=observed('coverage',state_for,verified,plan,analysis.query_date,allow_fallback,summary=lambda v:{'coverage':v.coverage,'o_con_thieu':v.gaps},status=lambda v:'WARNING' if v.gaps else 'DONE')
         trace.timings_ms['seed_retrieval_and_audit']=round((time.perf_counter()-stage)*1000,2)
         trace.retrieval_candidates=[{'unit_id':x.unit_id,'method':x.retrieval_method,'score':round(x.score,8),
           'authority_verified':x.authority_verified} for x in items[:50]]
@@ -271,6 +313,7 @@ class OnlinePipeline:
         graph_stats={'nodes_visited':len(verified),'edges_visited':len(hierarchy_edges),'rounds':0,
           'critical_edges_followed':hierarchy_relations}
         budget_reason=None; stage=time.perf_counter()
+        graph_step=Step('graph')
         if self.cfg.graph.enabled and not exact_only:
             graph_seeds=verified[:self.cfg.graph.max_nodes]
             visited={x.unit_id for x in graph_seeds}; paths={x.unit_id:list(x.graph_path) for x in graph_seeds}
@@ -287,15 +330,16 @@ class OnlinePipeline:
                 if graph_stats['edges_visited']>=self.cfg.graph.max_edges: budget_reason='EDGE_BUDGET'; break
                 if (time.monotonic()-graph_started)*1000>=self.cfg.graph.wall_clock_ms: budget_reason='TIME_BUDGET'; break
                 remaining_ms=self.cfg.graph.wall_clock_ms-(time.monotonic()-graph_started)*1000
-                expanded,frontier,round_stats=self.graph.expand_round(frontier,gaps,env.normalized_query,visited,paths,
-                  self.cfg.graph.max_nodes-len(visited),self.cfg.graph.max_edges-graph_stats['edges_visited'],relation_paths,direction_paths,remaining_ms)
+                expanded,frontier,round_stats=observed('graph_round',self.graph.expand_round,frontier,gaps,env.normalized_query,visited,paths,
+                  self.cfg.graph.max_nodes-len(visited),self.cfg.graph.max_edges-graph_stats['edges_visited'],relation_paths,direction_paths,remaining_ms,
+                  summary=lambda r:graph_summary(r,self.store,round_no))
                 graph_stats['edges_visited']+=round_stats['edges_visited']; graph_stats['rounds']=round_no
                 graph_stats['critical_edges_followed']+=round_stats['critical_edges_followed']
                 if expanded:
                     expanded,removed_more=temporal_filter(expanded,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end); removed+=removed_more
                     expanded,authority_removed_more=authority_filter(expanded,strict=not self.cfg.provisional_mode); authority_removed+=authority_removed_more
-                    expanded=deterministic_audit(self.store,expanded,analysis.query_date,allow_fallback,analysis.query_date_end)
-                    expanded,round_decisions,round_warnings=self.applicability.audit([x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome)
+                    expanded=observed('source_audit',deterministic_audit,self.store,expanded,analysis.query_date,allow_fallback,analysis.query_date_end,summary=lambda v:{'nguon_graph_vuot_kiem_tra':sum(x.verified for x in v),'co_loi_cung':sum(not x.verified for x in v)})
+                    expanded,round_decisions,round_warnings=observed('auditor',self.applicability.audit,[x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,summary=audit_summary)
                     decisions+=round_decisions; warnings+=round_warnings
                     verified=rerank(list({x.unit_id:x for x in verified+expanded}.values()),self.cfg)
                     state=state_for(verified,plan,analysis.query_date,allow_fallback)
@@ -309,12 +353,13 @@ class OnlinePipeline:
             else:
                 budget_reason='ROUND_BUDGET' if max_rounds else 'GRAPH_DISABLED_BY_ZERO_ROUNDS'
             graph_stats['nodes_visited']=len(visited); graph_stats['critical_edges_followed']=list(dict.fromkeys(graph_stats['critical_edges_followed']))
+        graph_step.finish({'so_vong':graph_stats['rounds'],'node_da_xet':graph_stats['nodes_visited'] if graph_stats['rounds'] else 0,'canh_da_xet':graph_stats['edges_visited'] if graph_stats['rounds'] else 0,'ly_do_dung':budget_reason or ('GRAPH_DISABLED' if not self.cfg.graph.enabled else 'EXACT_LOOKUP'),'o_con_thieu':state.gaps},'SKIPPED' if not graph_stats['rounds'] else 'WARNING' if _actionable_gaps(state.gaps,verified,self.cfg.provisional_mode) else 'DONE')
         trace.timings_ms['graph_retrieval']=round((time.perf_counter()-stage)*1000,2)
         route_limit=self.cfg.max_verified_units if analysis.route==Route.DIRECT and any(x.retrieval_method=='exact_hierarchy' for x in verified) else 1 if analysis.route==Route.DIRECT else min(self.cfg.max_verified_units,6) if analysis.route==Route.STANDARD else self.cfg.max_verified_units
         if plan.slot_requirements:
             route_limit=self.cfg.max_verified_units
         selection_started=time.perf_counter()
-        selected,state=select_for_plan(verified,plan,analysis.query_date,allow_fallback,route_limit)
+        selected,state=observed('selection',select_for_plan,verified,plan,analysis.query_date,allow_fallback,route_limit,summary=lambda r:{**evidence_summary(r[0],self.store),'coverage':r[1].coverage,'o_con_thieu':r[1].gaps})
         conflicts=detect_authoritative_conflicts(verified,analysis.query_date,analysis.query_date_end)
         required_missing=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
         if required_missing:
@@ -347,7 +392,7 @@ class OnlinePipeline:
                 status=Stop.PARTIAL_ALLOWED; partial=True
                 warnings.append('INDEPENDENT_TASK_RULES_ONLY')
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
-        pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome)
+        pack=observed('pack',build_verified_pack,env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome,summary=lambda v:{'so_nguon':len(v.evidence),'so_ky_tu':sum(len(x.text) for x in v.evidence),'trang_thai_du_kien':status.value})
         pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements})
         if (exact_only and lookup_scope_complete and len(analysis.explicit_references)==1
           and not conflicts and not analysis.facts and not analysis.legal_subissues
@@ -355,12 +400,13 @@ class OnlinePipeline:
             pack=pack.model_copy(update={'lookup_reference':analysis.explicit_references[0]})
         adjudication_started=time.perf_counter()
         if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS}:
+            for key in ('adjudicator','answer_quality','semantic_review'): skip_step(key,'Chưa đủ căn cứ hoặc cần làm rõ ngày; không tạo kết luận')
             summary='Cần ngày chính xác để xác định phiên bản pháp luật áp dụng.' if status==Stop.NEED_MORE_FACTS else 'Không đủ bằng chứng đã xác minh để kết luận.'
             draft=AdjudicationDraft(answer_summary=summary,claims=[],applicable_law_versions=[],assumptions=assumptions,limitations=state.gaps)
             generation_warnings=[]; answer=draft.answer_summary; refs=[]
         else:
             checkpoint('generation')
-            draft,generation_warnings=self.adjudicator.generate(pack,partial,assumptions)
+            draft,generation_warnings=observed('adjudicator',self.adjudicator.generate,pack,partial,assumptions,summary=lambda r:{'so_claim':len(r[0].claims),'so_canh_bao':len(r[1]),'semantic_review':r[0].semantic_review.get('status','NOT_RUN')},status=lambda r:'WARNING' if r[1] else 'DONE')
             if draft.semantic_review.get('error_code')=='GEMINI_HTTP_429':
                 raise ProviderRateLimited('GEMINI_HTTP_429')
             checkpoint()
@@ -432,7 +478,7 @@ class OnlinePipeline:
         reference_items=[] if status in {Stop.INSUFFICIENT_EVIDENCE,Stop.NEED_MORE_FACTS} else (
           [item for item in selected if item.unit_id in {citation.evidence_id for citation in refs}] if refs else selected)
         reference_audit_started=time.perf_counter()
-        ok,problems=reference_audit(answer,reference_items,refs,draft.claims,context_query=env.normalized_query)
+        ok,problems=observed('reference_audit',reference_audit,answer,reference_items,refs,draft.claims,context_query=env.normalized_query,summary=lambda r:{'ket_qua':'PASS' if r[0] else 'FAIL','so_van_de':len(r[1])},status=lambda r:'DONE' if r[0] else 'WARNING')
         if not ok and draft.claims:
             repaired_answer,repaired_items,repaired_claims=_repair_references(selected,draft.claims)
             repaired_refs=citations(repaired_items)
@@ -493,7 +539,7 @@ class OnlinePipeline:
           {'event':'adjudication','mode':self.cfg.adjudication.mode,'claims':len(draft.claims),'fallback':bool(generation_warnings)},
           {'event':'reference_audit','passed':ok,'issues':problems}]
         from .tasks import assess_parts
-        parts=assess_parts(analysis,selected,draft.claims,draft.semantic_review,allow_fallback,getattr(self.store.report,'legal_ready',False))
+        parts=observed('tasks',assess_parts,analysis,selected,draft.claims,draft.semantic_review,allow_fallback,getattr(self.store.report,'legal_ready',False),summary=lambda v:{'so_y':len(v),'trang_thai_tung_y':[p.answer_status for p in v]},status=lambda v:'WARNING' if any(p.answer_status!='ANSWERED' for p in v) else 'DONE')
         if parts and any(part.answer_status!='ANSWERED' for part in parts) and status==Stop.SUFFICIENT:
             status=Stop.PARTIAL_ALLOWED
             state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['per_task_answer_completeness']))})

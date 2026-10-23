@@ -9,7 +9,7 @@ import re
 from .models import LegalLocator, QueryAnalysis
 from .temporal import legal_regime_for
 
-TAXONOMY_VERSION = 'labor-subissues-v9'
+TAXONOMY_VERSION = 'labor-subissues-v10'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 

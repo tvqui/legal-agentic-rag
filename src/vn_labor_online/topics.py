@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass,replace
 import re,unicodedata
 
-VERSION='labor-topics-v2'
+VERSION='labor-topics-v3'
 
 def fold(text):
     text=unicodedata.normalize('NFD',text.lower()).replace('đ','d')
@@ -111,8 +111,15 @@ TOPICS=[replace(topic,phrases=topic.phrases+ALIASES.get(topic.key,())) for topic
 
 def detect_topics(query):
     text=fold(query)
+    accident_context=('tai nan lao dong' in text or 'tai nan' in text and any(
+        phrase in text for phrase in ('trong gio lam viec','tai noi lam viec','khi dang lam viec','khi thuc hien cong viec')))
+    # Occurrence during working hours is context for investigating an accident,
+    # not automatically a request about hour limits or proof of a legal accident.
+    hours_text=re.sub(r'\btrong gio lam viec\b',' ',text) if accident_context else text
     # Personal leave is an absence, not termination. Keep separately stated
     # termination clauses available instead of excluding the entire question.
     termination_text=re.sub(r'(?<!\w)(?:toi muon |xin )?nghi viec rieng(?!\w)',' ',text)
-    return [topic for topic in TOPICS if any(re.search(r'(?<!\w)'+re.escape(fold(phrase))+r'(?!\w)',
-      termination_text if topic.issue=='TERMINATION' else text) for phrase in topic.phrases)]
+    return [topic for topic in TOPICS if (topic.key=='occupational_accident' and accident_context) or any(
+      re.search(r'(?<!\w)'+re.escape(fold(phrase))+r'(?!\w)',
+      termination_text if topic.issue=='TERMINATION' else hours_text if topic.key=='normal_hours' else text)
+      for phrase in topic.phrases)]

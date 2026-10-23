@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, Clipboard, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { EvidenceIndicator } from './EvidenceIndicator'
+import { ExecutionLog } from './ExecutionLog'
 import { IconButton } from '../ui/IconButton'
 
 function formatTime(value) {
@@ -89,6 +90,7 @@ export function Message({ message, onCitation, onRetry }) {
         <ReviewNotice message={message} />
         <EvidenceIndicator sourceCount={message.citations?.length || 0} evidenceStatus={message.evidenceStatus} answerStatus={message.answerStatus} />
       </>}
+      {!isUser && <ExecutionLog steps={message.executionLog} active={message.status === 'streaming'} availability={message.executionAvailability} dropped={message.executionDropped} />}
       <div className="message-actions">
         <IconButton label={copied ? 'Đã sao chép' : 'Sao chép'} onClick={copy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</IconButton>
         {isUser

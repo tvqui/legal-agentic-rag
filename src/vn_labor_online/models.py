@@ -227,6 +227,8 @@ class ProviderApplicability(BaseModel):
     conditions_status:Literal['SATISFIED','NOT_SATISFIED','UNKNOWN','NOT_APPLICABLE']
     exception_status:Literal['TRIGGERED','NOT_TRIGGERED','UNKNOWN','NOT_APPLICABLE']
 class Trace(BaseModel):
+    execution_steps:list[dict[str,Any]]=Field(default_factory=list)
+    execution_steps_dropped:int=0
     trace_id:str; query_id:str; build_id:str; route:Route; route_reason:str; retrieval_rounds:int=0
     nodes_visited:int=0; edges_visited:int=0; timings_ms:dict[str,float]=Field(default_factory=dict); events:list[dict[str,Any]]=Field(default_factory=list)
     seed_results:int=0; critical_edges_followed:list[str]=Field(default_factory=list)

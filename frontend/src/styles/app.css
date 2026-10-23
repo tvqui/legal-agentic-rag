@@ -1,5 +1,16 @@
+html,
+body,
+#root {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden
+}
+
 .app-shell {
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     background: var(--bg)
@@ -7,7 +18,9 @@
 
 .workspace {
     min-width: 0;
-    min-height: 100vh;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
     display: flex;
     flex-direction: column
 }
@@ -18,6 +31,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
     position: sticky;
     top: 0;
     overflow: hidden;
@@ -357,6 +371,7 @@
 
 .topbar {
     height: 52px;
+    flex-shrink: 0;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -418,7 +433,8 @@
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     flex: 1;
-    min-height: 0
+    min-height: 0;
+    overflow: hidden
 }
 
 .conversation-header {
@@ -464,7 +480,8 @@
 
 .chat-scroll {
     min-height: 0;
-    overflow: auto
+    overflow: auto;
+    overscroll-behavior: contain
 }
 
 .chat-content {
@@ -659,6 +676,39 @@
     overflow: hidden
 }
 
+/* Per-answer execution journal, also retained after the request finishes. */
+.execution-log {
+    margin: 14px 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 12px;
+}
+.execution-log-heading { display: flex; align-items: center; gap: 6px; padding: 2px 6px; }
+.execution-log-toggle { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; background: none; border: 0; padding: 10px 6px; color: var(--text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
+.execution-log-toggle svg:last-child { margin-left: auto; flex-shrink: 0; }
+.execution-log-download { display: inline-flex; align-items: center; gap: 4px; padding: 7px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--text); font: inherit; cursor: pointer; white-space: nowrap; }
+.execution-log-note, .execution-log-alert { margin: 0 !important; padding: 8px 12px; line-height: 1.5; font-size: 11px; color: var(--muted); }
+.execution-log-alert { color: var(--danger); border-top: 1px solid var(--border); }
+.execution-log-scroll { max-height: 460px; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
+.execution-log-table { width: 100%; min-width: 640px; border-collapse: collapse; table-layout: fixed; }
+.execution-log-table th, .execution-log-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+.execution-log-table th { position: sticky; top: 0; z-index: 1; background: var(--surface); color: var(--text); }
+.execution-log-table th:nth-child(1) { width: 27%; }
+.execution-log-table th:nth-child(2) { width: 21%; }
+.execution-log-table th:nth-child(3) { width: 39%; }
+.execution-log-table th:nth-child(4) { width: 13%; }
+.execution-layer, .execution-output-type { display: block; color: var(--muted); margin-top: 3px; }
+.execution-log-table pre { margin: 5px 0 0; white-space: pre-wrap; font: inherit; overflow-wrap: anywhere; }
+.execution-badge { display: inline-block; margin-top: 6px; padding: 1px 6px; border-radius: 5px; background: var(--border); color: var(--text); font-size: 10px; }
+.execution-badge.done { color: #126349; background: #e3f3eb; }
+.execution-badge.running { color: #145b88; background: #e4f0fa; }
+.execution-badge.warning { color: #825400; background: #fff2d5; }
+.execution-badge.error, .execution-badge.cancelled { color: #9e2929; background: #fbe8e8; }
+.execution-row-error td { background: color-mix(in srgb, var(--danger) 4%, transparent); }
+
 .agent-summary {
     width: 100%;
     border: 0;
@@ -846,11 +896,14 @@
     border-left: 1px solid var(--border);
     box-shadow: -12px 0 30px rgba(19, 49, 52, .08);
     animation: drawer-in .2s ease both;
-    overflow: auto
+    display: flex;
+    flex-direction: column;
+    overflow: hidden
 }
 
 .source-header {
     height: 82px;
+    flex-shrink: 0;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
@@ -865,7 +918,11 @@
 }
 
 .source-body {
-    padding: 24px
+    padding: 24px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere
 }
 
 .badge {
@@ -1005,6 +1062,8 @@
 }
 
 .utility-page {
+    flex: 1;
+    min-height: 0;
     padding: 50px clamp(24px, 7vw, 100px);
     overflow: auto
 }
@@ -1352,7 +1411,7 @@
     }
 
     .workspace {
-        min-height: 100vh
+        min-height: 0
     }
 
     .sidebar {
@@ -1490,6 +1549,7 @@
         top: auto;
         width: 100%;
         height: min(78vh, 650px);
+        height: min(78dvh, 650px);
         border-left: 0;
         border-top: 1px solid var(--border);
         border-radius: 16px 16px 0 0;

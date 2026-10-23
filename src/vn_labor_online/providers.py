@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 
 from .errors import LLMProviderError,StructuredOutputError,ProviderRateLimited
 from .runtime import checkpoint,request_timeout,RequestStopped
+from .demo_progress import observe_model
 from .gemini_quota import GeminiRatePolicy,get_gemini_limiter,quota_info
 from .gemini_diagnostics import classify_error,public_diagnostics
 
@@ -91,6 +92,7 @@ class HttpJsonProvider(BaseProvider):
             headers["Authorization"] = "Bearer " + self.api_key
         return headers
 
+    @observe_model
     def structured(self, system: str, user: str, schema: dict) -> dict:
         payload = {
             "model": self.model,
@@ -129,6 +131,7 @@ class OllamaProvider(BaseProvider):
         self.max_output_tokens=max_output_tokens
         self.context_tokens=context_tokens
 
+    @observe_model
     def structured(self, system: str, user: str, schema: dict) -> dict:
         input_bound=len((system+user).encode("utf-8"))+256
         if input_bound+self.max_output_tokens>self.context_tokens:
@@ -240,6 +243,7 @@ class GeminiProvider(BaseProvider):
         self._probe_failure={}
 
 
+    @observe_model
     def structured(self, system, user, schema):
         if not self.model or not self.api_key:
             raise LLMProviderError('GEMINI_CONFIGURATION_MISSING')

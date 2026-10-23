@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib, json, logging, math, os, re, secrets, threading, uuid
 from datetime import date
 from .runtime import RequestRegistry,RequestStopped,request_budget
+from .demo_progress import step as execution_step,execution_snapshot,public_error
 from .config import load_config
 from .errors import OnlineError,ProviderRateLimited
 from .models import AnswerResponse,QueryRequest
@@ -11,6 +12,14 @@ from .taxonomy import TAXONOMY_VERSION
 from .topics import VERSION as TOPIC_REGISTRY_VERSION
 
 logger = logging.getLogger(__name__)
+
+def _with_execution(request,payload):
+    budget=getattr(request.state,'execution_budget',None)
+    if budget is not None:
+        snapshot=budget.progress.snapshot()
+        payload['details']['execution_steps']=snapshot['steps']
+        payload['details']['execution_steps_dropped']=snapshot['dropped']
+    return payload
 
 def _error_envelope(status_code: int, category: str, message: str, details: dict | None = None, error_id: str | None = None):
     eid = error_id or f"ERR_{uuid.uuid4().hex[:12].upper()}"
@@ -63,10 +72,10 @@ def create_app(config_path:str|Path|None=None):
     async def stopped_handler(request:Request,exc:RequestStopped):
         cancelled=exc.reason=='REQUEST_CANCELLED'
         logger.warning('[%s] %s stage=%s',getattr(request.state,'request_id','unknown'),exc.reason,exc.stage)
-        return JSONResponse(status_code=409 if cancelled else 504,content=_error_envelope(
+        return JSONResponse(status_code=409 if cancelled else 504,content=_with_execution(request,_error_envelope(
           409 if cancelled else 504,'CANCELLED' if cancelled else 'TIMEOUT',
           'Yêu cầu đã được dừng.' if cancelled else 'Yêu cầu vượt thời gian xử lý. Chưa có kết luận pháp lý được trả về.',
-          details={'stage':exc.stage,'request_id':getattr(request.state,'request_id',None)}))
+          details={'stage':exc.stage,'request_id':getattr(request.state,'request_id',None)})))
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -76,7 +85,7 @@ def create_app(config_path:str|Path|None=None):
             message="Dữ liệu yêu cầu không hợp lệ hoặc thiếu trường bắt buộc.",
             details={"errors": jsonable_encoder(exc.errors())}
         )
-        return JSONResponse(status_code=422, content=payload)
+        return JSONResponse(status_code=422, content=_with_execution(request,payload))
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
@@ -89,7 +98,7 @@ def create_app(config_path:str|Path|None=None):
             message=msg,
             details=det
         )
-        return JSONResponse(status_code=exc.status_code, content=payload)
+        return JSONResponse(status_code=exc.status_code, content=_with_execution(request,payload))
 
     @app.exception_handler(ProviderRateLimited)
     async def provider_rate_handler(request:Request,exc:ProviderRateLimited):
@@ -103,7 +112,7 @@ def create_app(config_path:str|Path|None=None):
                  if exc.quota_kind in {'DAILY','QUOTA_DISABLED'} else
                  'Dịch vụ AI đang giới hạn lượt gọi hoặc lượng token; đã hết số lần thử/thời gian chờ cho yêu cầu này. Vui lòng thử lại sau.')
         payload=_error_envelope(503,'PROVIDER_RATE_LIMIT',message,details=details)
-        return JSONResponse(status_code=503,content=payload,headers=headers)
+        return JSONResponse(status_code=503,content=_with_execution(request,payload),headers=headers)
 
     @app.exception_handler(OnlineError)
     async def online_error_handler(request: Request, exc: OnlineError):
@@ -116,7 +125,7 @@ def create_app(config_path:str|Path|None=None):
             details={"error_type": type(exc).__name__},
             error_id=eid
         )
-        return JSONResponse(status_code=503, content=payload)
+        return JSONResponse(status_code=503, content=_with_execution(request,payload))
 
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception):
@@ -129,7 +138,7 @@ def create_app(config_path:str|Path|None=None):
             details={"error_id": eid},
             error_id=eid
         )
-        return JSONResponse(status_code=500, content=payload)
+        return JSONResponse(status_code=500, content=_with_execution(request,payload))
 
     @app.middleware('http')
     async def bearer_auth(request:Request,call_next):
@@ -168,7 +177,7 @@ def create_app(config_path:str|Path|None=None):
             'literal_source_lookup':'verified-excerpt-v1',
             'assessment_fact_gate':'critical-facts-v1','probation_scope':'dated-job-group-v1',
             'gemini_schema_contract':'local-validation-v1','provider_capacity':'paced-retry-v2','gemini_readiness':'diagnostic-probe-v2',
-            'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'cooperative_cancel':True,'idempotent_retry':True},
+            'request_budget_seconds':pipeline.cfg.request_timeout_seconds,'progress':True,'execution_log':'execution-steps-v1','cooperative_cancel':True,'idempotent_retry':True},
           'quality_policy':{'semantic_review':pipeline.cfg.adjudication.semantic_review and pipeline.cfg.adjudication.mode!='deterministic',
           'semantic_review_provider':pipeline.cfg.adjudication.review_provider,
           'semantic_repair_attempts':pipeline.cfg.adjudication.semantic_repair_attempts,'answer_while_clarifying':pipeline.cfg.answer_while_clarifying,
@@ -187,7 +196,7 @@ def create_app(config_path:str|Path|None=None):
         key=request_key(http_request,message_id)
         entry=requests.get(key) if key else None
         if not entry: raise HTTPException(404,detail='Request not found')
-        return {'state':entry.state,'stage':entry.budget.stage,
+        return {**entry.budget.progress.snapshot(),'state':entry.state,'stage':entry.budget.stage,
           'cancel_requested':entry.budget.cancelled.is_set()}
 
     @app.post('/v1/requests/{message_id}/cancel')
@@ -216,11 +225,26 @@ def create_app(config_path:str|Path|None=None):
             if key: requests.finish(key,state='FAILED')
             raise HTTPException(429,detail='The answer service is busy; retry after the current request finishes')
         try:
-            with request_budget(seconds,entry.budget if entry else None):
+            with request_budget(seconds,entry.budget if entry else None) as budget:
+                http_request.state.execution_budget=budget
+                with execution_step('api') as current_step:
+                    current_step.finish({'schema':'QueryRequest','dau_ra':'Request đã hợp lệ; bắt đầu ghi sau kiểm tra schema'})
                 result=state['pipeline'].ask(request)
+                with execution_step('response') as current_step:
+                    current_step.finish({'trang_thai':result.status.value,'so_claim':len(result.claims),
+                        'so_trich_dan':len(result.citations),'so_canh_bao':len(result.warnings),
+                        'legal_status':result.legal_status},'DONE' if result.status.value=='SUFFICIENT' else 'WARNING')
+                snapshot=execution_snapshot()
+                result.trace.execution_steps=snapshot['steps']
+                result.trace.execution_steps_dropped=snapshot['dropped']
             if key: requests.finish(key,result)
             return result
-        except BaseException:
+        except BaseException as exc:
+            budget=getattr(http_request.state,'execution_budget',None)
+            if budget is not None:
+                budget.progress.fail_running(exc)
+                ident=budget.progress.begin('response')
+                budget.progress.finish(ident,public_error(exc),'CANCELLED' if getattr(exc,'reason','')=='REQUEST_CANCELLED' else 'ERROR')
             if key: requests.finish(key,state='FAILED')
             raise
         finally:

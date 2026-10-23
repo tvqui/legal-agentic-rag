@@ -1,0 +1,377 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="5700" viewBox="0 0 2000 5700" role="img" aria-labelledby="title desc">
+<title id="title">Pháp Điển AI — luồng công nghệ ONLINE theo mã nguồn ngày 23/10/2026</title><desc id="desc">Ba mươi bước có đánh số, màu theo tầng, có nhánh truy xuất một lượt, vòng Graph, hỏi thêm, ngoài phạm vi, không đủ căn cứ, xung đột, lỗi và hậu kiểm sửa hữu hạn.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L9,3 L0,6 Z" fill="context-stroke"/></marker><style>text{font-family:"Segoe UI",Arial,sans-serif}.step{cursor:pointer}.step:hover rect{filter:brightness(.97)}</style></defs>
+<rect x="0" y="0" width="2000" height="5700" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2" />
+<text x="70" y="58" font-size="39" fill="#0f172a" font-weight="750" text-anchor="start">PHÁP ĐIỂN AI · LUỒNG CÔNG NGHỆ ONLINE</text>
+<text x="70" y="101" font-size="23" fill="#475569" font-weight="400" text-anchor="start">Từ câu hỏi đến màn hình · số là nhóm bước chức năng, không phải thứ tự thời gian bắt buộc của mọi câu</text>
+<rect x="70" y="120" width="210" height="42" rx="9" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+<text x="175" y="148" font-size="22" fill="#2563eb" font-weight="700" text-anchor="middle">Researcher</text>
+<rect x="300" y="120" width="210" height="42" rx="9" fill="#ecfdf5" stroke="#15803d" stroke-width="2" />
+<text x="405" y="148" font-size="22" fill="#15803d" font-weight="700" text-anchor="middle">Retriever</text>
+<rect x="530" y="120" width="210" height="42" rx="9" fill="#fff7ed" stroke="#c2410c" stroke-width="2" />
+<text x="635" y="148" font-size="22" fill="#c2410c" font-weight="700" text-anchor="middle">Auditor</text>
+<rect x="760" y="120" width="210" height="42" rx="9" fill="#faf5ff" stroke="#9333ea" stroke-width="2" />
+<text x="865" y="148" font-size="22" fill="#9333ea" font-weight="700" text-anchor="middle">Adjudicator</text>
+<rect x="990" y="120" width="210" height="42" rx="9" fill="#fff1f2" stroke="#be123c" stroke-width="2" />
+<text x="1095" y="148" font-size="22" fill="#be123c" font-weight="700" text-anchor="middle">Hậu kiểm</text>
+<text x="1495" y="150" font-size="21" fill="#475569" font-weight="400" text-anchor="start">Mũi tên liền: xử lý / điều kiện</text>
+<rect x="560" y="575" width="880" height="870" rx="25" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+<text x="585" y="610" font-size="24" fill="#2563eb" font-weight="700" text-anchor="start">RESEARCHER · hiểu câu hỏi và lập kế hoạch</text>
+<rect x="560" y="1490" width="880" height="1150" rx="25" fill="#ecfdf5" stroke="#15803d" stroke-width="2" />
+<text x="585" y="1525" font-size="24" fill="#15803d" font-weight="700" text-anchor="start">RETRIEVER · tìm các nguồn hạt giống</text>
+<rect x="560" y="2695" width="880" height="950" rx="25" fill="#fff7ed" stroke="#c2410c" stroke-width="2" />
+<text x="585" y="2730" font-size="24" fill="#c2410c" font-weight="700" text-anchor="start">AUDITOR · kiểm chứng và xác định khoảng thiếu</text>
+<rect x="560" y="3665" width="880" height="225" rx="25" fill="#fff7ed" stroke="#c2410c" stroke-width="2" />
+<text x="585" y="3700" font-size="24" fill="#c2410c" font-weight="700" text-anchor="start">AUDITOR · giao bằng chứng đã kiểm</text>
+<rect x="560" y="3910" width="880" height="250" rx="25" fill="#faf5ff" stroke="#9333ea" stroke-width="2" />
+<text x="585" y="3945" font-size="24" fill="#9333ea" font-weight="700" text-anchor="start">ADJUDICATOR · dựng bản nháp từ pack</text>
+<rect x="560" y="4220" width="880" height="940" rx="25" fill="#fff1f2" stroke="#be123c" stroke-width="2" />
+<text x="585" y="4255" font-size="24" fill="#be123c" font-weight="700" text-anchor="start">HẬU KIỂM · câu chữ, ý nghĩa, trích dẫn và độ đủ</text>
+<polyline points="1000.0,325 1000.0,375" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,530 1000.0,635" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,780 1000.0,830" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,995 1000.0,1045" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,1200 1000.0,1250" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,1405 1000.0,1550" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,1680 1000.0,1745" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,2180 1000.0,2240" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,2405 1000.0,2455" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,2605 1000.0,2760" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,2935 1000.0,2980" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,3155 1000.0,3200" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,3355 1000.0,3420" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,3595 1000.0,3720" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,3875 1000.0,3970" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,4125 1000.0,4280" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,4435 1000.0,4480" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,4655 1000.0,4710" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,4885 1000.0,4930" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000.0,5105 1000.0,5250" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<polyline points="1000,1920 1000,1980" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1023" y="1931" width="284.0" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1030" y="1952" font-size="20" fill="#64748b" font-weight="600" text-anchor="start">Không dùng được đường tắt</text>
+<polyline points="1400,1830 1460,1830 1460,2320 1400,2320" fill="none" stroke="#15803d" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1493" y="2369" width="208.4" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1500" y="2390" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">Dùng Exact/Profile</text>
+<text x="1500" y="2415" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">→ bỏ Hybrid</text>
+<polyline points="1400,1620 1480,1620 1480,2020 1400,2020" fill="none" stroke="#15803d" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1498" y="1679" width="230.0" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1505" y="1700" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">Vào Hybrid trực tiếp</text>
+<polyline points="1400,3275 1470,3275 1470,3150 1500,3150" fill="none" stroke="#15803d" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1488" y="3349" width="230.0" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1495" y="3370" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">Thiếu + còn lượt tìm</text>
+<polyline points="1730,3000 1730,2850 1400,2850" fill="none" stroke="#15803d" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1498" y="2719" width="284.0" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1505" y="2740" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">Nguồn mới: lọc ngày/nguồn</text>
+<text x="1505" y="2765" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">→ kiểm lại 12 → 13 → 14</text>
+<polyline points="1730,3300 1730,3500 1400,3500" fill="none" stroke="#15803d" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1493" y="3404" width="230.0" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1500" y="3425" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">Dừng: hết frontier /</text>
+<text x="1500" y="3450" font-size="20" fill="#15803d" font-weight="600" text-anchor="start">ngân sách tìm thêm</text>
+<text x="1040" y="3390" font-size="21" fill="#c2410c" font-weight="600" text-anchor="start">Đủ / không còn khả năng mở rộng</text>
+<polyline points="600,710 535,710 535,815 500,815" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="283" y="669" width="186.8" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="290" y="690" font-size="20" fill="#2563eb" font-weight="600" text-anchor="start">Nối tiếp chưa rõ</text>
+<polyline points="600,1320 535,1320 535,900 500,900" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="298" y="1089" width="154.4" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="305" y="1110" font-size="20" fill="#2563eb" font-weight="600" text-anchor="start">Thiếu dữ kiện</text>
+<text x="305" y="1135" font-size="20" fill="#2563eb" font-weight="600" text-anchor="start">quyết định</text>
+<polyline points="600,1360 500,1360" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="293" y="1469" width="143.60000000000002" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="300" y="1490" font-size="20" fill="#2563eb" font-weight="600" text-anchor="start">Ngoài domain</text>
+<polyline points="500,810 520,810 520,255 600,255" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="213" y="309" width="240.8" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="220" y="330" font-size="20" fill="#2563eb" font-weight="600" text-anchor="start">Bổ sung → request mới</text>
+<polyline points="600,3500 540,3500 540,965 500,965" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="193" y="3269" width="240.8" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="200" y="3290" font-size="20" fill="#2563eb" font-weight="600" text-anchor="start">Chưa rõ ngày hiệu lực</text>
+<polyline points="600,3545 500,3545" fill="none" stroke="#be123c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="58" y="3374" width="240.8" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="65" y="3395" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Thiếu căn cứ;</text>
+<text x="65" y="3420" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">không có phần an toàn</text>
+<polyline points="1400,4050 1460,4050 1460,4790 1400,4790" fill="none" stroke="#9333ea" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1493" y="4139" width="251.60000000000002" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1500" y="4160" font-size="20" fill="#9333ea" font-weight="600" text-anchor="start">Literal đúng điều kiện</text>
+<text x="1500" y="4185" font-size="20" fill="#9333ea" font-weight="600" text-anchor="start">→ bỏ 19–20</text>
+<polyline points="1400,4555 1500,4555" fill="none" stroke="#be123c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1498" y="4414" width="143.60000000000002" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1505" y="4435" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Còn lượt sửa</text>
+<polyline points="1500,4660 1465,4660 1465,4615 1400,4615" fill="none" stroke="#be123c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="1478" y="4734" width="251.60000000000002" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1485" y="4755" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Sửa xong → kiểm lại 20</text>
+<polyline points="600,4360 550,4360 550,3610 500,3610" fill="none" stroke="#be123c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="58" y="3809" width="197.60000000000002" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="65" y="3830" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Câu chữ không đạt</text>
+<polyline points="600,4580 530,4580 530,3650 500,3650" fill="none" stroke="#be123c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="43" y="4399" width="273.20000000000005" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="50" y="4420" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Review không đạt / lỗi;</text>
+<text x="50" y="4445" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">không còn phần được kiểm</text>
+<polyline points="600,4800 510,4800 510,3690 500,3690" fill="none" stroke="#be123c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="43" y="4729" width="305.6" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="50" y="4750" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Trích dẫn / độ đủ không đạt</text>
+<text x="50" y="4775" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">(sau sửa hữu hạn ở bước 22)</text>
+<polyline points="600,5025 500,5025" fill="none" stroke="#c2410c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="63" y="4854" width="143.60000000000002" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="70" y="4875" font-size="20" fill="#c2410c" font-weight="600" text-anchor="start">Còn xung đột</text>
+<polyline points="500,5075 540,5075 540,5320 600,5320" fill="none" stroke="#c2410c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="78" y="5204" width="262.4" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="85" y="5225" font-size="20" fill="#c2410c" font-weight="600" text-anchor="start">Hiển thị nguồn xung đột</text>
+<polyline points="40,975 15,975 15,5490" fill="none" stroke="#94a3b8" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<polyline points="40,1400 15,1400 15,5490" fill="none" stroke="#94a3b8" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<polyline points="40,3690 15,3690 15,5490" fill="none" stroke="#94a3b8" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<polyline points="40,4240 15,4240 15,5490" fill="none" stroke="#94a3b8" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<polyline points="15,5490 1000,5490 1000,5425" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="133" y="5449" width="564.8000000000001" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="140" y="5470" font-size="20" fill="#64748b" font-weight="600" text-anchor="start">Các nhánh dừng / lỗi cũng trả về màn hình ở bước 24</text>
+<polyline points="500,2200 560,2200" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="53" y="2414" width="197.60000000000002" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="60" y="2435" font-size="20" fill="#64748b" font-weight="600" text-anchor="start">Quan sát mọi tầng</text>
+<polyline points="600,455 555,455 555,4120 500,4120" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="58" y="3909" width="273.20000000000005" height="31" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="65" y="3930" font-size="20" fill="#64748b" font-weight="600" text-anchor="start">Lỗi có thể ở bước bất kỳ</text>
+<polyline points="1400,455 1980,455 1980,5335 1400,5335" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="1498" y="509" width="251.60000000000002" height="56" rx="5" fill="#ffffff" opacity=".97"/>
+<text x="1505" y="530" font-size="20" fill="#64748b" font-weight="600" text-anchor="start">Retry cùng ID đã DONE:</text>
+<text x="1505" y="555" font-size="20" fill="#64748b" font-weight="600" text-anchor="start">trả kết quả cũ → 24</text>
+<text x="1040" y="4695" font-size="20" fill="#be123c" font-weight="600" text-anchor="start">Qua kiểm tra / chỉ phần đã kiểm / bỏ reviewer</text>
+<g class="step" data-step="1" tabindex="0" aria-label="Bước 1: Người dùng nhập câu hỏi">
+<rect x="600" y="190" width="800" height="135" rx="16" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<rect x="600" y="190" width="8" height="135" rx="4" fill="#475569"/>
+<text x="623" y="225" font-size="25" fill="#475569" font-weight="700" text-anchor="start">01. Người dùng nhập câu hỏi</text>
+<text x="623" y="263" font-size="21" fill="#334155" font-weight="400" text-anchor="start">React · JavaScript · lịch sử trình duyệt</text>
+<text x="623" y="290" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: câu hỏi + ngữ cảnh + facts + ngày tra cứu</text>
+</g>
+<g class="step" data-step="2" tabindex="0" aria-label="Bước 2: Tiếp nhận và bảo vệ request">
+<rect x="600" y="375" width="800" height="155" rx="16" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<rect x="600" y="375" width="8" height="155" rx="4" fill="#475569"/>
+<text x="623" y="410" font-size="25" fill="#475569" font-weight="700" text-anchor="start">02. Tiếp nhận và bảo vệ request</text>
+<text x="623" y="448" font-size="21" fill="#334155" font-weight="400" text-anchor="start">FastAPI · Pydantic · HTTP/JSON · RequestRegistry</text>
+<text x="623" y="475" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: request hợp lệ + ngân sách + mã yêu cầu</text>
+</g>
+<g class="step" data-step="3" tabindex="0" aria-label="Bước 3: Ghép ngữ cảnh và dữ kiện nối tiếp">
+<rect x="600" y="635" width="800" height="145" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2" />
+<rect x="600" y="635" width="8" height="145" rx="4" fill="#2563eb"/>
+<text x="623" y="670" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">03. Ghép ngữ cảnh và dữ kiện nối tiếp</text>
+<text x="623" y="708" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · resolve_context · provenance của facts</text>
+<text x="623" y="735" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: truy vấn đã giải nghĩa / yêu cầu làm rõ</text>
+</g>
+<g class="step" data-step="4" tabindex="0" aria-label="Bước 4: Hiểu vấn đề và tách các ý cần trả lời">
+<rect x="600" y="830" width="800" height="165" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2" />
+<rect x="600" y="830" width="8" height="165" rx="4" fill="#2563eb"/>
+<text x="623" y="865" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">04. Hiểu vấn đề và tách các ý cần trả lời</text>
+<text x="623" y="903" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · regex · taxonomy · LLM nếu cần</text>
+<text x="623" y="930" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: vấn đề + tasks + facts + truy vấn tìm kiếm</text>
+</g>
+<g class="step" data-step="5" tabindex="0" aria-label="Bước 5: Lập kế hoạch căn cứ cho từng ý">
+<rect x="600" y="1045" width="800" height="155" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2" />
+<rect x="600" y="1045" width="8" height="155" rx="4" fill="#2563eb"/>
+<text x="623" y="1080" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">05. Lập kế hoạch căn cứ cho từng ý</text>
+<text x="623" y="1118" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · EvidencePlan · bộ định vị điều khoản</text>
+<text x="623" y="1145" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: các ô căn cứ bắt buộc / có điều kiện</text>
+</g>
+<g class="step" data-step="6" tabindex="0" aria-label="Bước 6: Kiểm tra domain và dữ kiện quyết định">
+<rect x="600" y="1250" width="800" height="155" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2" />
+<rect x="600" y="1250" width="8" height="155" rx="4" fill="#2563eb"/>
+<text x="623" y="1285" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">06. Kiểm tra domain và dữ kiện quyết định</text>
+<text x="623" y="1323" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · scope gate · critical fact gate</text>
+<text x="623" y="1350" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: tiếp tục / hỏi lại / ngoài phạm vi</text>
+</g>
+<g class="step" data-step="7" tabindex="0" aria-label="Bước 7: Chọn đường truy xuất">
+<rect x="600" y="1550" width="800" height="130" rx="16" fill="#ffffff" stroke="#15803d" stroke-width="2" />
+<rect x="600" y="1550" width="8" height="130" rx="4" fill="#15803d"/>
+<text x="623" y="1585" font-size="25" fill="#15803d" font-weight="700" text-anchor="start">07. Chọn đường truy xuất</text>
+<text x="623" y="1623" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · định tuyến Exact / Profile / Hybrid</text>
+<text x="623" y="1650" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: đường tìm kiếm phù hợp với câu hỏi</text>
+</g>
+<g class="step" data-step="8" tabindex="0" aria-label="Bước 8: Tra cứu chính xác / thử chuỗi profile">
+<rect x="600" y="1745" width="800" height="175" rx="16" fill="#ffffff" stroke="#15803d" stroke-width="2" />
+<rect x="600" y="1745" width="8" height="175" rx="4" fill="#15803d"/>
+<text x="623" y="1780" font-size="25" fill="#15803d" font-weight="700" text-anchor="start">08. Tra cứu chính xác / thử chuỗi profile</text>
+<text x="623" y="1818" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · Exact + PART_OF / profile rule chain</text>
+<text x="623" y="1845" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: evidence hạt giống; có thể bỏ Hybrid</text>
+</g>
+<g class="step" data-step="9" tabindex="0" aria-label="Bước 9: Truy xuất Hybrid và các kênh bổ sung">
+<rect x="600" y="1980" width="800" height="200" rx="16" fill="#ffffff" stroke="#15803d" stroke-width="2" />
+<rect x="600" y="1980" width="8" height="200" rx="4" fill="#15803d"/>
+<text x="623" y="2015" font-size="25" fill="#15803d" font-weight="700" text-anchor="start">09. Truy xuất Hybrid và các kênh bổ sung</text>
+<text x="623" y="2053" font-size="21" fill="#334155" font-weight="400" text-anchor="start">BM25S + BGE-M3 + FAISS; issue/case/community nếu cần</text>
+<text x="623" y="2080" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: nhiều danh sách nguồn ứng viên theo kênh</text>
+</g>
+<g class="step" data-step="10" tabindex="0" aria-label="Bước 10: Gộp nguồn và lọc thời điểm / thẩm quyền">
+<rect x="600" y="2240" width="800" height="165" rx="16" fill="#ffffff" stroke="#15803d" stroke-width="2" />
+<rect x="600" y="2240" width="8" height="165" rx="4" fill="#15803d"/>
+<text x="623" y="2275" font-size="25" fill="#15803d" font-weight="700" text-anchor="start">10. Gộp nguồn và lọc thời điểm / thẩm quyền</text>
+<text x="623" y="2313" font-size="21" fill="#334155" font-weight="400" text-anchor="start">RRF (nhiều kênh) · Python · bộ lọc hiệu lực/nguồn</text>
+<text x="623" y="2340" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: ứng viên hợp nhất và đã lọc bước đầu</text>
+</g>
+<g class="step" data-step="11" tabindex="0" aria-label="Bước 11: Xếp hạng lại các nguồn">
+<rect x="600" y="2455" width="800" height="150" rx="16" fill="#ffffff" stroke="#15803d" stroke-width="2" />
+<rect x="600" y="2455" width="8" height="150" rx="4" fill="#15803d"/>
+<text x="623" y="2490" font-size="25" fill="#15803d" font-weight="700" text-anchor="start">11. Xếp hạng lại các nguồn</text>
+<text x="623" y="2528" font-size="21" fill="#334155" font-weight="400" text-anchor="start">BGE reranker nếu bật · rerank quy tắc</text>
+<text x="623" y="2555" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: nguồn được ưu tiên để kiểm chứng</text>
+</g>
+<g class="step" data-step="12" tabindex="0" aria-label="Bước 12: Kiểm tra nguồn và dấu vết bằng chứng">
+<rect x="600" y="2760" width="800" height="175" rx="16" fill="#ffffff" stroke="#c2410c" stroke-width="2" />
+<rect x="600" y="2760" width="8" height="175" rx="4" fill="#c2410c"/>
+<text x="623" y="2795" font-size="25" fill="#c2410c" font-weight="700" text-anchor="start">12. Kiểm tra nguồn và dấu vết bằng chứng</text>
+<text x="623" y="2833" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · deterministic audit · provenance/span</text>
+<text x="623" y="2860" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: evidence qua kiểm tra máy + cảnh báo</text>
+</g>
+<g class="step" data-step="13" tabindex="0" aria-label="Bước 13: Kiểm tra khả năng áp dụng">
+<rect x="600" y="2980" width="800" height="175" rx="16" fill="#ffffff" stroke="#c2410c" stroke-width="2" />
+<rect x="600" y="2980" width="8" height="175" rx="4" fill="#c2410c"/>
+<text x="623" y="3015" font-size="25" fill="#c2410c" font-weight="700" text-anchor="start">13. Kiểm tra khả năng áp dụng</text>
+<text x="623" y="3053" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · checklist/profile · LLM nếu cần</text>
+<text x="623" y="3080" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: PASS / FAIL / UNRESOLVED cho bằng chứng</text>
+</g>
+<g class="step" data-step="14" tabindex="0" aria-label="Bước 14: Đo độ phủ và xác định căn cứ còn thiếu">
+<rect x="600" y="3200" width="800" height="155" rx="16" fill="#ffffff" stroke="#c2410c" stroke-width="2" />
+<rect x="600" y="3200" width="8" height="155" rx="4" fill="#c2410c"/>
+<text x="623" y="3235" font-size="25" fill="#c2410c" font-weight="700" text-anchor="start">14. Đo độ phủ và xác định căn cứ còn thiếu</text>
+<text x="623" y="3273" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · evidence slots · coverage / gaps</text>
+<text x="623" y="3300" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: đủ để dừng tìm / danh sách căn cứ còn thiếu</text>
+</g>
+<g class="step" data-step="15" tabindex="0" aria-label="Bước 15: Mở rộng đồ thị có giới hạn">
+<rect x="1500" y="3000" width="460" height="300" rx="16" fill="#ffffff" stroke="#15803d" stroke-width="2" />
+<rect x="1500" y="3000" width="8" height="300" rx="4" fill="#15803d"/>
+<text x="1523" y="3035" font-size="25" fill="#15803d" font-weight="700" text-anchor="start">15. Mở rộng đồ thị có giới hạn</text>
+<text x="1523" y="3073" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · GraphExplorer · JSONL</text>
+<text x="1523" y="3100" font-size="21" fill="#334155" font-weight="400" text-anchor="start">adjacency trong RAM</text>
+<text x="1523" y="3127" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Fact / Ontology / Rule / Document /</text>
+<text x="1523" y="3154" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Derived theo đường đi</text>
+<text x="1523" y="3181" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: nguồn mới + đường đi + lý do</text>
+<text x="1523" y="3208" font-size="21" fill="#334155" font-weight="400" text-anchor="start">dừng</text>
+</g>
+<g class="step" data-step="16" tabindex="0" aria-label="Bước 16: Chọn nguồn và phân loại mức đủ cuối">
+<rect x="600" y="3420" width="800" height="175" rx="16" fill="#ffffff" stroke="#c2410c" stroke-width="2" />
+<rect x="600" y="3420" width="8" height="175" rx="4" fill="#c2410c"/>
+<text x="623" y="3455" font-size="25" fill="#c2410c" font-weight="700" text-anchor="start">16. Chọn nguồn và phân loại mức đủ cuối</text>
+<text x="623" y="3493" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · select_for_plan · kiểm xung đột / ngày</text>
+<text x="623" y="3520" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: tập nguồn cuối + trạng thái dự kiến</text>
+</g>
+<g class="step" data-step="17" tabindex="0" aria-label="Bước 17: Đóng gói bằng chứng đã kiểm">
+<rect x="600" y="3720" width="800" height="155" rx="16" fill="#ffffff" stroke="#c2410c" stroke-width="2" />
+<rect x="600" y="3720" width="8" height="155" rx="4" fill="#c2410c"/>
+<text x="623" y="3755" font-size="25" fill="#c2410c" font-weight="700" text-anchor="start">17. Đóng gói bằng chứng đã kiểm</text>
+<text x="623" y="3793" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · Pydantic · VerifiedEvidencePack</text>
+<text x="623" y="3820" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: pack có evidence IDs + facts + tasks + gaps</text>
+</g>
+<g class="step" data-step="18" tabindex="0" aria-label="Bước 18: Tạo bản nháp có căn cứ">
+<rect x="600" y="3970" width="800" height="155" rx="16" fill="#ffffff" stroke="#9333ea" stroke-width="2" />
+<rect x="600" y="3970" width="8" height="155" rx="4" fill="#9333ea"/>
+<text x="623" y="4005" font-size="25" fill="#9333ea" font-weight="700" text-anchor="start">18. Tạo bản nháp có căn cứ</text>
+<text x="623" y="4043" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python / trích nguyên văn / profile; Qwen–Ollama hoặc HTTP</text>
+<text x="623" y="4070" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: bản nháp claims ↔ evidence IDs</text>
+</g>
+<g class="step" data-step="19" tabindex="0" aria-label="Bước 19: Kiểm tra câu chữ và cấu trúc bản nháp">
+<rect x="600" y="4280" width="800" height="155" rx="16" fill="#ffffff" stroke="#be123c" stroke-width="2" />
+<rect x="600" y="4280" width="8" height="155" rx="4" fill="#be123c"/>
+<text x="623" y="4315" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">19. Kiểm tra câu chữ và cấu trúc bản nháp</text>
+<text x="623" y="4353" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · kiểm câu chữ/schema · sửa có giới hạn</text>
+<text x="623" y="4380" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: bản nháp sạch / cờ chặn chất lượng</text>
+</g>
+<g class="step" data-step="20" tabindex="0" aria-label="Bước 20: Đối chiếu ý nghĩa và độ đủ từng ý">
+<rect x="600" y="4480" width="800" height="175" rx="16" fill="#ffffff" stroke="#be123c" stroke-width="2" />
+<rect x="600" y="4480" width="8" height="175" rx="4" fill="#be123c"/>
+<text x="623" y="4515" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">20. Đối chiếu ý nghĩa và độ đủ từng ý</text>
+<text x="623" y="4553" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Gemini / reviewer cấu hình · schema + quote validation</text>
+<text x="623" y="4580" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: PASS / PARTIAL / FAIL / ERROR theo claims/tasks</text>
+</g>
+<g class="step" data-step="21" tabindex="0" aria-label="Bước 21: Sửa bản nháp rồi kiểm lại">
+<rect x="1500" y="4480" width="460" height="230" rx="16" fill="#ffffff" stroke="#be123c" stroke-width="2" />
+<rect x="1500" y="4480" width="8" height="230" rx="4" fill="#be123c"/>
+<text x="1523" y="4515" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">21. Sửa bản nháp rồi kiểm lại</text>
+<text x="1523" y="4553" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · bounded repair · pack giữ</text>
+<text x="1523" y="4580" font-size="21" fill="#334155" font-weight="400" text-anchor="start">nguyên</text>
+<text x="1523" y="4607" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: bản nháp sửa → quay về bước 20</text>
+</g>
+<g class="step" data-step="22" tabindex="0" aria-label="Bước 22: Hậu kiểm trích dẫn và căn cứ bắt buộc">
+<rect x="600" y="4710" width="800" height="175" rx="16" fill="#ffffff" stroke="#be123c" stroke-width="2" />
+<rect x="600" y="4710" width="8" height="175" rx="4" fill="#be123c"/>
+<text x="623" y="4745" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">22. Hậu kiểm trích dẫn và căn cứ bắt buộc</text>
+<text x="623" y="4783" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · reference_audit · kiểm căn cứ theo claims</text>
+<text x="623" y="4810" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: nội dung + nguồn khớp / hạ mức hoặc chặn</text>
+</g>
+<g class="step" data-step="23" tabindex="0" aria-label="Bước 23: Chốt trạng thái và độ đủ từng task">
+<rect x="600" y="4930" width="800" height="175" rx="16" fill="#ffffff" stroke="#be123c" stroke-width="2" />
+<rect x="600" y="4930" width="8" height="175" rx="4" fill="#be123c"/>
+<text x="623" y="4965" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">23. Chốt trạng thái và độ đủ từng task</text>
+<text x="623" y="5003" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · assess_parts · AnswerResponse + Trace</text>
+<text x="623" y="5030" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: trạng thái cuối + đáp án/phần thiếu + nguồn</text>
+</g>
+<g class="step" data-step="24" tabindex="0" aria-label="Bước 24: Hiển thị kết quả và nguồn trên màn hình">
+<rect x="600" y="5250" width="800" height="175" rx="16" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<rect x="600" y="5250" width="8" height="175" rx="4" fill="#475569"/>
+<text x="623" y="5285" font-size="25" fill="#475569" font-weight="700" text-anchor="start">24. Hiển thị kết quả và nguồn trên màn hình</text>
+<text x="623" y="5323" font-size="21" fill="#334155" font-weight="400" text-anchor="start">FastAPI JSON → React · trích dẫn + Source Drawer</text>
+<text x="623" y="5350" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: kết quả / hỏi lại / từ chối / lỗi rõ nguyên nhân</text>
+</g>
+<g class="step" data-step="25" tabindex="0" aria-label="Bước 25: Hỏi bổ sung dữ kiện / ngày chính xác">
+<rect x="40" y="775" width="460" height="230" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2" />
+<rect x="40" y="775" width="8" height="230" rx="4" fill="#2563eb"/>
+<text x="63" y="810" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">25. Hỏi bổ sung dữ kiện / ngày</text>
+<text x="63" y="840" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">chính xác</text>
+<text x="63" y="878" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python → React · NEED_MORE_FACTS</text>
+<text x="63" y="905" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: câu hỏi cần bổ sung</text>
+<text x="63" y="932" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Người dùng trả lời → 1 → 3</text>
+</g>
+<g class="step" data-step="26" tabindex="0" aria-label="Bước 26: Từ chối câu hỏi ngoài phạm vi">
+<rect x="40" y="1250" width="460" height="180" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2" />
+<rect x="40" y="1250" width="8" height="180" rx="4" fill="#2563eb"/>
+<text x="63" y="1285" font-size="25" fill="#2563eb" font-weight="700" text-anchor="start">26. Từ chối câu hỏi ngoài phạm vi</text>
+<text x="63" y="1323" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · ABSTAIN / OUT_OF_SCOPE</text>
+<text x="63" y="1350" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: lý do ngoài phạm vi → 24</text>
+</g>
+<g class="step" data-step="27" tabindex="0" aria-label="Bước 27: Không trả kết luận chưa được xác minh">
+<rect x="40" y="3490" width="460" height="230" rx="16" fill="#ffffff" stroke="#be123c" stroke-width="2" />
+<rect x="40" y="3490" width="8" height="230" rx="4" fill="#be123c"/>
+<text x="63" y="3525" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">27. Không trả kết luận chưa được</text>
+<text x="63" y="3555" font-size="25" fill="#be123c" font-weight="700" text-anchor="start">xác minh</text>
+<text x="63" y="3593" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · evidence / quality gate</text>
+<text x="63" y="3620" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: không kết luận; nêu thiếu ở đâu</text>
+<text x="63" y="3647" font-size="21" fill="#334155" font-weight="400" text-anchor="start">→ 24</text>
+</g>
+<g class="step" data-step="28" tabindex="0" aria-label="Bước 28: Thông báo nguồn xung đột">
+<rect x="40" y="4930" width="460" height="185" rx="16" fill="#ffffff" stroke="#c2410c" stroke-width="2" />
+<rect x="40" y="4930" width="8" height="185" rx="4" fill="#c2410c"/>
+<text x="63" y="4965" font-size="25" fill="#c2410c" font-weight="700" text-anchor="start">28. Thông báo nguồn xung đột</text>
+<text x="63" y="5003" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · CONFLICTING_EVIDENCE</text>
+<text x="63" y="5030" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: nêu xung đột + nguồn → 24</text>
+</g>
+<g class="step" data-step="29" tabindex="0" aria-label="Bước 29: Lỗi kỹ thuật / quá tải / hết giờ / hủy">
+<rect x="40" y="3990" width="460" height="280" rx="16" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<rect x="40" y="3990" width="8" height="280" rx="4" fill="#475569"/>
+<text x="63" y="4025" font-size="25" fill="#475569" font-weight="700" text-anchor="start">29. Lỗi kỹ thuật / quá tải / hết</text>
+<text x="63" y="4055" font-size="25" fill="#475569" font-weight="700" text-anchor="start">giờ / hủy</text>
+<text x="63" y="4093" font-size="21" fill="#334155" font-weight="400" text-anchor="start">FastAPI · budget/cancel · provider</text>
+<text x="63" y="4120" font-size="21" fill="#334155" font-weight="400" text-anchor="start">retry · HTTP</text>
+<text x="63" y="4147" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: lỗi / quá tải / timeout / hủy;</text>
+<text x="63" y="4174" font-size="21" fill="#334155" font-weight="400" text-anchor="start">không giả căn cứ</text>
+</g>
+<g class="step" data-step="30" tabindex="0" aria-label="Bước 30: Nhật ký thực thi xuyên suốt">
+<rect x="40" y="2070" width="460" height="310" rx="16" fill="#ffffff" stroke="#475569" stroke-width="2" />
+<rect x="40" y="2070" width="8" height="310" rx="4" fill="#475569"/>
+<text x="63" y="2105" font-size="25" fill="#475569" font-weight="700" text-anchor="start">30. Nhật ký thực thi xuyên suốt</text>
+<text x="63" y="2143" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Python · ProgressLog/Trace · API poll ·</text>
+<text x="63" y="2170" font-size="21" fill="#334155" font-weight="400" text-anchor="start">React</text>
+<text x="63" y="2197" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Output: từng bước + output + thời gian</text>
+<text x="63" y="2224" font-size="21" fill="#334155" font-weight="400" text-anchor="start">+ lỗi/bỏ qua</text>
+<text x="63" y="2251" font-size="21" fill="#334155" font-weight="400" text-anchor="start">Luồng quan sát; không phải bước suy</text>
+<text x="63" y="2278" font-size="21" fill="#334155" font-weight="400" text-anchor="start">luận nối tiếp</text>
+</g>
+<rect x="40" y="2550" width="460" height="390" rx="18" fill="#f8fafc" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 6"/>
+<text x="65" y="2590" font-size="24" fill="#334155" font-weight="700" text-anchor="start">DỮ LIỆU ĐÃ XÂY TỪ OFFLINE</text>
+<text x="65" y="2631" font-size="22" fill="#475569" font-weight="400" text-anchor="start">retrieval_units + BM25 +</text>
+<text x="65" y="2659" font-size="22" fill="#475569" font-weight="400" text-anchor="start">vector/FAISS</text>
+<text x="65" y="2699" font-size="22" fill="#475569" font-weight="400" text-anchor="start">nodes / edges + catalog + provenance</text>
+<text x="65" y="2739" font-size="22" fill="#475569" font-weight="400" text-anchor="start">Nguồn: artifact vn_labor_results</text>
+<text x="65" y="2779" font-size="22" fill="#475569" font-weight="400" text-anchor="start">Các tầng: Fact · Ontology · Rule;</text>
+<text x="65" y="2807" font-size="22" fill="#475569" font-weight="400" text-anchor="start">kèm Document / Derived</text>
+<text x="65" y="2847" font-size="22" fill="#475569" font-weight="400" text-anchor="start">Runtime ONLINE đọc JSONL và</text>
+<text x="65" y="2875" font-size="22" fill="#475569" font-weight="400" text-anchor="start">adjacency trong RAM. Không mặc định</text>
+<text x="65" y="2903" font-size="22" fill="#475569" font-weight="400" text-anchor="start">truy vấn Neo4j cho từng câu.</text>
+<text x="75" y="5565" font-size="25" fill="#0f172a" font-weight="700" text-anchor="start">ĐƯỜNG ĐI ĐỂ THUYẾT TRÌNH</text>
+<text x="75" y="5608" font-size="23" fill="#334155" font-weight="400" text-anchor="start">Một lượt: 1–14 → 16–20 → 22–24. Tìm thêm: 14 → 15 → 12 → 13 → 14 (trong ngân sách).</text>
+<text x="75" y="5648" font-size="22" fill="#be123c" font-weight="400" text-anchor="start">Không phải mọi câu đều gọi LLM / Dense / Graph. PASS kỹ thuật và SUFFICIENT không chứng nhận pháp lý tuyệt đối.</text>
+</svg>

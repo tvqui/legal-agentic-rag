@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-23",
+  "scope": "Local source snapshot; not proof of Kaggle deployment",
+  "sha256": {
+    "src/vn_labor_online/pipeline.py": "bdeb279bc2b9506f198c938a0b3b89b5c5701b09dcd28c6f62806f7f5b12f502",
+    "src/vn_labor_online/analysis.py": "38d432541cc145fd0c4aaac987be34e616157869b0226c933b49c7e1a54b5a3f",
+    "src/vn_labor_online/researcher.py": "b6885db760fc9b54f3128333088fcf67bdfa9a45ef62d17abb760d64343653ae",
+    "src/vn_labor_online/retrieval.py": "25243027f192825485a1ffd93164e6e815f788f801073842145e24c3cb205e5a",
+    "src/vn_labor_online/query_support.py": "a4efefd2ac1244a94c421ee1551ff4fe2472a8031e62cfff72338d0605b910ac",
+    "src/vn_labor_online/graph.py": "f34583bdf030a34e5228eab2da6b57ba814fb60c829ce72c80bbe3a1dc14caa4",
+    "src/vn_labor_online/artifact_store.py": "368f6ab7c67ac80481692ceadec6e26987a388dc547fd16e42e68c7d17e915ff",
+    "src/vn_labor_online/applicability.py": "d4af30d5ea4e1fc447ee6fc05fd58c194c46a7d3310332c2f84786f5cab24a18",
+    "src/vn_labor_online/audit.py": "68d504429f488d333f6361436c87945d707cbfcae3216e4167baa2c073f74739",
+    "src/vn_labor_online/evidence.py": "c4f61bdb40c8e3b1216baec092d35fc7061ccd823dfdf42878990c1608c5eb53",
+    "src/vn_labor_online/generation.py": "b122d19121ce07714154bfc3387ac56a0db5c4a72b7cbc227b41ef92ca978c78",
+    "src/vn_labor_online/answer_quality.py": "fabc026c278ca175858f619e395ac2e35a473bbdb70f4d6a7db9f7476c08eb75",
+    "src/vn_labor_online/answer_review.py": "71b1e9d2d6e165073f6f7a7c59c3428bb9af1874de877fd99b0c39a51de7c1ff",
+    "src/vn_labor_online/claim_validation.py": "7eb9675a505f0ad1fec61614430b4d37a661478dad43be6d395e0c1f980a202b",
+    "src/vn_labor_online/tasks.py": "39df8bd9f443de37c5a1d7d28bd6ef18b78da95ef59b0316c4a36a7c4188a752",
+    "src/vn_labor_online/models.py": "b83f3688fcc4f8ec08d32563fcbaeeaef4c10d5913be745702f568775f17a1fc",
+    "src/vn_labor_online/api.py": "331d9ae45861aab63834038a8a11299890c73c45c05e3265e95ef17d293e81d3",
+    "src/vn_labor_online/runtime.py": "21c8f4b865086ca869e4b4a7f6ee9a94b175cdcfd5bf8dfb25052b4a81fb7262",
+    "src/vn_labor_online/conversation.py": "142d49638c31c186fac8c1ce28bf88bbda3ccef95ec6e077be45351e98f1077d",
+    "src/vn_labor_online/demo_progress.py": "3b685303170e85b865d7466345ed18519330d15d4e9d0b3cb6d98de9dd5fbafe",
+    "frontend/src/pages/ChatPage.jsx": "add2b9cda9740e423e46c844708c205edb9f95eb8ee843cf15aea21834a268f3",
+    "frontend/src/services/chatService.js": "8afb91fdcff45b7751aadfec7824607b5fbb2ce7b8f7be2d5ffe3db973debea8",
+    "frontend/src/components/chat/ExecutionLog.jsx": "af5a7dfe2411c38740bfef6071647e8f7cb92c0365514d05198d0b4d01a5e07f",
+    "config/online_kaggle.yaml": "18aec73017c0a7bc8e6c18e87e3c2dd36fe422d708ef6d7f33be36db2c6c17de"
+  },
+  "checks": {
+    "document_nodes": 30,
+    "svg_nodes": 30,
+    "word_node_sections": 30,
+    "browser": {
+      "nodes": 30,
+      "infoOpen": true,
+      "selected": "Bước 15. Mở rộng đồ thị có giới hạn — Retriever",
+      "bounds": []
+    }
+  }
+}

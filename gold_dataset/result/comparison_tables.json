@@ -1,0 +1,329 @@
+{
+  "stages": {
+    "retrieval": {
+      "status": "COMPLETE",
+      "exit_code": 0,
+      "seconds": 197.87339809500003
+    },
+    "ablation": {
+      "status": "ERROR",
+      "exit_code": 1,
+      "seconds": 11856.969557583001
+    },
+    "zalo": {
+      "status": "ERROR",
+      "exit_code": 1,
+      "seconds": 0.8160187510002288
+    },
+    "vlsp": {
+      "status": "ERROR",
+      "exit_code": 1,
+      "seconds": 0.6661511050006084
+    }
+  },
+  "rows": [
+    {
+      "section": "1 Labour retrieval",
+      "variant": "bm25",
+      "scope": "retrieval; fixed graph",
+      "labels": "PROVISIONAL_DRAFT_GOLD",
+      "attempts": 255,
+      "successful_attempts": 255,
+      "errors": 0,
+      "group_recall_at_k": 0.8176470588235294,
+      "novel_group_precision_at_k": 0.08588235294117648,
+      "mrr_at_k": 0.5669934640522876,
+      "group_ndcg_at_k": 0.6169162762429145,
+      "all_groups_found": 0.8,
+      "min_ms": 3.974,
+      "max_ms": 8.113,
+      "mean_ms": 4.697286274509804,
+      "median_ms": 4.594,
+      "p95_ms": 5.8
+    },
+    {
+      "section": "1 Labour retrieval",
+      "variant": "dense",
+      "scope": "retrieval; fixed graph",
+      "labels": "PROVISIONAL_DRAFT_GOLD",
+      "attempts": 255,
+      "successful_attempts": 255,
+      "errors": 0,
+      "group_recall_at_k": 0.9294117647058824,
+      "novel_group_precision_at_k": 0.09764705882352942,
+      "mrr_at_k": 0.6181792717086835,
+      "group_ndcg_at_k": 0.6926012743040779,
+      "all_groups_found": 0.9176470588235294,
+      "min_ms": 49.143,
+      "max_ms": 78.44,
+      "mean_ms": 54.73125882352941,
+      "median_ms": 54.369,
+      "p95_ms": 59.915
+    },
+    {
+      "section": "1 Labour retrieval",
+      "variant": "hybrid",
+      "scope": "retrieval; fixed graph",
+      "labels": "PROVISIONAL_DRAFT_GOLD",
+      "attempts": 255,
+      "successful_attempts": 255,
+      "errors": 0,
+      "group_recall_at_k": 0.9411764705882353,
+      "novel_group_precision_at_k": 0.09882352941176471,
+      "mrr_at_k": 0.6652567693744165,
+      "group_ndcg_at_k": 0.7272470819855282,
+      "all_groups_found": 0.9294117647058824,
+      "min_ms": 54.252,
+      "max_ms": 83.348,
+      "mean_ms": 61.12630980392157,
+      "median_ms": 61.011,
+      "p95_ms": 66.864
+    },
+    {
+      "section": "1 Labour retrieval",
+      "variant": "hybrid_graph",
+      "scope": "retrieval; fixed graph",
+      "labels": "PROVISIONAL_DRAFT_GOLD",
+      "attempts": 255,
+      "successful_attempts": 255,
+      "errors": 0,
+      "group_recall_at_k": 0.5941176470588235,
+      "novel_group_precision_at_k": 0.06352941176470589,
+      "mrr_at_k": 0.11611111111111111,
+      "group_ndcg_at_k": 0.22185068184141057,
+      "all_groups_found": 0.5882352941176471,
+      "min_ms": 62.952,
+      "max_ms": 1135.575,
+      "mean_ms": 330.79127450980394,
+      "median_ms": 249.545,
+      "p95_ms": 928.383
+    },
+    {
+      "section": "2 Ablation",
+      "variant": "full",
+      "scope": "isolated_end_to_end_component_ablation",
+      "labels": "DRAFT",
+      "attempts": 100,
+      "ok": 99,
+      "errors": 1,
+      "draft_disposition_labelled": 99,
+      "draft_disposition_match_rate": 0.030303030303030304,
+      "gold_citation_group_recall": 0.2916666666666667,
+      "status_confusion": {
+        "ANSWERABLE": {
+          "INSUFFICIENT_EVIDENCE": 41,
+          "NEED_MORE_FACTS": 9,
+          "PARTIAL_ALLOWED": 34,
+          "TECHNICAL_ERROR": 1
+        },
+        "INSUFFICIENT_EVIDENCE": {
+          "INSUFFICIENT_EVIDENCE": 2,
+          "NEED_MORE_FACTS": 0,
+          "PARTIAL_ALLOWED": 1,
+          "TECHNICAL_ERROR": 0
+        },
+        "NEED_MORE_FACTS": {
+          "INSUFFICIENT_EVIDENCE": 5,
+          "NEED_MORE_FACTS": 1,
+          "PARTIAL_ALLOWED": 5,
+          "TECHNICAL_ERROR": 0
+        }
+      },
+      "content_answers": 40,
+      "warning_cases": 99,
+      "graph_exercised": 25,
+      "reranker_requested": 89,
+      "reviewer_exercised": 67,
+      "ai_judged": 98,
+      "ai_correctness": 0.43979591836734694,
+      "ai_completeness": 0.4306122448979592,
+      "ai_evidence_support": 0.4030612244897959,
+      "reference_id_audit_pass_rate": 0.8686868686868687,
+      "mean_ms": 61688.68383838384,
+      "min_ms": 8.976,
+      "max_ms": 239495.44,
+      "median_ms": 55479.22
+    },
+    {
+      "section": "2 Ablation",
+      "variant": "without_graph",
+      "scope": "isolated_end_to_end_component_ablation",
+      "labels": "DRAFT",
+      "attempts": 100,
+      "ok": 43,
+      "errors": 57,
+      "draft_disposition_labelled": 99,
+      "draft_disposition_match_rate": 0.020202020202020204,
+      "gold_citation_group_recall": 0.275,
+      "status_confusion": {
+        "ANSWERABLE": {
+          "INSUFFICIENT_EVIDENCE": 18,
+          "NEED_MORE_FACTS": 9,
+          "PARTIAL_ALLOWED": 13,
+          "TECHNICAL_ERROR": 45
+        },
+        "INSUFFICIENT_EVIDENCE": {
+          "INSUFFICIENT_EVIDENCE": 1,
+          "NEED_MORE_FACTS": 0,
+          "PARTIAL_ALLOWED": 0,
+          "TECHNICAL_ERROR": 2
+        },
+        "NEED_MORE_FACTS": {
+          "INSUFFICIENT_EVIDENCE": 1,
+          "NEED_MORE_FACTS": 1,
+          "PARTIAL_ALLOWED": 0,
+          "TECHNICAL_ERROR": 9
+        }
+      },
+      "content_answers": 13,
+      "warning_cases": 43,
+      "graph_exercised": 0,
+      "reranker_requested": 33,
+      "reviewer_exercised": 23,
+      "ai_judged": 28,
+      "ai_correctness": 0.40714285714285714,
+      "ai_completeness": 0.4142857142857143,
+      "ai_evidence_support": 0.4107142857142857,
+      "reference_id_audit_pass_rate": 0.7674418604651163,
+      "mean_ms": 40470.84209302325,
+      "min_ms": 9.158,
+      "max_ms": 160178.582,
+      "median_ms": 25750.86
+    },
+    {
+      "section": "2 Ablation",
+      "variant": "without_reranker",
+      "scope": "isolated_end_to_end_component_ablation",
+      "labels": "DRAFT",
+      "attempts": 100,
+      "ok": 14,
+      "errors": 86,
+      "draft_disposition_labelled": 99,
+      "draft_disposition_match_rate": 0.020202020202020204,
+      "gold_citation_group_recall": 0.09090909090909091,
+      "status_confusion": {
+        "ANSWERABLE": {
+          "INSUFFICIENT_EVIDENCE": 1,
+          "NEED_MORE_FACTS": 9,
+          "PARTIAL_ALLOWED": 1,
+          "TECHNICAL_ERROR": 74
+        },
+        "INSUFFICIENT_EVIDENCE": {
+          "INSUFFICIENT_EVIDENCE": 1,
+          "NEED_MORE_FACTS": 0,
+          "PARTIAL_ALLOWED": 0,
+          "TECHNICAL_ERROR": 2
+        },
+        "NEED_MORE_FACTS": {
+          "INSUFFICIENT_EVIDENCE": 1,
+          "NEED_MORE_FACTS": 1,
+          "PARTIAL_ALLOWED": 0,
+          "TECHNICAL_ERROR": 9
+        }
+      },
+      "content_answers": 1,
+      "warning_cases": 14,
+      "graph_exercised": 2,
+      "reranker_requested": 0,
+      "reviewer_exercised": 1,
+      "ai_judged": 0,
+      "ai_correctness": null,
+      "ai_completeness": null,
+      "ai_evidence_support": null,
+      "reference_id_audit_pass_rate": 0.2857142857142857,
+      "mean_ms": 3850.0757857142858,
+      "min_ms": 8.965,
+      "max_ms": 33894.345,
+      "median_ms": 21.2905
+    },
+    {
+      "section": "2 Ablation",
+      "variant": "without_auditor",
+      "scope": "isolated_end_to_end_component_ablation",
+      "labels": "DRAFT",
+      "attempts": 100,
+      "ok": 47,
+      "errors": 53,
+      "draft_disposition_labelled": 99,
+      "draft_disposition_match_rate": 0.030303030303030304,
+      "gold_citation_group_recall": 0.0,
+      "status_confusion": {
+        "ANSWERABLE": {
+          "INSUFFICIENT_EVIDENCE": 29,
+          "NEED_MORE_FACTS": 9,
+          "TECHNICAL_ERROR": 47
+        },
+        "INSUFFICIENT_EVIDENCE": {
+          "INSUFFICIENT_EVIDENCE": 2,
+          "NEED_MORE_FACTS": 0,
+          "TECHNICAL_ERROR": 1
+        },
+        "NEED_MORE_FACTS": {
+          "INSUFFICIENT_EVIDENCE": 6,
+          "NEED_MORE_FACTS": 1,
+          "TECHNICAL_ERROR": 4
+        }
+      },
+      "content_answers": 0,
+      "warning_cases": 47,
+      "graph_exercised": 3,
+      "reranker_requested": 37,
+      "reviewer_exercised": 0,
+      "ai_judged": 1,
+      "ai_correctness": 0.2,
+      "ai_completeness": 0.2,
+      "ai_evidence_support": 0,
+      "reference_id_audit_pass_rate": 0.7872340425531915,
+      "mean_ms": 685.2213191489362,
+      "min_ms": 9.172,
+      "max_ms": 8608.065,
+      "median_ms": 501.06
+    },
+    {
+      "section": "2 Ablation",
+      "variant": "without_review",
+      "scope": "isolated_end_to_end_component_ablation",
+      "labels": "DRAFT",
+      "attempts": 100,
+      "ok": 47,
+      "errors": 53,
+      "draft_disposition_labelled": 99,
+      "draft_disposition_match_rate": 0.020202020202020204,
+      "gold_citation_group_recall": 0.5,
+      "status_confusion": {
+        "ANSWERABLE": {
+          "INSUFFICIENT_EVIDENCE": 3,
+          "NEED_MORE_FACTS": 9,
+          "PARTIAL_ALLOWED": 26,
+          "TECHNICAL_ERROR": 47
+        },
+        "INSUFFICIENT_EVIDENCE": {
+          "INSUFFICIENT_EVIDENCE": 1,
+          "NEED_MORE_FACTS": 0,
+          "PARTIAL_ALLOWED": 1,
+          "TECHNICAL_ERROR": 1
+        },
+        "NEED_MORE_FACTS": {
+          "INSUFFICIENT_EVIDENCE": 2,
+          "NEED_MORE_FACTS": 1,
+          "PARTIAL_ALLOWED": 4,
+          "TECHNICAL_ERROR": 4
+        }
+      },
+      "content_answers": 31,
+      "warning_cases": 47,
+      "graph_exercised": 7,
+      "reranker_requested": 37,
+      "reviewer_exercised": 0,
+      "ai_judged": 1,
+      "ai_correctness": 1,
+      "ai_completeness": 1,
+      "ai_evidence_support": 1,
+      "reference_id_audit_pass_rate": 0.7659574468085106,
+      "mean_ms": 6829.944638297872,
+      "min_ms": 9.487,
+      "max_ms": 47779.188,
+      "median_ms": 662.482
+    }
+  ]
+}

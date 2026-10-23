@@ -170,18 +170,19 @@ import collections,csv,json,math,statistics
 
 def export(folder):
     rows=[json.loads(line) for line in (folder/'responses.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
-    fields=['id','batch','question','elapsed_seconds','http_status','answer_status','citation_count','answer','limitations','questions','warnings','trace_id','server_total_ms','quality_review']
+    fields=['id','batch','question','started_at','finished_at','elapsed_seconds','http_status','answer_status','citation_count','answer','limitations','questions','warnings','trace_id','server_total_ms','quality_review']
     with (folder/'responses.csv').open('w',encoding='utf-8-sig',newline='') as stream:
         writer=csv.DictWriter(stream,fieldnames=fields); writer.writeheader()
         for row in rows:
             body=row.get('response') or {}; trace=body.get('trace') or {}
             writer.writerow({'id':row['id'],'batch':row.get('batch'),'question':row['question'],
+              'started_at':row.get('started_at'),'finished_at':row.get('finished_at'),
               'elapsed_seconds':row['elapsed_seconds'],'http_status':row['http_status'],'answer_status':body.get('status'),
               'citation_count':len(body.get('citations') or []),'answer':body.get('answer',body.get('message','')),
               'limitations':json.dumps(body.get('limitations',[]),ensure_ascii=False),
               'questions':json.dumps(body.get('questions',[]),ensure_ascii=False),
               'warnings':json.dumps(body.get('warnings',[]),ensure_ascii=False),
-              'trace_id':body.get('trace_id'),'server_total_ms':trace.get('timings_ms',{}).get('total'),
+              'trace_id':body.get('trace_id') or trace.get('trace_id'),'server_total_ms':trace.get('timings_ms',{}).get('total'),
               'quality_review':row.get('quality_review','PENDING_INDEPENDENT_REVIEW')})
     success=[row['elapsed_seconds'] for row in rows if row['http_status']==200]
     answer_times=sorted(row['elapsed_seconds'] for row in rows if row['http_status']==200 and row.get('response',{}).get('status') in {'SUFFICIENT','PARTIAL_ALLOWED'})
@@ -204,7 +205,8 @@ def export(folder):
     for row in rows:
         body=row.get('response') or {}
         lines+=['',f"## {row['id']}",'',row['question'],'',
-          f"Thời gian: {row['elapsed_seconds']:.3f} giây; HTTP: {row['http_status']}; trạng thái: {body.get('status')}; trace: {body.get('trace_id','không có')}.",'',
+          f"Bắt đầu (UTC): {row.get('started_at','không có')}; kết thúc (UTC): {row.get('finished_at','không có')}.",'',
+          f"Thời gian: {row['elapsed_seconds']:.3f} giây; HTTP: {row['http_status']}; trạng thái: {body.get('status')}; trace: {body.get('trace_id') or body.get('trace',{}).get('trace_id','không có')}.",'',
           body.get('answer',body.get('message','Không nhận được câu trả lời hợp lệ.')),'']
         for citation in body.get('citations')or[]:
             label=' · '.join(str(citation[k]) for k in ('document_number','article','clause','point') if citation.get(k))

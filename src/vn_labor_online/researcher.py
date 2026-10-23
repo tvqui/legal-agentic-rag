@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json,re,unicodedata
-from .analysis import ISSUES,missing_fact_questions
+from .analysis import ISSUES,missing_fact_questions,_special_occupation_fact
 from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION,profile_covers_issues,relationship_comparison
 from .config import ResearcherConfig
 from .models import FactCandidate,QueryAnalysis,ResearcherResult,Route
@@ -32,7 +32,8 @@ def _entailed(field,value,quote):
     if field=='notice_exception':
         return (value is False and 'khong thuoc' in folded and 'khong can bao truoc' in folded) or (value is True and 'duoc nghi khong can bao truoc' in folded)
     if field=='special_occupation':
-        return (value is False and 'khong thuoc' in folded and 'dac thu' in folded) or (value is True and 'dac thu' in folded and 'khong thuoc' not in folded)
+        extracted,_=_special_occupation_fact(quote)
+        return extracted is not None and extracted is value
     if field=='protected_status': return rendered in folded or value=='MATERNITY' and any(x in folded for x in ('mang thai','thai san','nuoi con'))
     if field=='training_costs': return 'chi phi dao tao' in folded
     return False

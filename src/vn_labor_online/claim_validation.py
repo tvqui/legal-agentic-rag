@@ -42,6 +42,16 @@ def semantic_issues(text, items, *, context_query=''):
         title=getattr(item,'document_title',None)
         typ=document_type(number,title,getattr(item,'document_type',None))
         source=fold(getattr(item,'source_text',None) or item.text)
+        full_source=fold(' '.join((str(getattr(item,'ancestor_context','') or ''),
+            str(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text))))
+        # Judicial review of a decision is a different procedural phase from
+        # exercising the underlying workplace right. A lexical match on the
+        # right's name cannot turn appeal procedure into its precondition.
+        if re.search(r'thu tuc[^.;]{0,50}(?:khang cao|khang nghi)',full_source):
+            primary=re.search(r'\b(?:viec )?(?:dinh cong|sa thai|don phuong cham dut hop dong(?: lao dong)?)\s+'
+                r'(?:phai|can|bat buoc)[^.;]{0,100}thu tuc[^.;]{0,60}(?:khang cao|khang nghi)',q)
+            if primary and not re.search(r'(?:khong the coi|khong duoc coi|khong phai)\s*$',q[max(0,primary.start()-45):primary.start()]):
+                problems.append('CLAIM_JUDICIAL_REVIEW_AS_PRIMARY_PROCEDURE')
         payment_minimum=('tro cap' in source and 'it nhat bang' in source and
             bool(re.search(r'\d+\s*%',source)))
         deduction=bool(re.search(r'(?<!khong )\b(?:bi tru|bi khau tru|bi giam)\b',q))
@@ -60,6 +70,13 @@ def semantic_issues(text, items, *, context_query=''):
                 if 'khong '+action in source and 'khong duoc '+action in q and 'khong duoc '+action not in source:
                     problems.append('CLAIM_OMISSION_DUTY_INVERTED')
         article=str(getattr(item,'article_number',None) or getattr(item,'article',None) or '')
+        if number in {'45/2019/QH14','18/VBHN-VPQH'} and article=='97':
+            permission=bool(re.search(r'(?<!khong )(?<!chua )\bduoc(?: phep)?\s+cham\b',q))
+            remedy_condition='bien phap khac phuc' in full_source
+            qualified=any(term in q for term in ('bien phap khac phuc','cac dieu kien khac',
+                'dap ung du dieu kien','kiem tra day du dieu kien'))
+            if permission and 'bat kha khang' in q and remedy_condition and not qualified:
+                problems.append('CLAIM_LATE_WAGE_REMEDY_CONDITION_LOST')
         if number in {'45/2019/QH14','18/VBHN-VPQH'} and article=='105':
             source_context=fold(' '.join(str(value or '') for value in (getattr(item,'full_text',None),source)))
             numeric_hours=bool(re.search(r'\b\d+\s+gio',q))

@@ -23,6 +23,15 @@ RESET = re.compile(r'\b(?:chuyện khác|vấn đề khác|tình huống mới|t
 FOLLOWUP = re.compile(r'^(?:(?:nếu\s+)?(?:hết|sau|trong)\s+(?:thời gian|thời hạn|giai đoạn)\s+(?:đó|này)\b|còn\b|vậy\b|thế\b|thì\b|trường hợp (?:đó|này)|điều đó|việc đó|thử bao lâu|bao lâu|bao nhiêu|bao giờ|khi nào|mấy (?:ngày|tháng|năm)|tại sao|vì sao|tôi làm\b|tôi là\b|tôi chỉ\b|thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|ngày (?:là|dự kiến)|không thuộc\b)', re.I)
 
 
+FACT_REPLY = re.compile(
+    r'^(?:tôi\s+(?:(?:không|chưa)\s+)?(?:làm|là|thuộc|chỉ)\b|'
+    r'(?:công việc|ngành nghề|nghề|hợp đồng|mức lương|loại hợp đồng)\s+'
+    r'(?:(?:của tôi|này)\s+)?(?:là|không|chưa|thuộc)\b|'
+    r'tôi bổ sung\b|bổ sung(?: dữ kiện| thông tin)?\s*[:：]|'
+    r'thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|'
+    r'ngày (?:là|dự kiến)|không thuộc\b)', re.I)
+
+
 @dataclass
 class ResolvedContext:
     query: str
@@ -67,14 +76,15 @@ def resolve_context(request):
             active, topic = [], None
             # Hypothetical scenarios must never become the next turn's personal facts.
             continue
-        continuing_subtopic = topic == 'thử việc' and next_topic == TOPIC_LABELS['WAGE'] and FOLLOWUP.search(text.strip())
+        continuing_subtopic = topic == 'thử việc' and next_topic == TOPIC_LABELS['WAGE'] and (
+            FOLLOWUP.search(text.strip()) or FACT_REPLY.search(text.strip()))
         if next_topic and next_topic != topic and not continuing_subtopic:
             active = []
             topic = next_topic
         if topic:
             active.append((turn_id, text, analysis))
     current_topic = _topic(current)
-    continuation = bool(FOLLOWUP.search(request.question.strip()))
+    continuation = bool(FOLLOWUP.search(request.question.strip()) or FACT_REPLY.search(request.question.strip()))
     related_subtopic = topic == 'thử việc' and current_topic == TOPIC_LABELS['WAGE']
     if not active or (current_topic and current_topic != topic and not related_subtopic):
         if active and current_topic and re.match(r'^(?:còn|vậy|thế|thì)\b',request.question.strip(),re.I):
@@ -113,7 +123,7 @@ def resolve_context(request):
     result.query = f'Về {topic}: {request.question}'
     # A factual reply resumes the prior requested tasks, not every old question
     # or its outdated numbers. Labels come from the versioned taxonomy.
-    fact_reply=re.match(r'^(?:tôi làm\b|tôi là\b|tôi chỉ\b|thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|ngày (?:là|dự kiến)|không thuộc\b)',request.question.strip(),re.I)
+    fact_reply=FACT_REPLY.search(request.question.strip())
     if fact_reply and not re.search(r'\?|bao lâu|bao nhiêu|có đúng|quy định gì|thì sao',request.question,re.I):
         previous=next((a for _,_,a in reversed(active) if a.legal_subissues),None)
         if previous:

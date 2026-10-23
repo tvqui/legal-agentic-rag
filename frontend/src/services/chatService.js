@@ -1,4 +1,5 @@
 import { clientSession } from './conversationService.js'
+import { normalizeExecutionSteps } from './executionLog.js'
 
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || '/api')
   .trim()
@@ -220,6 +221,9 @@ export const chatService = {
       traceId: payload.trace_id,
       legalStatus: payload.legal_status,
       parts: payload.parts || [],
+      executionLog: normalizeExecutionSteps(payload.trace?.execution_steps),
+      executionAvailability: Array.isArray(payload.trace?.execution_steps) ? 'available' : 'unsupported',
+      executionDropped: payload.trace?.execution_steps_dropped || 0,
     }
   },
 }

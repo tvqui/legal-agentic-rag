@@ -7,6 +7,7 @@ import { SourceDrawer } from '../components/source/SourceDrawer'
 import { IconButton } from '../components/ui/IconButton'
 import { chatService } from '../services/chatService'
 import { conversationService } from '../services/conversationService'
+import { normalizeExecutionSteps } from '../services/executionLog'
 
 export function ChatPage({ activeConversation, onMenu, onConversationUpdate }) {
   const [messages, setMessages] = useState(() => conversationService.loadMessages())
@@ -64,19 +65,34 @@ export function ChatPage({ activeConversation, onMenu, onConversationUpdate }) {
       createdAt: now,
       status: 'streaming',
       citations: [],
+      executionLog: [],
+      executionAvailability: 'waiting',
     }])
     setGenerating(true)
     setProgress(null)
     const controller = new AbortController()
     abortRef.current = { controller, messageId: user.id }
     const pollController = new AbortController()
+    let lastExecutionLog = []
+    let lastDropped = 0
     let pollTimer
     const poll = async () => {
       if (pollController.signal.aborted) return
       try {
         const result = await chatService.progress(user.id, pollController.signal)
-        if (result && !pollController.signal.aborted) setProgress(result.stage)
-      } catch { /* Progress transport errors do not replace the answer result. */ }
+        if (result && !pollController.signal.aborted) {
+          setProgress(result.stage)
+          lastExecutionLog = normalizeExecutionSteps(result.steps)
+          lastDropped = result.dropped || 0
+          updateMessages(current => current.map(item => item.id === assistantId ? {
+            ...item, executionLog: lastExecutionLog, executionDropped: lastDropped,
+            executionAvailability: Array.isArray(result.steps) ? 'available' : 'unsupported',
+          } : item))
+        }
+      } catch {
+        if (!pollController.signal.aborted) updateMessages(current => current.map(item => item.id === assistantId
+          ? { ...item, executionAvailability: 'disconnected' } : item))
+      }
       if (!pollController.signal.aborted) pollTimer = setTimeout(poll, 2500)
     }
     pollTimer = setTimeout(poll, 1000)
@@ -86,11 +102,15 @@ export function ChatPage({ activeConversation, onMenu, onConversationUpdate }) {
       onConversationUpdate?.(activeConversation.id, content)
     } catch (error) {
       const stopped = error?.name === 'AbortError'
+      const errorSteps = normalizeExecutionSteps(error.details?.execution_steps)
       updateMessages((current) => current.map((item) => item.id === assistantId ? {
         ...item,
         content: stopped ? 'Đã gửi yêu cầu dừng. Bước đang chạy trên máy chủ có thể cần thêm thời gian để kết thúc.' : error.message,
         status: 'error',
         errorInfo: stopped ? null : { category: error.category, errorId: error.errorId, status: error.status },
+        executionLog: errorSteps.length ? errorSteps : lastExecutionLog,
+        executionDropped: error.details?.execution_steps_dropped || lastDropped,
+        executionAvailability: errorSteps.length ? 'available' : 'disconnected',
       } : item))
     } finally {
       clearTimeout(pollTimer)

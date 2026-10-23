@@ -114,6 +114,8 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
     topics=detect_topics(q)
     issues=list(dict.fromkeys([item for item in issues if item!='GENERAL']+[topic.issue for topic in topics])) or ['GENERAL']
+    if 'occupational_accident' in {topic.key for topic in topics} and not any(topic.issue=='WORKING_TIME' for topic in topics):
+        issues=[issue for issue in issues if issue!='WORKING_TIME']
     unemployment_framework=('unemployment' in {topic.key for topic in topics}
         and facts.get('actor') is None
         and not re.search(r'\b(?:tôi|của tôi|trường hợp của|anh [a-z]|chị [a-z])\b',lower)
@@ -183,6 +185,29 @@ def _needle_match(query,needles):
         if found: return found
     return None
 
+SPECIAL_OCCUPATION = re.compile(
+    r'\b(?P<negative>không\s+(?:(?:phải\s+)?(?:thuộc|làm)|phải)'
+    r'(?:\s+(?:trong|nhóm|các|những)){0,3}\s+)?'
+    r'(?:ngành|nghề|công\s+việc)'
+    r'(?:(?:\s*[,/]\s*(?:(?:hoặc|hay|và)\s+)?|\s+(?:hoặc|hay|và)\s+|\s+)'
+    r'(?:ngành|nghề|công\s+việc)){0,2}\s+đặc\s+thù\b', re.I)
+
+
+def _special_occupation_fact(query):
+    """Read an explicit category statement and retain its complete negation."""
+    for match in SPECIAL_OCCUPATION.finditer(query):
+        prefix=re.split(r'[.;?!\n]',query[:match.start()])[-1]
+        suffix=re.split(r'[.;!\n]',query[match.end():],maxsplit=1)[0]
+        if re.search(r'\b(?:không\s+(?:biết|rõ)|chưa\s+(?:biết|rõ)|chưa\s+xác\s+định|'
+                     r'không\s+chắc|chưa\s+chắc|nếu|giả\s+sử|giả\s+định)\b',prefix,re.I):
+            continue
+        if '?' in suffix and (re.search(r'\bcó\s+(?:phải\s+)?(?:thuộc|làm)\b',prefix,re.I)
+                              or re.match(r'\s*[,;]?\s*(?:phải|đúng)\s+không\s*\?',suffix,re.I)):
+            continue
+        return not bool(match.group('negative')),match
+    return None,None
+
+
 def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
     """Attach exact current-turn spans to facts produced by deterministic parsing."""
     patterns={'worked_months':WORKED_MONTHS,
@@ -212,6 +237,9 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
             _,match=_service_duration(query)
         elif field=='notice_days':
             match=NO_NOTICE.search(query) if value==0 else NOTICE_DAYS.search(query)
+        elif field=='special_occupation':
+            extracted,match=_special_occupation_fact(query)
+            if extracted is not value: match=None
         elif field=='mutual_termination_agreement' and value is False:
             match=re.search(r'\b(?:chưa|không|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên)){0,4}\s+(?:đồng ý|thỏa thuận|thoả thuận)[^.;?!]{0,45}',query,re.I)
         else:
@@ -348,9 +376,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
         facts['notice_exception']=False
     elif any(term in q for term in ('được nghỉ không cần báo trước','được quyền nghỉ không cần báo trước')):
         facts['notice_exception']=True
-    if any(term in q for term in ('không thuộc ngành nghề đặc thù','không thuộc ngành, nghề, công việc đặc thù','không thuộc công việc đặc thù',
-      'không làm ngành nghề đặc thù','không làm ngành, nghề, công việc đặc thù','không làm công việc đặc thù')): facts['special_occupation']=False
-    elif any(term in q for term in ('ngành nghề đặc thù','ngành, nghề, công việc đặc thù')): facts['special_occupation']=True
+    special_occupation,_=_special_occupation_fact(q)
+    if special_occupation is not None: facts['special_occupation']=special_occupation
     if any(term in q for term in ('không có chi phí đào tạo','không phải hoàn trả chi phí đào tạo')): facts['training_costs']=False
     elif any(term in q for term in ('có chi phí đào tạo','phải hoàn trả chi phí đào tạo')): facts['training_costs']=True
     if any(term in q for term in ('trả lương không đúng thời hạn','trả lương chậm','trả lương trễ','trả lương cho tôi trễ')):

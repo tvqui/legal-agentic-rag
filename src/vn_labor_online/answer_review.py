@@ -129,9 +129,13 @@ def validate_review(review, draft, pack, tasks):
         if set(claim.evidence_ids)-set(by_evidence):
             raise StructuredOutputError('unknown cited source')
         for grounding in decision.grounding:
-            if grounding.evidence_id not in claim.evidence_ids or not any(
-                grounding.quote in text for text in texts(by_evidence[grounding.evidence_id])):
+            from .query_support import restore_source_quote
+            restored=None
+            if grounding.evidence_id in claim.evidence_ids:
+                restored=restore_source_quote(grounding.quote,texts(by_evidence[grounding.evidence_id]))
+            if restored is None:
                 raise StructuredOutputError('semantic grounding is not an exact cited-source quotation')
+            grounding.quote=restored
         if decision.verdict == 'SUPPORTED':
             if not decision.grounding or hard_issues(claim, attached,context_query=getattr(pack,'query','')):
                 raise StructuredOutputError('unsupported semantic PASS')
@@ -177,6 +181,20 @@ def source_payload(item):
         'full_text':item.full_text or item.text,'norm_role':item.norm_role,
         'valid_from':item.valid_from,'valid_to':item.valid_to}
 
+def accounting_schema(model, claim_ids=(), task_ids=()):
+    """Constrain decoder IDs; local validation still checks uniqueness/support."""
+    schema=model.model_json_schema()
+    for field,definition,identifier,values in (
+        ('claims','ClaimVerdict','claim_id',list(claim_ids)),
+        ('coverage','CoverageVerdict','task_id',list(task_ids)),
+    ):
+        if field not in schema.get('properties',{}): continue
+        schema['properties'][field].update(minItems=len(values),maxItems=len(values))
+        if values:
+            schema['$defs'][definition]['properties'][identifier]['enum']=values
+    return schema
+
+
 def audit_in_batches(provider, payload, draft, pack, tasks):
     """Keep full sources for entailment; do not enlarge or truncate the window.
 
@@ -186,29 +204,44 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
     """
     budget=getattr(provider,'context_tokens',None)
     output=getattr(provider,'max_output_tokens',0)
+    payload={**payload,'required_claim_ids':[c.claim_id for c in draft.claims],
+        'required_task_ids':[t.task_id for t in tasks]}
     encoded=json.dumps(payload,ensure_ascii=False)
-    if not isinstance(budget,int) or len((SYSTEM+encoded).encode())+output+256<=budget:
-        return Review.model_validate(provider.structured(SYSTEM,encoded,Review.model_json_schema()))
+    context_overflow=isinstance(budget,int) and len((SYSTEM+encoded).encode())+output+256>budget
+    accounting_retry=payload.get('previous_validation_error')=='CLAIM_ACCOUNTING_MISMATCH' and len(draft.claims)>4
+    if not context_overflow and len(draft.claims)<=8 and not accounting_retry:
+        return Review.model_validate(provider.structured(SYSTEM,encoded,accounting_schema(
+            Review,payload['required_claim_ids'],payload['required_task_ids'])))
     checks=[]
     by_source={e.evidence_id:e for e in pack.evidence}
-    for claim in draft.claims:
-        single={**payload,'claims':[claim.model_dump()],
-            'evidence':[source_payload(by_source[uid]) for uid in claim.evidence_ids if uid in by_source]}
+    # Limit accounting complexity even for providers with a large context
+    # window. Small batches still retain complete sources and exact IDs.
+    size=1 if context_overflow else 4
+    if (len(draft.claims)+size-1)//size>8:
+        raise StructuredOutputError('REVIEW_CLAIM_BATCH_LIMIT')
+    for offset in range(0,len(draft.claims),size):
+        batch=draft.claims[offset:offset+size]
+        ids={claim.claim_id for claim in batch}
+        source_ids={uid for claim in batch for uid in claim.evidence_ids}
+        single={**payload,'claims':[claim.model_dump() for claim in batch],
+            'required_claim_ids':[claim.claim_id for claim in batch],
+            'required_task_ids':[],
+            'evidence':[source_payload(e) for uid,e in by_source.items() if uid in source_ids]}
         raw=ClaimChecks.model_validate(provider.structured(SYSTEM+' Return only claim verdicts for this batch; question coverage is checked separately.',
-            json.dumps(single,ensure_ascii=False),ClaimChecks.model_json_schema()))
-        if len(raw.claims)!=1 or raw.claims[0].claim_id!=claim.claim_id:
+            json.dumps(single,ensure_ascii=False),accounting_schema(ClaimChecks,single['required_claim_ids'])))
+        if len(raw.claims)!=len(batch) or {claim.claim_id for claim in raw.claims}!=ids:
             raise StructuredOutputError('claim batch accounting mismatch')
         # Validate quotation and hard guards immediately, before coverage sees it.
         preliminary=Review(claims=raw.claims,coverage=[],question_fully_addressed=False,missing_requirements=[])
-        validate_review(preliminary,draft.model_copy(update={'claims':[claim]}),pack,[])
+        validate_review(preliminary,draft.model_copy(update={'claims':batch}),pack,[])
         checks.extend(raw.claims)
     supported={c.claim_id for c in checks if c.verdict=='SUPPORTED'}
-    compact={k:v for k,v in payload.items() if k not in {'claims','evidence'}}
+    compact={k:v for k,v in payload.items() if k not in {'claims','evidence','required_claim_ids'}}
     compact['checked_claims']=[c.model_dump() for c in draft.claims if c.claim_id in supported]
     compact['grounding']=[c.model_dump() for c in checks if c.claim_id in supported]
     coverage=QuestionCoverage.model_validate(provider.structured(
         SYSTEM+' Entailment was independently checked with full sources. Assess only whether the checked claims answer the entire question and every task. Do not add any new legal claim or evidence.',
-        json.dumps(compact,ensure_ascii=False),QuestionCoverage.model_json_schema()))
+        json.dumps(compact,ensure_ascii=False),accounting_schema(QuestionCoverage,task_ids=payload['required_task_ids'])))
     return Review(claims=checks,**coverage.model_dump())
 
 def review_error_code(exc):

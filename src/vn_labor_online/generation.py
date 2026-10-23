@@ -9,6 +9,7 @@ from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
 from .taxonomy import classify_subissues,original_documents,profile_covers_issues,annual_leave_points,annual_leave_combination_only
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
+from .demo_progress import call as observed,skip as skip_step,observe_result,draft_summary
 
 def _fold(value:str)->str:
     value=unicodedata.normalize('NFD',value.lower()).replace('đ','d')
@@ -217,6 +218,10 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
                 claims=[Claim(claim_id='claim_leave_combination',text=text,evidence_ids=ids)],
                 applicable_law_versions=_versions([lower,upper]),assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
         category=pack.facts.get('work_category')
+        # An unknown job category is not evidence for the 14-day group. In
+        # particular, disability/minority alone does not exclude special-heavy
+        # work. Let the general conditional explanation retain the missing fact.
+        if category not in {'NORMAL','HEAVY','SPECIAL_HEAVY'}: return None
         if category=='SPECIAL_HEAVY': base,point=16,'c'
         elif category=='NORMAL' and not pack.facts.get('minor') and not pack.facts.get('disabled'): base,point=12,'a'
         else: base,point=14,'b'
@@ -243,6 +248,8 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
             result=base+bonus; conclusion=f'Mức nền phù hợp là {base} ngày; thâm niên {service_years} năm làm tăng {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày.'
         if pack.facts.get('minor') or pack.facts.get('disabled') or category in {'HEAVY','SPECIAL_HEAVY'}:
             conclusion='Mức nghỉ cơ sở được xác định theo nhóm áp dụng tại khoản 1 Điều 113; không cộng chồng các mức nghỉ vì tuổi, khuyết tật và điều kiện công việc. '+conclusion
+        if point=='a' and any(pack.facts.get(field) is not False for field in ('minor','disabled')):
+            conclusion=('Nếu người lao động không thuộc nhóm chưa thành niên hoặc người khuyết tật: '+conclusion)
         # Keep the evidence-audited claim focused on the supported legal rule
         # and calculation.  The direct yes/no sentence is a conclusion derived
         # from that calculation, rather than a quotation attributed to a source.
@@ -449,11 +456,15 @@ class LegalAdjudicator:
     def generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
         literal=literal_lookup_draft(pack,partial,assumptions)
         if literal is not None:
+            skip_step('answer_quality','Luồng trích nguyên văn có kiểm tra literal riêng')
+            skip_step('semantic_review','LITERAL_SOURCE_MATCH: không yêu cầu reviewer LLM')
             return literal,['LITERAL_SOURCE_QUOTATION']
         draft,warnings=self._generate_with_layout(pack,partial,assumptions)
         if self.cfg.semantic_review and self.cfg.mode!='deterministic' and self.provider and draft.claims and 'ANSWER_QUALITY_BLOCKED' not in warnings:
             from .answer_review import review_answer
-            draft,review_warnings=review_answer(self.review_provider,draft,pack,self.cfg.semantic_repair_attempts)
+            draft,review_warnings=observed('semantic_review',review_answer,self.review_provider,draft,pack,self.cfg.semantic_repair_attempts,
+              technology='Reviewer '+self.cfg.review_provider+' · xem lượt provider/model thực tế',summary=draft_summary,
+              status=lambda r:'DONE' if r[0].semantic_review.get('status')=='PASS' else 'ERROR' if r[0].semantic_review.get('status')=='ERROR' else 'WARNING')
             warnings+=review_warnings
             if draft.claims:
                 draft=render_claims(draft,partial or draft.semantic_review.get('status')!='PASS')
@@ -463,8 +474,11 @@ class LegalAdjudicator:
                 draft=draft.model_copy(update={'applicable_law_versions':_versions([e for e in pack.evidence if e.evidence_id in used])})
             else:
                 draft=draft.model_copy(update={'answer_summary':'Chưa xác minh được kết luận phù hợp với nội dung nguồn và toàn bộ câu hỏi.','applicable_law_versions':[]})
+        else:
+            skip_step('semantic_review','Reviewer tắt, mode deterministic, không có claims hoặc câu trả lời đã bị chặn')
         return draft,list(dict.fromkeys(warnings))
 
+    @observe_result('answer_quality',draft_summary,status=lambda r:'WARNING' if r[1] else 'DONE')
     def _generate_with_layout(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
         # Work on display copies; never rewrite artifacts or their source spans.
         display=pack.model_copy(update={'evidence':[item.model_copy(update={

@@ -1,0 +1,545 @@
+[
+  {
+    "id": 1,
+    "title": "Người dùng nhập câu hỏi",
+    "layer": "Frontend",
+    "tech": "React, JavaScript, lịch sử hội thoại trên trình duyệt.",
+    "processing": "Nhận câu hỏi mới hoặc câu bổ sung. Gửi lịch sử các lượt người dùng, facts và ngày tra cứu nếu có; không dùng câu trả lời cũ của AI như một sự thật đã được xác nhận.",
+    "output": "QueryRequest: question, conversation_turns/context, facts, query_date, message_id; kèm capability phiên X-Client-Session.",
+    "short": [
+      "React · JavaScript · lịch sử trình duyệt",
+      "Output: câu hỏi + ngữ cảnh + facts + ngày tra cứu"
+    ],
+    "ref": "frontend/src/pages/ChatPage.jsx; frontend/src/services/chatService.js; conversationService.js",
+    "x": 600,
+    "y": 190,
+    "width": 800,
+    "height": 135,
+    "rendered_bottom": 307
+  },
+  {
+    "id": 2,
+    "title": "Tiếp nhận và bảo vệ request",
+    "layer": "API",
+    "tech": "HTTP/JSON; Vite proxy (dev); FastAPI, Pydantic; Bearer token nếu bật; RequestRegistry.",
+    "processing": "Proxy chuyển yêu cầu tới API. FastAPI kiểm schema, xác thực và trạng thái dịch vụ. Registry phân biệt yêu cầu mới, đang chạy, trùng đã xong hoặc trùng ID nhưng khác nội dung; semaphore giới hạn số câu xử lý đồng thời. Đường truyền Kaggle có thể đi qua ngrok, nhưng không làm thay đổi thuật toán RAG.",
+    "output": "Request hợp lệ cùng ngân sách thời gian và message_id. Retry cùng ID/nội dung có thể nhận kết quả đã xong; request sai/bận chuyển nhánh 29.",
+    "short": [
+      "FastAPI · Pydantic · HTTP/JSON · RequestRegistry",
+      "Output: request hợp lệ + ngân sách + mã yêu cầu"
+    ],
+    "ref": "src/vn_labor_online/api.py:create_app/answer; runtime.py:RequestRegistry",
+    "x": 600,
+    "y": 375,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 492
+  },
+  {
+    "id": 3,
+    "title": "Ghép ngữ cảnh và dữ kiện nối tiếp",
+    "layer": "Researcher",
+    "tech": "Python; conversation.resolve_context; quy tắc chủ đề và nguồn gốc facts.",
+    "processing": "Xác định câu mới có tiếp nối vấn đề trước hay không. Hợp nhất dữ kiện từ lịch sử người dùng, giữ nguồn gốc và ưu tiên thông tin mới phù hợp. Nếu chủ đề nối tiếp còn mơ hồ, dừng để hỏi lại, không đoán hoặc tìm kiếm ngay.",
+    "output": "Câu hỏi đã giải nghĩa, facts, ngày tra cứu, các lượt được sử dụng; hoặc câu hỏi làm rõ đi tới bước 25.",
+    "short": [
+      "Python · resolve_context · provenance của facts",
+      "Output: truy vấn đã giải nghĩa / yêu cầu làm rõ"
+    ],
+    "ref": "src/vn_labor_online/conversation.py:resolve_context; pipeline.py:ask",
+    "x": 600,
+    "y": 635,
+    "width": 800,
+    "height": 145,
+    "rendered_bottom": 752
+  },
+  {
+    "id": 4,
+    "title": "Hiểu vấn đề và tách các ý cần trả lời",
+    "layer": "Researcher",
+    "tech": "Python, regex, taxonomy vấn đề lao động; LegalResearcher; Gemini/Ollama/HTTP tùy cấu hình.",
+    "processing": "Nhận diện chủ thể, hợp đồng, thời gian, điều luật được nêu, ý định và các yêu cầu độc lập. Quy tắc chạy trước; Researcher thích nghi chỉ yêu cầu model khi cần theo execution_path. Model trả dữ liệu có cấu trúc và được kiểm tra, không mặc nhiên biến suy đoán thành facts.",
+    "output": "QueryAnalysis: legal_issues/subissues, facts, missing_facts, answer_tasks, retrieval_queries, ontology_features và route.",
+    "short": [
+      "Python · regex · taxonomy · LLM nếu cần",
+      "Output: vấn đề + tasks + facts + truy vấn tìm kiếm"
+    ],
+    "ref": "src/vn_labor_online/analysis.py:analyze; researcher.py:LegalResearcher; taxonomy.py",
+    "x": 600,
+    "y": 830,
+    "width": 800,
+    "height": 165,
+    "rendered_bottom": 947
+  },
+  {
+    "id": 5,
+    "title": "Lập kế hoạch căn cứ cho từng ý",
+    "layer": "Researcher",
+    "tech": "Python; plan_evidence; taxonomy/profile; bộ định vị Điều/Khoản/Điểm.",
+    "processing": "Xác định phải có những nhóm căn cứ nào, gồm quy tắc chính, điều kiện, ngoại lệ và hậu quả khi cần. Phân biệt ô bắt buộc và có điều kiện. Nếu thiếu ngày, dùng ngày chốt corpus theo chính sách và ghi cảnh báo; không tự coi đó là ngày luật mới nhất.",
+    "output": "EvidencePlan: mandatory_slots, conditional_slots, slot_requirements và mốc/khoảng ngày cần áp dụng.",
+    "short": [
+      "Python · EvidencePlan · bộ định vị điều khoản",
+      "Output: các ô căn cứ bắt buộc / có điều kiện"
+    ],
+    "ref": "src/vn_labor_online/analysis.py:plan_evidence; pipeline.py:_ask; retrieval.py:resolve_article_plan",
+    "x": 600,
+    "y": 1045,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 1162
+  },
+  {
+    "id": 6,
+    "title": "Kiểm tra domain và dữ kiện quyết định",
+    "layer": "Researcher",
+    "tech": "Python; in_scope, missing_facts, route, requested_outcome; answer_while_clarifying.",
+    "processing": "Câu ngoài pháp luật lao động đi tới 26. Thiếu dữ kiện có thể làm đổi kết luận cụ thể thì tới 25. Trong trường hợp được chính sách cho phép, hệ thống tiếp tục tìm để giải thích có điều kiện, đồng thời hỏi bổ sung; không kết luận chắc chắn về phần chưa rõ.",
+    "output": "Tiếp tục tra cứu, NEED_MORE_FACTS, ABSTAIN; hoặc cờ chỉ giải thích có điều kiện.",
+    "short": [
+      "Python · scope gate · critical fact gate",
+      "Output: tiếp tục / hỏi lại / ngoài phạm vi"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:_ask; analysis.py",
+    "x": 600,
+    "y": 1250,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 1367
+  },
+  {
+    "id": 7,
+    "title": "Chọn đường truy xuất",
+    "layer": "Retriever",
+    "tech": "Python; route DIRECT/STANDARD/COMPLEX theo phân tích và cấu hình; exact/profile fast path.",
+    "processing": "Ưu tiên thử định vị điều khoản khi người dùng nêu rõ văn bản/điều; hoặc thử profile cho chuỗi quy tắc đã biết. Những câu không đi đường tắt hoặc không đạt điều kiện sẽ chạy truy xuất nhiều kênh. Đường tắt không bỏ các kiểm tra bằng chứng và hậu kiểm cần thiết.",
+    "output": "Lựa chọn thử bước 8 hoặc vào bước 9; flags exact_only/profile_only.",
+    "short": [
+      "Python · định tuyến Exact / Profile / Hybrid",
+      "Output: đường tìm kiếm phù hợp với câu hỏi"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:_ask",
+    "x": 600,
+    "y": 1550,
+    "width": 800,
+    "height": 130,
+    "rendered_bottom": 1667
+  },
+  {
+    "id": 8,
+    "title": "Tra cứu chính xác / thử chuỗi profile",
+    "layer": "Retriever",
+    "tech": "Python; exact, hierarchy_descendants, PART_OF; policy_anchor, kiểm thử profile bằng quy tắc.",
+    "processing": "Exact khớp số văn bản và Điều/Khoản/Điểm, lấy thêm khoản/điểm con theo thứ tự nguồn để không mất phần liệt kê. Profile thử các căn cứ đã định vị, lọc và kiểm áp dụng sơ bộ. Profile chỉ bật đường tắt nếu chuỗi được nhận diện và không còn thiếu phần phải tìm. Có nguồn exact chưa đồng nghĩa câu trả lời đã đủ.",
+    "output": "Evidence hạt giống; exact_only/profile_only. Nếu không dùng được đường tắt thì chuyển 9; nếu dùng được vẫn qua 10–14.",
+    "short": [
+      "Python · Exact + PART_OF / profile rule chain",
+      "Output: evidence hạt giống; có thể bỏ Hybrid"
+    ],
+    "ref": "src/vn_labor_online/retrieval.py:exact/hierarchy_descendants/policy_anchor; pipeline.py",
+    "x": 600,
+    "y": 1745,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 1862
+  },
+  {
+    "id": 9,
+    "title": "Truy xuất Hybrid và các kênh bổ sung",
+    "layer": "Retriever",
+    "tech": "BM25S; BAAI/bge-m3 (FlagEmbedding/PyTorch); FAISS; neo vấn đề, case/community.",
+    "processing": "BM25S tìm theo từ khóa. BGE-M3 mã hóa câu hỏi thành vector; FAISS tìm vector gần trong chỉ mục đã xây OFFLINE. Kênh issue/profile giữ neo pháp lý; case và community chỉ thêm khi câu hỏi và cấu hình cần đến. Câu nhiều ý có thể bổ sung truy vấn theo task. Trong code hiện tại các kênh được gọi theo thứ tự, không mặc định chạy song song.",
+    "output": "Các danh sách Evidence, mỗi nguồn có unit_id, điểm/rank và retrieval_method; chưa là bằng chứng đã kiểm.",
+    "short": [
+      "BM25S + BGE-M3 + FAISS; issue/case/community nếu cần",
+      "Output: nhiều danh sách nguồn ứng viên theo kênh"
+    ],
+    "ref": "src/vn_labor_online/retrieval.py:Retriever; query_support.py:task_bm25_channels; pipeline.py",
+    "x": 600,
+    "y": 1980,
+    "width": 800,
+    "height": 200,
+    "rendered_bottom": 2097
+  },
+  {
+    "id": 10,
+    "title": "Gộp nguồn và lọc thời điểm / thẩm quyền",
+    "layer": "Retriever",
+    "tech": "RRF khi nhiều kênh; Python dedup; temporal_filter, authority_filter, retain_required_anchors.",
+    "processing": "Gộp thứ hạng các kênh rồi loại trùng. Một kênh thì dùng kết quả kênh đó, không giả vờ chạy RRF. Lọc theo khoảng hiệu lực, ngày hỏi, nguồn/thẩm quyền và giữ neo bắt buộc. Chính sách provisional có thể cho fallback cấp văn bản kèm cảnh báo, không chứng nhận hiệu lực từng điều khoản đã duyệt.",
+    "output": "Nguồn còn lại, ID bị loại và lý do; các neo căn cứ cần thiết được giữ khi phù hợp.",
+    "short": [
+      "RRF (nhiều kênh) · Python · bộ lọc hiệu lực/nguồn",
+      "Output: ứng viên hợp nhất và đã lọc bước đầu"
+    ],
+    "ref": "src/vn_labor_online/retrieval.py:fusion/temporal_filter/authority_filter/retain_required_anchors",
+    "x": 600,
+    "y": 2240,
+    "width": 800,
+    "height": 165,
+    "rendered_bottom": 2357
+  },
+  {
+    "id": 11,
+    "title": "Xếp hạng lại các nguồn",
+    "layer": "Retriever",
+    "tech": "BAAI/bge-reranker-v2-m3; PyTorch/FlagEmbedding; rerank quy tắc.",
+    "processing": "Reranker chấm trực tiếp cặp câu hỏi–đoạn nguồn, giúp đưa đoạn liên quan lên trên. Exact/profile có thể bỏ qua model này; khi bị tắt thì không sử dụng. Nếu model reranker không khả dụng, code có nhánh cảnh báo và tiếp tục với kết quả có sẵn, thay vì tuyên bố rerank thành công.",
+    "output": "Danh sách ứng viên đã sắp lại, hoặc kết quả cũ kèm NEURAL_RERANKER_UNAVAILABLE.",
+    "short": [
+      "BGE reranker nếu bật · rerank quy tắc",
+      "Output: nguồn được ưu tiên để kiểm chứng"
+    ],
+    "ref": "src/vn_labor_online/retrieval.py:neural_rerank/rerank; pipeline.py",
+    "x": 600,
+    "y": 2455,
+    "width": 800,
+    "height": 150,
+    "rendered_bottom": 2572
+  },
+  {
+    "id": 12,
+    "title": "Kiểm tra nguồn và dấu vết bằng chứng",
+    "layer": "Auditor",
+    "tech": "Python; deterministic_audit; provenance, source span, catalog, temporal metadata.",
+    "processing": "Đối chiếu đoạn chứng cứ với dữ liệu artifact, đường dẫn gốc, dấu vết vị trí và metadata thời gian/nguồn. Lỗi cứng không được đưa tiếp như bằng chứng hợp lệ. Cảnh báo chưa duyệt nguồn/hiệu lực phải được giữ. Bằng chứng mở rộng từ Graph cũng phải qua bước này.",
+    "output": "Evidence có verified/audit_warnings; nguồn đạt kiểm tra máy đi tới 13, nguồn lỗi bị loại.",
+    "short": [
+      "Python · deterministic audit · provenance/span",
+      "Output: evidence qua kiểm tra máy + cảnh báo"
+    ],
+    "ref": "src/vn_labor_online/audit.py:deterministic_audit; pipeline.py",
+    "x": 600,
+    "y": 2760,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 2877
+  },
+  {
+    "id": 13,
+    "title": "Kiểm tra khả năng áp dụng",
+    "layer": "Auditor",
+    "tech": "LegalApplicabilityAuditor; quy tắc/profile; diagnostic checklist; Ollama hoặc HTTP LLM nếu cấu hình.",
+    "processing": "Kiểm tra nguồn có liên quan, điều kiện nào được xác nhận, có hỗ trợ nhận định pháp lý hay chỉ là đoạn giống từ khóa. Mode hybrid ưu tiên quy tắc, đưa phần cần kiểm sang model theo batch và giới hạn. Quyết định của model vẫn được kiểm cấu trúc; nội dung không xác định không được coi là PASS.",
+    "output": "ApplicabilityDecision: PASS/FAIL/UNRESOLVED, relevant, supports_claim, reasons; tập evidence được chấp nhận.",
+    "short": [
+      "Python · checklist/profile · LLM nếu cần",
+      "Output: PASS / FAIL / UNRESOLVED cho bằng chứng"
+    ],
+    "ref": "src/vn_labor_online/applicability.py:LegalApplicabilityAuditor.audit/_hybrid/_deterministic",
+    "x": 600,
+    "y": 2980,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 3097
+  },
+  {
+    "id": 14,
+    "title": "Đo độ phủ và xác định căn cứ còn thiếu",
+    "layer": "Auditor",
+    "tech": "Python; extend_plan_for_evidence, state_for, _actionable_gaps.",
+    "processing": "So bằng chứng đã được chấp nhận với các ô căn cứ trong kế hoạch. Khi chuỗi pháp lý đòi hỏi căn cứ bổ sung, kế hoạch có thể được mở rộng. Phân biệt khoảng thiếu có thể tìm thêm với metadata chờ duyệt. Khi không cần mở rộng, đi 16; còn khoảng thiếu và còn ngân sách thì sang 15.",
+    "output": "EvidenceState: slots, coverage, gaps; quyết định cần Graph hay đủ để đánh giá đầu ra cuối.",
+    "short": [
+      "Python · evidence slots · coverage / gaps",
+      "Output: đủ để dừng tìm / danh sách căn cứ còn thiếu"
+    ],
+    "ref": "src/vn_labor_online/evidence.py:state_for/extend_plan_for_evidence; pipeline.py",
+    "x": 600,
+    "y": 3200,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 3317
+  },
+  {
+    "id": 15,
+    "title": "Mở rộng đồ thị có giới hạn",
+    "layer": "Retriever",
+    "tech": "GraphExplorer; adjacency từ nodes.jsonl/edges.jsonl trong RAM; duyệt quan hệ và xếp ưu tiên.",
+    "processing": "Từ frontier bằng chứng hiện có, tìm node/cạnh giúp lấp khoảng thiếu: REFERENCES, AMENDS, REPEALS, VERSION_OF, PART_OF, CITES, HAS_ISSUE, SIMILAR_TO… Các tầng Fact/Ontology/Rule/Document/Derived tham gia tùy đường đi thực tế. Nguồn mới được lọc thời điểm/thẩm quyền rồi quay lại 12–14. Dừng theo số vòng, hop, node, cạnh, thời gian hoặc hết frontier; không lặp vô hạn và không nhất thiết chạy lại BM25/Dense mỗi vòng.",
+    "output": "Bằng chứng mới, frontier, graph_path/relations, thống kê node/cạnh và stop_reason. Nếu đã hết khả năng tìm, chuyển tới đánh giá cuối ở 16.",
+    "short": [
+      "Python · GraphExplorer · JSONL adjacency trong RAM",
+      "Fact / Ontology / Rule / Document / Derived theo đường đi",
+      "Output: nguồn mới + đường đi + lý do dừng"
+    ],
+    "ref": "src/vn_labor_online/graph.py:GraphExplorer.expand_round; pipeline.py:_ask; artifact_store.py",
+    "x": 1500,
+    "y": 3000,
+    "width": 460,
+    "height": 300,
+    "rendered_bottom": 3225
+  },
+  {
+    "id": 16,
+    "title": "Chọn nguồn và phân loại mức đủ cuối",
+    "layer": "Auditor",
+    "tech": "Python; select_for_plan, detect_authoritative_conflicts; kiểm giao khoảng hiệu lực.",
+    "processing": "Chọn căn cứ đáp ứng từng ô và phát hiện nguồn có thẩm quyền xung đột. Khoảng ngày vắt qua mốc thay đổi luật có thể yêu cầu ngày chính xác. Không đủ toàn bộ nhưng có task độc lập đã đủ thì chỉ cho phép phần đó theo chính sách; không dựa duy nhất vào tỷ lệ coverage để kết luận đủ.",
+    "output": "Trạng thái dự kiến: SUFFICIENT, PARTIAL_ALLOWED, CONFLICTING_EVIDENCE; hoặc NEED_MORE_FACTS/INSUFFICIENT_EVIDENCE. Tập nguồn đã chọn đi 17 nếu được tiếp tục.",
+    "short": [
+      "Python · select_for_plan · kiểm xung đột / ngày",
+      "Output: tập nguồn cuối + trạng thái dự kiến"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:_ask; evidence.py; tasks.py:independent_partial_plan",
+    "x": 600,
+    "y": 3420,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 3537
+  },
+  {
+    "id": 17,
+    "title": "Đóng gói bằng chứng đã kiểm",
+    "layer": "Auditor",
+    "tech": "Python, Pydantic; VerifiedEvidencePack; build_verified_pack.",
+    "processing": "Chỉ đóng gói câu hỏi đã hiểu, facts, ngày, tasks, bằng chứng được chọn, quyết định Auditor và các ô còn thiếu. Gắn ID bằng chứng để câu trả lời có thể truy nguyên. Đây là dữ liệu trích dẫn cho model, không phải chỉ dẫn được phép thay đổi vai trò hệ thống.",
+    "output": "VerifiedEvidencePack gửi sang Adjudicator; có lookup_reference khi đủ điều kiện trích nguyên văn.",
+    "short": [
+      "Python · Pydantic · VerifiedEvidencePack",
+      "Output: pack có evidence IDs + facts + tasks + gaps"
+    ],
+    "ref": "src/vn_labor_online/evidence.py:build_verified_pack; models.py:VerifiedEvidencePack; pipeline.py",
+    "x": 600,
+    "y": 3720,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 3837
+  },
+  {
+    "id": 18,
+    "title": "Tạo bản nháp có căn cứ",
+    "layer": "Adjudicator",
+    "tech": "LegalAdjudicator; trích nguyên văn, rule/profile renderer; Qwen qua Ollama hoặc LLM HTTP khi cần.",
+    "processing": "Nhánh tra cứu đủ điều kiện trích chính xác nội dung nguồn, không cần LLM diễn giải. Nhánh quy tắc đã biết có thể dựng đáp án từ profile. Các trường hợp khác yêu cầu model trả claims theo JSON schema, chỉ được dùng evidence_ids có trong pack. Không phải câu nào cũng gọi Qwen; Gemini reviewer không mặc nhiên là model sinh bản nháp.",
+    "output": "AdjudicationDraft: claims gắn evidence_ids, bản trình bày, phiên bản luật, giả định/giới hạn; hoặc nhánh literal đi thẳng 22.",
+    "short": [
+      "Python / trích nguyên văn / profile; Qwen–Ollama hoặc HTTP",
+      "Output: bản nháp claims ↔ evidence IDs"
+    ],
+    "ref": "src/vn_labor_online/generation.py:LegalAdjudicator.generate/_generate/literal_lookup_draft",
+    "x": 600,
+    "y": 3970,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 4087
+  },
+  {
+    "id": 19,
+    "title": "Kiểm tra câu chữ và cấu trúc bản nháp",
+    "layer": "Hậu kiểm",
+    "tech": "Python; answer_quality, clean_draft, render_claims; JSON/Pydantic; model sửa câu nếu cần.",
+    "processing": "Kiểm lỗi câu chữ, ký tự, định dạng, nội dung thừa, claims và giới hạn an toàn. Không tự sửa đoán số điều hoặc chữ OCR pháp lý. Khi cần có thể yêu cầu sửa ngôn ngữ trong giới hạn cho phép và kiểm lại; chỉ dùng bản dựng dự phòng nếu đạt điều kiện. Nhánh trích nguyên văn có kiểm literal riêng nên bỏ bước này.",
+    "output": "Bản nháp đã làm sạch/được sửa an toàn; hoặc cờ ANSWER_QUALITY_BLOCKED, đi nhánh không kết luận.",
+    "short": [
+      "Python · kiểm câu chữ/schema · sửa có giới hạn",
+      "Output: bản nháp sạch / cờ chặn chất lượng"
+    ],
+    "ref": "src/vn_labor_online/generation.py:_generate_with_layout; answer_quality.py",
+    "x": 600,
+    "y": 4280,
+    "width": 800,
+    "height": 155,
+    "rendered_bottom": 4397
+  },
+  {
+    "id": 20,
+    "title": "Đối chiếu ý nghĩa và độ đủ từng ý",
+    "layer": "Hậu kiểm",
+    "tech": "answer_review; reviewer Gemini nếu chọn, hoặc provider sinh câu trả lời; schema và kiểm quote bằng Python.",
+    "processing": "Reviewer đối chiếu từng claim với nguồn đầy đủ và kiểm các tasks đã được trả lời hay chưa. Báo cáo phải đúng ID, đúng trích đoạn nguồn và đúng cách tính phần đã trả lời. PASS mới qua; PARTIAL chỉ giữ claims đã kiểm; FAIL/ERROR không được lén trả bản nháp cũ. Nếu reviewer tắt/deterministic thì không gọi LLM và phải thể hiện giới hạn đó.",
+    "output": "semantic_review: PASS/PARTIAL/FAIL/ERROR, claims được hỗ trợ, ý còn thiếu. Có thể đi 21 để sửa trong ngân sách, hoặc chặn tại 27.",
+    "short": [
+      "Gemini / reviewer cấu hình · schema + quote validation",
+      "Output: PASS / PARTIAL / FAIL / ERROR theo claims/tasks"
+    ],
+    "ref": "src/vn_labor_online/answer_review.py:review_answer/audit_in_batches/validate_review; generation.py",
+    "x": 600,
+    "y": 4480,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 4597
+  },
+  {
+    "id": 21,
+    "title": "Sửa bản nháp rồi kiểm lại",
+    "layer": "Hậu kiểm",
+    "tech": "Python; review_answer, repair; cùng pack và giới hạn semantic_repair_attempts.",
+    "processing": "Khi review phát hiện nội dung thiếu/sai và còn lượt sửa, yêu cầu sửa trong phạm vi bằng chứng đã có rồi quay lại reviewer. Báo cáo review sai schema có thể được yêu cầu kiểm lại trong cùng ngân sách. Không bổ sung nguồn giả, không mở một vòng tìm kiếm Graph mới tại đây và không nới tiêu chuẩn để buộc PASS.",
+    "output": "Bản nháp mới hoặc yêu cầu kiểm lại về bước 20. Hết lượt thì giữ phần độc lập đã xác minh hoặc chặn kết luận.",
+    "short": [
+      "Python · bounded repair · pack giữ nguyên",
+      "Output: bản nháp sửa → quay về bước 20"
+    ],
+    "ref": "src/vn_labor_online/answer_review.py:review_answer (vòng repair bên trong)",
+    "x": 1500,
+    "y": 4480,
+    "width": 460,
+    "height": 230,
+    "rendered_bottom": 4624
+  },
+  {
+    "id": 22,
+    "title": "Hậu kiểm trích dẫn và căn cứ bắt buộc",
+    "layer": "Hậu kiểm",
+    "tech": "Python; reference_audit, claim_validation; missing_answer_slots; sửa tham chiếu xác định.",
+    "processing": "Kiểm marker, evidence ID, link và claims có khớp nguồn; kiểm đủ các nhóm căn cứ cần nêu trong đáp án, không chỉ trong tập đã truy xuất. Có một nhánh sửa tham chiếu hữu hạn bằng claims vốn đã gắn nguồn hợp lệ rồi audit lại. Nếu vẫn không đạt, bỏ claims/kết luận không xác minh. Không có LLM judge là đủ để bỏ bước kiểm máy.",
+    "output": "Câu trả lời và citations đạt audit hoặc bị hạ mức/chặn. Sửa xong vẫn phải tính lại mức đủ căn cứ.",
+    "short": [
+      "Python · reference_audit · kiểm căn cứ theo claims",
+      "Output: nội dung + nguồn khớp / hạ mức hoặc chặn"
+    ],
+    "ref": "src/vn_labor_online/audit.py:reference_audit; claim_validation.py; pipeline.py:_repair_references",
+    "x": 600,
+    "y": 4710,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 4827
+  },
+  {
+    "id": 23,
+    "title": "Chốt trạng thái và độ đủ từng task",
+    "layer": "Hậu kiểm",
+    "tech": "Python; assess_parts; AnswerResponse/Trace; chính sách provisional.",
+    "processing": "Đánh giá từng ý đã được trả lời, còn thiếu hay chỉ có giải thích có điều kiện. Chọn trạng thái cuối và giữ cảnh báo nguồn/hiệu lực chưa duyệt. Xung đột được trình bày là xung đột, không tự chọn một kết luận chắc chắn. Lỗi reviewer có thể làm chặn đáp án dù đã tìm được đúng điều luật.",
+    "output": "AnswerResponse: status, answer, claims, citations, parts, questions, limitations, warnings, legal_status, trace. SUFFICIENT không tự đồng nghĩa legal_ready.",
+    "short": [
+      "Python · assess_parts · AnswerResponse + Trace",
+      "Output: trạng thái cuối + đáp án/phần thiếu + nguồn"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:_ask; tasks.py:assess_parts; models.py:AnswerResponse",
+    "x": 600,
+    "y": 4930,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 5047
+  },
+  {
+    "id": 24,
+    "title": "Hiển thị kết quả và nguồn trên màn hình",
+    "layer": "Frontend",
+    "tech": "FastAPI JSON; React; chatService; Source Drawer; lịch sử localStorage.",
+    "processing": "API trả dữ liệu có cấu trúc; frontend đánh số trích dẫn, hiện các phần đáp án, nguồn, câu hỏi bổ sung và cảnh báo. Câu bị chặn vẫn hiện lý do. Nếu cần bổ sung thì lượt người dùng tiếp theo quay về bước 1 và đi qua giải nghĩa ngữ cảnh ở bước 3. Giao diện không tự suy luận thêm luật.",
+    "output": "Tin nhắn người dùng đọc được, nguồn chính thức có thể mở, nhật ký xử lý và các thao tác thử lại/bổ sung.",
+    "short": [
+      "FastAPI JSON → React · trích dẫn + Source Drawer",
+      "Output: kết quả / hỏi lại / từ chối / lỗi rõ nguyên nhân"
+    ],
+    "ref": "src/vn_labor_online/api.py:answer; frontend/src/services/chatService.js; Message.jsx; SourceDrawer.jsx",
+    "x": 600,
+    "y": 5250,
+    "width": 800,
+    "height": 175,
+    "rendered_bottom": 5367
+  },
+  {
+    "id": 25,
+    "title": "Hỏi bổ sung dữ kiện / ngày chính xác",
+    "layer": "Researcher",
+    "tech": "Python tạo questions; React hiển thị; conversation_context ở lượt kế tiếp.",
+    "processing": "Đây là một kết quả hợp lệ, không phải lỗi mạng. Hỏi đúng thông tin làm thay đổi kết luận như loại hợp đồng, ngoại lệ, nhóm công việc hoặc ngày hiệu lực. Với câu nối tiếp chưa rõ chủ đề, yêu cầu làm rõ trước. Người dùng trả lời tạo request mới, quay lại 1 → 3. Nếu được giải thích có điều kiện, câu hỏi có thể kèm phần đáp án tại 24.",
+    "output": "NEED_MORE_FACTS hoặc questions kèm PARTIAL_ALLOWED; không tự điền dữ kiện thiếu.",
+    "short": [
+      "Python → React · NEED_MORE_FACTS",
+      "Output: câu hỏi cần bổ sung",
+      "Người dùng trả lời → 1 → 3"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:ask/_ask; conversation.py",
+    "x": 40,
+    "y": 775,
+    "width": 460,
+    "height": 230,
+    "rendered_bottom": 949
+  },
+  {
+    "id": 26,
+    "title": "Từ chối câu hỏi ngoài phạm vi",
+    "layer": "Researcher",
+    "tech": "Python scope gate; React.",
+    "processing": "Thông báo câu hỏi nằm ngoài pháp luật lao động, không ép lấy quy tắc lao động trả lời hình sự, thuế hay vấn đề khác. Không chạy các bước truy xuất/sinh đáp án sau gate chỉ để có nội dung. Phân tích sơ bộ/Researcher trước gate có thể đã chạy theo cấu hình.",
+    "output": "ABSTAIN, OUT_OF_SCOPE; lý do hiển thị ở 24.",
+    "short": [
+      "Python · ABSTAIN / OUT_OF_SCOPE",
+      "Output: lý do ngoài phạm vi → 24"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:_ask",
+    "x": 40,
+    "y": 1250,
+    "width": 460,
+    "height": 180,
+    "rendered_bottom": 1367
+  },
+  {
+    "id": 27,
+    "title": "Không trả kết luận chưa được xác minh",
+    "layer": "Hậu kiểm",
+    "tech": "Python; chính sách evidence/quality fail-closed; React.",
+    "processing": "Có hai nguồn chặn cần phân biệt: không đủ chuỗi căn cứ sau tìm kiếm; hoặc đã có nguồn nhưng đáp án/reviewer chưa đạt. Chỉ thông báo lý do, phần thiếu và khả năng thử lại; không biến lỗi dịch vụ kiểm tra thành khẳng định pháp luật không có quy định. Nếu một phần độc lập đã được kiểm và chính sách cho phép, có thể trả PARTIAL_ALLOWED thay vì chặn toàn bộ.",
+    "output": "INSUFFICIENT_EVIDENCE, hoặc phần đã xác minh kèm giới hạn. Đưa thông tin ra màn hình tại 24.",
+    "short": [
+      "Python · evidence / quality gate",
+      "Output: không kết luận; nêu thiếu ở đâu → 24"
+    ],
+    "ref": "src/vn_labor_online/pipeline.py:_ask; generation.py; answer_review.py",
+    "x": 40,
+    "y": 3490,
+    "width": 460,
+    "height": 230,
+    "rendered_bottom": 3664
+  },
+  {
+    "id": 28,
+    "title": "Thông báo nguồn xung đột",
+    "layer": "Auditor",
+    "tech": "Python; detect_authoritative_conflicts; citations.",
+    "processing": "Nếu các nguồn có thẩm quyền được hệ thống nhận diện là xung đột, kết quả cuối nêu rõ tình trạng và nguồn liên quan. Không dùng điểm similarity để giải quyết xung đột pháp lý. Kiểm trích dẫn và khả năng trình bày an toàn vẫn áp dụng; nếu không qua kiểm tra, trạng thái có thể bị hạ xuống không đủ căn cứ.",
+    "output": "CONFLICTING_EVIDENCE nếu giữ được nhánh xung đột; chưa có kết luận pháp lý dứt khoát.",
+    "short": [
+      "Python · CONFLICTING_EVIDENCE",
+      "Output: nêu xung đột + nguồn → 24"
+    ],
+    "ref": "src/vn_labor_online/evidence.py:detect_authoritative_conflicts; pipeline.py:_ask",
+    "x": 40,
+    "y": 4930,
+    "width": 460,
+    "height": 185,
+    "rendered_bottom": 5047
+  },
+  {
+    "id": 29,
+    "title": "Lỗi kỹ thuật / quá tải / hết giờ / hủy",
+    "layer": "Runtime",
+    "tech": "FastAPI error handlers; RequestBudget/checkpoint; provider pacing/retry; AbortController và cancel API.",
+    "processing": "Nhánh này có thể xảy ra ở API, model, chỉ mục hay đường truyền. Schema sai/không xác thực/bận có mã HTTP riêng; Gemini hết RPM là lỗi dịch vụ/quota, không phải thiếu luật. Hủy và timeout có kiểm tra hợp tác, bước đang chờ provider có thể cần thời gian kết thúc. Dự phòng chỉ chạy ở nơi code cho phép. Ngrok/proxy có thể trả lỗi ngoài backend nên không phải lúc nào cũng có trace.",
+    "output": "Thông báo lỗi an toàn, mã/trace nếu có và log gần nhất; hoặc kết quả dự phòng có cảnh báo nếu nhánh đó được phép. Trình duyệt không mặc nhiên biết server đã dừng khi mất mạng.",
+    "short": [
+      "FastAPI · budget/cancel · provider retry · HTTP",
+      "Output: lỗi / quá tải / timeout / hủy; không giả căn cứ"
+    ],
+    "ref": "src/vn_labor_online/api.py:error handlers; runtime.py; providers.py; frontend chatService.js",
+    "x": 40,
+    "y": 3990,
+    "width": 460,
+    "height": 280,
+    "rendered_bottom": 4191
+  },
+  {
+    "id": 30,
+    "title": "Nhật ký thực thi xuyên suốt",
+    "layer": "Runtime",
+    "tech": "Python ProgressLog/Trace; API tiến trình; React ExecutionLog; JSON.",
+    "processing": "Mỗi bước thực sự chạy ghi tên tầng, công nghệ, output tóm tắt, trạng thái và thời gian. Frontend lấy snapshot qua API cùng capability phiên; phản hồi cuối còn mang execution_steps. Bước bỏ qua ghi SKIPPED, không dựng như đã gọi model. Không công khai prompt/suy nghĩ nội bộ/API key; thời gian bước cha có thể gồm bước con nên không cộng mọi dòng.",
+    "output": "Bảng Tiến trình xử lý, log JSON tải được và Trace. Đây là dữ liệu quan sát, không là phép chứng minh kết luận luật đúng.",
+    "short": [
+      "Python · ProgressLog/Trace · API poll · React",
+      "Output: từng bước + output + thời gian + lỗi/bỏ qua",
+      "Luồng quan sát; không phải bước suy luận nối tiếp"
+    ],
+    "ref": "src/vn_labor_online/demo_progress.py; api.py:progress; frontend ExecutionLog.jsx",
+    "x": 40,
+    "y": 2070,
+    "width": 460,
+    "height": 310,
+    "rendered_bottom": 2295
+  }
+]
