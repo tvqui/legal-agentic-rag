@@ -1,0 +1,20 @@
+{
+  "source_zip_sha256": "03d4aff611026fe4e1be4b27d5522af3bc501c242d2be37b37dd871bf318b4ab",
+  "review_kind": "ENGINEERING_AND_REFERENCE_REVIEW_NOT_LEGAL_EXPERT_APPROVAL",
+  "question_notes": {
+    "TD003": {
+      "status_score_eligible": false,
+      "qa_judge_eligible": false,
+      "note": "Cần duyệt lại nhãn bắt buộc hỏi vùng/ngày. Ngày tra cứu đã được cung cấp. Nếu 6 triệu là lương công việc theo tháng cho đủ giờ bình thường thì cao hơn mức tối thiểu tháng cao nhất 5,31 triệu theo khoản 1 Điều 3 Nghị định 293/2025/NĐ-CP. Vùng không luôn là dữ kiện quyết định trong ví dụ số tiền này. Vẫn cần làm rõ thành phần lương/giờ làm, không đồng nhất đủ lương tối thiểu với mọi khía cạnh trả lương hợp pháp.",
+      "source": "https://xaydungchinhsach.chinhphu.vn/nghi-dinh-so-293-2025-nd-cp-quy-dinh-muc-luong-toi-thieu-doi-voi-nguoi-lao-dong-lam-viec-theo-hop-dong-lao-dong-119251110172808433.htm"
+    },
+    "HD007": {"note": "Đáp án quy tắc chung; khi đánh giá trường hợp cụ thể cần xét loại lao động/ngoại lệ, không diễn giải thành khẳng định vô điều kiện cho mọi người lao động."},
+    "TV004": {"note": "Giữ điều kiện loại trừ chức danh người quản lý doanh nghiệp; đáp án đã có điều kiện này."},
+    "NP005": {"note": "12 ngày là mức cơ bản của nhóm thông thường; cần cho phép câu trả lời nêu tuổi, khuyết tật, thâm niên khi thích hợp, không phạt một điều kiện đúng chỉ vì đáp án ngắn."},
+    "CD007": {"note": "Qrels hiện chỉ khoản 1 điểm a Điều 36; chưa bao trùm thời hạn báo trước và các trường hợp bảo vệ ở Điều 37. Đây là căn cứ tối thiểu, không phải danh sách đầy đủ để kiểm tra mọi điều kiện cho thôi việc."},
+    "TG009": {"note": "Nếu đánh giá đầy đủ thủ tục làm thêm tới 300 giờ/năm, còn phải kiểm tra điều kiện liên quan và khoản 4 Điều 107; qrels hiện không phải toàn bộ căn cứ thủ tục."},
+    "TD013": {"note": "Thiếu chứng cứ so với corpus đang đo; không gán thành sự thật vĩnh viễn rằng không có văn bản tương lai đã ban hành."},
+    "TD014": {"note": "Nhãn phụ thuộc ngày chốt/corpus. Muốn chấm lịch nghỉ thực tế phải đối chiếu quyết định áp dụng của năm tương ứng."},
+    "TD015": {"note": "Câu sửa luật giả định; cần từ chối dự báo chắc chắn. Không dùng làm bằng chứng hệ thống đã tra được một quy định tương lai."}
+  }
+}

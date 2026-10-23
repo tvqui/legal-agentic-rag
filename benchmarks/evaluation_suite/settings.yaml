@@ -1,0 +1,34 @@
+# All paths are resolved relative to the project root unless absolute.
+artifact: auto
+input_root: /kaggle/input
+base_config: config/online_kaggle.yaml
+labor_gold: gold_dataset/PhapDienAI_Gold_100_Labor_v0_1.zip
+labor_limit: null  # full candidate: 100 QA, 85 answerable retrieval questions
+labor_seed_date: '2026-10-23'  # fixed comparison date, not an implicit 'today'
+device: cuda:0
+repeats: 3
+qa_repeats: 1  # 500 labour QA attempts; separate from 3 retrieval repetitions
+k: 10
+retrieval_methods: [bm25, dense, hybrid, hybrid_graph]
+stage_timeout_seconds: 18000
+total_timeout_seconds: 36000
+case_timeout_seconds: 240
+judge:
+  enabled: true
+  model_env: GEMINI_EVAL_MODEL
+zalo:
+  repo: minhnguyent546/zalo-ai-legal-text-retrieval-2021
+  revision: main  # resolved and pinned to a commit in each run
+  qrels_split: test
+  limit: 100
+  batch_size: 8
+  max_length: 1024
+vlsp:
+  repo: VLSP2025-LegalSML/Public-Test
+  revision: main
+  subset: syllogism_questions
+  split: train  # HF public-test release calls its only split 'train'
+  limit: 50
+  selection: labor_keywords  # report exactly which questions were included
+  query_date: '2025-07-15'  # explicit adaptation assumption, NOT dataset truth
+  date_assumption: 'Assumed public-test release date; manually review time-sensitive labels.'
