@@ -4,7 +4,12 @@ import json
 def notebook():
     cells=[]
     def markdown(s):cells.append({'cell_type':'markdown','metadata':{},'source':s.splitlines(True)})
-    def code(s):cells.append({'cell_type':'code','execution_count':None,'metadata':{},'outputs':[],'source':s.splitlines(True)})
+    def code(s):
+        if s.startswith('from kaggle_secrets') or s.startswith('# Use GPU 1'):
+            import textwrap
+            fallback="OWN_OLLAMA=None;OLLAMA_LOG=None" if s.startswith('# Use GPU 1') else "print('No QA stage: Gemini secret/probe not required.',flush=True)"
+            s="if {'ablation','vlsp'} & set(STAGES):\n"+textwrap.indent(s,'    ')+"\nelse:\n    "+fallback+"\n"
+        cells.append({'cell_type':'code','execution_count':None,'metadata':{},'outputs':[],'source':s.splitlines(True)})
     markdown('''# Pháp Điển AI — bộ đánh giá thống nhất
 
 Một lần thiết lập: GPU T4 ×2, Internet bật, Add Input đúng một bộ kết quả OFFLINE,
@@ -17,10 +22,11 @@ Muốn đánh giá nghiên cứu, chọn `standard` và cung cấp Gold đã rà
 REPO_URL = "https://github.com/tvqui/legal-agentic-rag.git"
 ROOT = Path('/kaggle/working/legal-agentic-rag')
 WORK = Path('/kaggle/working/evaluation_work')
-PROFILE = 'smoke'  # 'standard' uses settings.yaml limits and three repetitions
+PROFILE = 'smoke'  # set 'standard' after smoke succeeds
+RESUME_EVALUATION_ZIP = None  # e.g. '/kaggle/input/old-run/evaluation_...zip'; same code/data/settings required  # 'standard' uses settings.yaml limits and three repetitions
 ARTIFACT = 'auto'  # or a precise /kaggle/input/.../artifacts path
 LABOR_GOLD = 'gold_dataset/PhapDienAI_Gold_100_Labor_v0_1.zip'  # reads ZIP directly
-STAGES = ['retrieval','ablation','zalo','vlsp']  # may run groups separately
+STAGES = ['retrieval','zalo','ablation','vlsp']  # may run groups separately
 GEMINI_MODEL = 'gemini-3.1-flash-lite'
 EVALUATION_MODEL = GEMINI_MODEL  # records the actual AI judge model
 RESEARCHER_PROVIDER = 'gemini'  # change explicitly if comparing another setup
@@ -55,6 +61,8 @@ PYTHON=str(VENV/'bin/python')
 run([sys.executable,'-m','pip','--python',PYTHON,'install','--disable-pip-version-check',
     '-q','-c',str(constraint_file),'-e',str(ROOT)+'[retrieval,online]','datasets'])
 run([PYTHON,'-c','import torch,FlagEmbedding,faiss,datasets; assert torch.cuda.is_available(); print("CUDA dependencies ready:",torch.cuda.device_count())'])
+if not (ROOT/'benchmarks/evaluation_suite/protocol.py').exists() or 'labor-evaluation-v2-20261028' not in (ROOT/'benchmarks/evaluation_suite/protocol.py').read_text(encoding='utf-8'):
+    raise RuntimeError('Push evaluation suite v2 before running this notebook.')
 if not (ROOT/'benchmarks/evaluation_suite/suite.py').exists():
     raise RuntimeError('Push the evaluation_suite folder to GitHub before Run All.')
 ''')
@@ -123,17 +131,32 @@ if PROFILE=='smoke':
 elif PROFILE!='standard':raise ValueError('Unknown profile')
 settings_path=WORK/'settings.yaml'
 settings_path.write_text(yaml.safe_dump(settings,allow_unicode=True),encoding='utf-8')
-OUTPUT=Path('/kaggle/working')/('evaluation_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
+run([PYTHON,'-u','benchmarks/evaluation_suite/preflight_external.py','--settings',str(settings_path),
+     '--output',str(WORK/'external_preflight'),'--stages',*STAGES],cwd=ROOT,timeout=900)
+resume_args=[]
+if RESUME_EVALUATION_ZIP:
+    import importlib.util
+    spec=importlib.util.spec_from_file_location('evaluation_restore',ROOT/'benchmarks/evaluation_suite/resume.py')
+    restore_module=importlib.util.module_from_spec(spec);spec.loader.exec_module(restore_module)
+    OUTPUT=WORK/'restored_run'
+    restore_module.restore(RESUME_EVALUATION_ZIP,OUTPUT)
+    frozen=json.loads((OUTPUT/'settings_resolved.json').read_text(encoding='utf-8'))
+    # Keep every score-affecting setting. Paths must resolve to the same input; suite checks hashes.
+    settings=frozen
+    settings_path.write_text(yaml.safe_dump(settings,allow_unicode=True),encoding='utf-8')
+    resume_args=['--resume']
+else:
+    OUTPUT=Path('/kaggle/working')/('evaluation_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
 try:
     result=subprocess.run([PYTHON,'-u','benchmarks/evaluation_suite/suite.py','run',
-        '--settings',str(settings_path),'--output',str(OUTPUT),'--stages',*STAGES],cwd=ROOT)
+        '--settings',str(settings_path),'--output',str(OUTPUT),'--stages',*STAGES,*resume_args],cwd=ROOT)
     print('Suite exit code:',result.returncode,flush=True)
 finally:
     if OWN_OLLAMA is not None and OWN_OLLAMA.poll() is None:
         OWN_OLLAMA.terminate()
         try:OWN_OLLAMA.wait(timeout=15)
         except subprocess.TimeoutExpired:OWN_OLLAMA.kill();OWN_OLLAMA.wait(timeout=10)
-    OLLAMA_LOG.close()
+    if OLLAMA_LOG is not None:OLLAMA_LOG.close()
 ''')
     code('''from IPython.display import display,FileLink,Markdown
 table=OUTPUT/'comparison_tables.md'
@@ -150,4 +173,17 @@ for file in [OUTPUT/'comparison_tables.md',OUTPUT/'comparison_tables.csv',OUTPUT
 if __name__=='__main__':
     path=Path(__file__).with_name('Kaggle_Evaluation.ipynb')
     path.write_text(json.dumps(notebook(),ensure_ascii=False,indent=1),encoding='utf-8')
-    print(path)
+    import copy,hashlib
+    standard=copy.deepcopy(notebook())
+    standard['cells'][0]['source'].insert(0,'# STANDARD — chạy sau khi smoke đã đạt\n\n')
+    for cell in standard['cells']:
+        if cell['cell_type']=='code':
+            code=''.join(cell['source']).replace("PROFILE = 'smoke'","PROFILE = 'standard'")
+            compile(code,'standard-notebook','exec');cell['source']=code.splitlines(True)
+    standard_path=path.with_name('Kaggle_Evaluation_Standard.ipynb')
+    standard_path.write_text(json.dumps(standard,ensure_ascii=False,indent=1),encoding='utf-8')
+    for candidate in (path,standard_path):
+        for cell in json.loads(candidate.read_text(encoding='utf-8'))['cells']:
+            if cell['cell_type']=='code':compile(''.join(cell['source']),'evaluation-cell','exec')
+        Path(str(candidate)+'.sha256').write_text(hashlib.sha256(candidate.read_bytes()).hexdigest()+'  '+candidate.name+'\n',encoding='ascii')
+    print(path);print(standard_path)

@@ -108,8 +108,8 @@ class GoldTests(unittest.TestCase):
     def test_gold_labels_are_only_judge_data_never_user_facts(self):
         # Production gets only question/date and genuine facts. Answers/missing
         # fact labels must never leak into QueryRequest as hints or overrides.
-        import qa
-        source=Path(qa.__file__).read_text(encoding='utf-8')
+        import qa_worker
+        source=Path(qa_worker.__file__).read_text(encoding='utf-8')
         query=source[source.index('response=pipe.ask('):source.index('record.update(answer=')]
         self.assertNotIn('reference_answer',query);self.assertNotIn('expected_status',query)
         self.assertNotIn('missing_facts',query)

@@ -202,11 +202,6 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_FULL_12_MONTH_RULE'])
             elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='UNKNOWN',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['SPECIAL_OCCUPATION_NOT_ESTABLISHED'])
-            elif requested_outcome!='LOOKUP' and covered and profile_groups and not any(
-              locator_matches(item,locator) for groups in profile_groups.values() for alternatives in groups for locator in alternatives):
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
-                  conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
-                  reasons=['PROFILE_LOCATION_MISMATCH'])
             elif employee_termination and document=='10/2012/QH13' and facts.get('contract_type')=='INDEFINITE' and requested_outcome!='ASSESS_LEGALITY' and (
               article=='37' and item.clause_number=='3' and '45 ngay' in folded or article=='156'):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
@@ -258,7 +253,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_PROFILE_RULE'])
             elif not matched:
-                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['ISSUE_OR_QUERY_MISMATCH'])
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='UNRESOLVED',reasons=['ISSUE_OR_QUERY_MISMATCH'])
             elif requested_outcome=='LOOKUP' and (item.retrieval_method in {'exact','exact_hierarchy'} or any(key in item.component_scores for key in ('exact','exact_hierarchy'))):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',reasons=['DETERMINISTIC_EXACT_LOOKUP'])
             else:
@@ -268,6 +263,16 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=False,conditions_status=conditions,
                   exception_status=exceptions,audit_status='UNRESOLVED',
                   reasons=['SEMANTIC_SUPPORT_REQUIRES_AUDIT'])
+            # A profile is an incomplete retrieval guide, not a proof that all
+            # other provisions are inapplicable. Keep actual fact/taxonomy
+            # contradictions above as FAIL; let the hybrid auditor examine
+            # off-profile candidates without treating the heuristic as PASS.
+            profile_mismatch=(requested_outcome!='LOOKUP' and covered and profile_groups and not any(
+              locator_matches(item,locator) for groups in profile_groups.values() for alternatives in groups for locator in alternatives))
+            if profile_mismatch and decision.audit_status!='FAIL':
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
+                  conditions_status='UNKNOWN',exception_status='UNKNOWN',audit_status='UNRESOLVED',
+                  reasons=['PROFILE_LOCATION_MISMATCH'])
             decisions.append(decision)
         accepted=[item for item in items if next(x for x in decisions if x.evidence_id==item.unit_id).audit_status=='PASS']
         warnings=['APPLICABILITY_UNRESOLVED:'+x.evidence_id for x in decisions if x.audit_status=='UNRESOLVED']

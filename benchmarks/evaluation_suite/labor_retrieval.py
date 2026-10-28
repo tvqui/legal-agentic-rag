@@ -4,7 +4,8 @@ import argparse,csv,hashlib,json,math,statistics,sys,time
 from datetime import date,datetime,timezone
 from pathlib import Path
 
-METHODS=('bm25','dense','hybrid','hybrid_graph')
+METHODS=('bm25','dense','hybrid','hybrid_rerank','hybrid_graph','hybrid_graph_rerank')
+from protocol import VERSION,DEFAULT_KS,context_metrics,validate_annotation,query_macro,bootstrap_ci,paired_delta
 
 def digest(path):
     h=hashlib.sha256()
@@ -105,19 +106,22 @@ def prepare(args):
 def retrieve(method,row,retriever,graph,cfg):
     from vn_labor_online.retrieval import temporal_filter,authority_filter
     query=row['question'];channels=[]
-    if method in ('bm25','hybrid','hybrid_graph'):channels.append(retriever.bm25(query))
-    if method in ('dense','hybrid','hybrid_graph'):channels.append(retriever.dense(query))
+    if method=='bm25' or method.startswith('hybrid'):channels.append(retriever.bm25(query))
+    if method=='dense' or method.startswith('hybrid'):channels.append(retriever.dense(query))
     items=channels[0] if len(channels)==1 else retriever.fusion(channels)
     def filter_items(values):
         values,_=temporal_filter(values,row['query_date'],strict=False)
         values,_=authority_filter(values,strict=False)
         return values
     items=filter_items(items);stats={}
-    if method=='hybrid_graph':
+    if method.startswith('hybrid_graph'):
         seeds=items[:5]
         added,stats=graph.expand(seeds,[],query)
         items=retriever.fusion([items,filter_items(added)]) if added else items
         stats['new_candidate_ids']=[e.unit_id for e in added]
+    if method.endswith('_rerank'):
+        cfg.reranker.enabled=True
+        items=retriever.neural_rerank(items,query)
     return items,stats
 
 def summarize(output,manifest,records):
@@ -127,13 +131,34 @@ def summarize(output,manifest,records):
         values=[r['elapsed_ms'] for r in good]
         summary={'attempts':len(rows),'successful_attempts':len(good),'errors':len(rows)-len(good)}
         for key in ['group_recall_at_k','novel_group_precision_at_k','mrr_at_k','group_ndcg_at_k','all_groups_found']:
-            summary[key]=statistics.mean(r['metrics'][key] for r in good) if good else None
+            summary[key]=statistics.mean(query_macro(good,lambda r:r['metrics'][key]).values()) if good else None
         for key,fn in [('min_ms',min),('max_ms',max),('mean_ms',statistics.mean),('median_ms',statistics.median)]:
             summary[key]=fn(values) if values else None
         summary['p95_ms']=sorted(values)[math.ceil(.95*len(values))-1] if values else None
         report['variants'][method]=summary
     report['complete']=len(records)==manifest['queries']*manifest['repeats']*len(manifest['methods'])
     report['all_attempts_succeeded']=report['complete'] and all(r['status']=='OK' for r in records)
+    cutoffs=manifest.get('cutoffs',[manifest.get('k',10)])
+    multi={}
+    def interval(values):
+        values=list(values)
+        if report['complete']:return bootstrap_ci(values)
+        return {'mean':statistics.mean(values) if values else None,'n_queries':len(values),'ci95_low':None,'ci95_high':None}
+    for method in manifest['methods']:
+        good=[r for r in records if r['method']==method and r['status']=='OK']
+        report['variants'][method]['unique_queries']=len({r['id'] for r in good})
+        report['variants'][method]['context_annotation_queries']=len({r['id'] for r in good if r.get('context',{}).get('fact_coverage') is not None})
+        for key in ('context_units','context_chars','estimated_context_tokens','fact_coverage','evidence_precision'):
+            vals=query_macro(good,lambda r:r.get('context',{}).get(key))
+            report['variants'][method][key]=statistics.mean(vals.values()) if vals else None
+        multi[method]={}
+        for k in cutoffs:
+            multi[method][str(k)]={key:interval(query_macro(good,lambda r:r.get('metrics_by_k',{}).get(str(k),r.get('metrics',{}) if k==manifest.get('k') else {}).get(key)).values())
+                for key in ('group_recall_at_k','novel_group_precision_at_k','mrr_at_k','group_ndcg_at_k','all_groups_found')}
+        report['variants'][method]['recall_query_ci95']=multi[method].get(str(manifest.get('k',10)),{}).get('group_recall_at_k')
+    report['metrics_by_k']=multi
+    report['paired_deltas_vs_hybrid']={method:paired_delta(records,method,'hybrid',lambda r:r.get('metrics',{}).get('group_recall_at_k'),'method')
+        for method in manifest['methods'] if method!='hybrid'} if report['complete'] and 'hybrid' in manifest['methods'] else {}
     write(output/'summary.json',report)
     lines=['# So sánh truy xuất','',f"Trạng thái nhãn: {manifest['label_status']}",
        'Phạm vi: chỉ truy xuất; không chấm độ đúng pháp lý của câu trả lời.','',
@@ -151,9 +176,47 @@ def summarize(output,manifest,records):
         for row in records:writer.writerow({k:v for k,v in {**row,**row.get('metrics',{})}.items() if k in fields})
     return report
 
+def sync_device(device):
+    if str(device).startswith('cuda'):
+        import torch
+        torch.cuda.synchronize(device)
+
+
+def pin_models(cfg,store,methods,cache):
+    from huggingface_hub import HfApi,snapshot_download
+    pins={}
+    if any(m!='bm25' for m in methods):
+        repo=store.dense_report.get('model') or cfg.embedding_model
+        revision=store.dense_report.get('model_revision')
+        if not revision:raise ValueError('Dense artifact missing model_revision; cannot ensure matching embeddings')
+        cfg.embedding_model=repo
+        cfg.embedding_model_path=snapshot_download(repo,revision=revision,cache_dir=str(Path(cache)/'model_pins'))
+        pins['embedding']={'repo':repo,'revision':revision}
+    if any(m.endswith('_rerank') for m in methods):
+        repo=cfg.reranker.model
+        from external import pin_model_revision
+        revision=pin_model_revision(repo,cache)
+        cfg.reranker.model_path=snapshot_download(repo,revision=revision,cache_dir=str(Path(cache)/'model_pins'))
+        cfg.reranker.device=cfg.embedding_device;cfg.reranker.use_fp16=cfg.embedding_use_fp16
+        cfg.reranker.top_n=60
+        pins['reranker']={'repo':repo,'revision':revision}
+    return pins
+
+
 def run(args):
     cfg,store,retriever,fp,hashes=runtime(args.artifact,args.cache,args.device)
     gold=load_rows(args.gold);validate_gold(gold,store,fp)
+    ks=sorted(set(getattr(args,'ks',None) or [args.k]))
+    if args.k not in ks:ks.append(args.k);ks.sort()
+    if min(ks)<1 or max(ks)>30:raise ValueError('Cutoffs must be 1..30 within fixed candidate pool')
+    annotations={}
+    annotation_path=getattr(args,'evidence_annotations',None)
+    if annotation_path:
+        for annotation in load_rows(annotation_path):
+            validate_annotation(annotation,store.units_by_id,fp)
+            annotations[annotation['id']]=annotation
+        if set(annotations)-{r['id'] for r in gold}:raise ValueError('Evidence annotations contain unknown query IDs')
+
     from vn_labor_online.graph import GraphExplorer
     from vn_labor_online.runtime import request_budget
     graph=GraphExplorer(store,cfg.graph)
@@ -162,7 +225,10 @@ def run(args):
     out.mkdir(parents=True,exist_ok=True)
     approved=all(r.get('review_status')=='APPROVED' and r.get('reviewer') and r.get('reviewed_at') for r in gold)
     manifest={'label_status':'REVIEWED_LABELS' if approved else 'PROVISIONAL_DRAFT_GOLD',
-        'scope':'retrieval_only_no_llm_no_reranker_no_policy_or_exact_anchors',
+        'scope':'retrieval_only_optional_cross_encoder_no_llm_no_gold_at_inference',
+        'protocol_version':VERSION,'cutoffs':ks,
+        'annotation_queries':len(annotations),'annotation_status':'PARTIAL' if annotations and len(annotations)<len(gold) else 'AVAILABLE' if annotations else 'NOT_ANNOTATED',
+        'token_estimator':'ceil(sum(context_source_chars)/4); NOT tokenizer tokens',
         'methods':args.methods,'queries':len(gold),'repeats':args.repeats,'k':args.k,
         'corpus_fingerprint':fp,'file_hashes':hashes,'archive_sha256':store.archive_sha256,
         'gold_sha256':digest(args.gold),'runner_sha256':digest(__file__),
@@ -178,6 +244,7 @@ def run(args):
     for name in ['bm25s','numpy','faiss-cpu','faiss-gpu','FlagEmbedding','torch']:
         try:manifest['dependencies'][name]=importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:pass
+    manifest['model_pins']=pin_models(cfg,store,args.methods,args.cache)
     records=[];write(out/'manifest.json',manifest)
     try:
         # Warm up every selected variant; errors stop, never silently drop Dense.
@@ -196,14 +263,21 @@ def run(args):
                     for method in order:
                         result={'id':row['id'],'question':row['question'],'query_date':row['query_date'],
                             'method':method,'repeat':repeat+1,'status':'OK'}
+                        sync_device(args.device)
                         started=time.perf_counter()
                         try:
                             with request_budget(180):items,stats=retrieve(method,row,retriever,graph,cfg)
+                            sync_device(args.device)
+                            result['elapsed_ms']=round((time.perf_counter()-started)*1000,3)
                             ids=[item.unit_id for item in items[:args.k]]
-                            result.update(candidate_ids=ids,graph_stats=stats,metrics=metrics(ids,row['required_groups'],args.k))
+                            result.update(candidate_ids=[item.unit_id for item in items[:max(ks)]],graph_stats=stats,
+                                metrics=metrics(ids,row['required_groups'],args.k),
+                                metrics_by_k={str(k):metrics([item.unit_id for item in items[:k]],row['required_groups'],k) for k in ks},
+                                context=context_metrics([store.units_by_id[uid] for uid in ids],annotations.get(row['id'])))
+                            sync_device(args.device)
                         except Exception as exc:
                             result.update(status='ERROR',error=type(exc).__name__+': '+str(exc))
-                        result['elapsed_ms']=round((time.perf_counter()-started)*1000,3)
+                        result.setdefault('elapsed_ms',round((time.perf_counter()-started)*1000,3))
                         records.append(result);f.write(json.dumps(result,ensure_ascii=False)+'\n');f.flush()
                         print(f"{len(records)} {row['id']} {method} {result['status']} {result['elapsed_ms']} ms",flush=True)
                         summarize(out,manifest,records)
@@ -226,6 +300,8 @@ def main():
     parser.add_argument('--methods',nargs='+',choices=METHODS,default=list(METHODS))
     parser.add_argument('--repeats',type=int,default=3)
     parser.add_argument('--k',type=int,default=10)
+    parser.add_argument('--ks',nargs='+',type=int)
+    parser.add_argument('--evidence-annotations')
     args=parser.parse_args()
     if args.repeats<1 or args.k<1 or len(args.methods)!=len(set(args.methods)):parser.error('Positive k/repeats and unique methods required')
     return prepare(args) if args.action=='prepare' else run(args)

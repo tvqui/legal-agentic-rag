@@ -31,7 +31,15 @@ def extend_plan_for_evidence(plan:EvidencePlan,items:list[Evidence],facts:dict,q
     from .temporal import requires_transition_rule
     if requires_transition_rule(facts.get('contract_start_year'),query_date) and 'transitional_rule' not in mandatory:
         mandatory.append('transitional_rule')
-    return plan.model_copy(update={'mandatory_slots':mandatory})
+    from .exception_references import exception_locators
+    requirements={key:list(groups) for key,groups in plan.slot_requirements.items()}
+    for item in items:
+        if not item.verified: continue
+        for locator in exception_locators(item):
+            groups=requirements.setdefault('exceptions',[])
+            if not any(locator in group for group in groups): groups.append([locator])
+            if 'exceptions' not in mandatory: mandatory.append('exceptions')
+    return plan.model_copy(update={'mandatory_slots':mandatory,'slot_requirements':requirements})
 
 def _texts(items:list[Evidence],needles:tuple[str,...])->list[str]:
     return [x.unit_id for x in items if any(n in ' '.join(' '.join(y.split()) for y in (x.text,x.source_text,x.breadcrumb) if y).lower() for n in needles)]

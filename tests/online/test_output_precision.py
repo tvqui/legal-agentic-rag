@@ -209,6 +209,7 @@ class OutputPrecisionTests(unittest.TestCase):
             engine.store=SimpleNamespace(report=SimpleNamespace(build_id='test',provisional_reasons=[]))
             engine.researcher=LegalResearcher(ResearcherConfig())
             engine.retriever=Mock(); engine.retriever.policy_anchor.return_value=items
+            engine.retriever.exception_context.return_value=([],{'explicit_exception_references':0,'added':0})
             engine.retriever.resolve_article_plan.side_effect=lambda plan,*dates:(plan,[])
             engine.applicability=LegalApplicabilityAuditor(ApplicabilityConfig())
             engine.adjudicator=Mock(); engine.graph=Mock()
@@ -239,6 +240,7 @@ class SemanticPipelineGuards(unittest.TestCase):
             engine.store=SimpleNamespace(report=SimpleNamespace(build_id='test',provisional_reasons=[]))
             engine.researcher=LegalResearcher(ResearcherConfig())
             engine.retriever=Mock(); engine.retriever.policy_anchor.return_value=items
+            engine.retriever.exception_context.return_value=([],{'explicit_exception_references':0,'added':0})
             engine.retriever.resolve_article_plan.side_effect=lambda plan,*dates:(plan,[])
             engine.applicability=LegalApplicabilityAuditor(ApplicabilityConfig())
             engine.adjudicator=Mock(); engine.graph=Mock()

@@ -17,7 +17,9 @@ def pin(repo,revision,cache):
     path=pins/(hashlib.sha256((repo+revision).encode()).hexdigest()+'.json')
     if path.exists():return read(path)
     info=HfApi().dataset_info(repo,revision=revision)
-    meta={'repo':repo,'revision':info.sha,'license':dict(info.card_data or {}).get('license'),
+    card=info.card_data
+    card=card.to_dict() if hasattr(card,'to_dict') else card if isinstance(card,dict) else {}
+    meta={'repo':repo,'revision':info.sha,'license':card.get('license'),
         'source':'https://huggingface.co/datasets/'+repo,'cache_dir':str(cache)}
     save(path,meta);return meta
 
@@ -105,10 +107,12 @@ def run_zalo(run_dir,settings):
     import numpy as np,bm25s,faiss
     from FlagEmbedding import BGEM3FlagModel
     from huggingface_hub import HfApi,snapshot_download
+    from labor_retrieval import sync_device
+    from protocol import percentile,query_macro,bootstrap_ci
     out=Path(run_dir)/'zalo';docs=jsonl(out/'corpus.jsonl');queries=jsonl(out/'questions.jsonl')
     cfg=settings['zalo'];source=read(out/'source.json')
     # Keep the external corpus separate from labour-law artifacts and models.
-    repo='BAAI/bge-m3';revision=HfApi().model_info(repo).sha
+    repo='BAAI/bge-m3';revision=pin_model_revision(repo,settings['cache'])
     model_path=snapshot_download(repo,revision=revision,cache_dir=str(Path(settings['cache'])/'hf_models'))
     model=BGEM3FlagModel(model_path,use_fp16=settings['device']!='cpu',devices=settings['device'])
     texts=[r['text'] for r in docs];ids=[r['id'] for r in docs]
@@ -138,12 +142,12 @@ def run_zalo(run_dir,settings):
         channels=[]
         if method in ('bm25','hybrid'):
             tokens=bm25s.tokenize([question.lower()],stopwords=None,stemmer=None)
-            positions,_=lexical.retrieve(tokens,k=min(30,len(docs)))
+            positions,_=lexical.retrieve(tokens,k=min(max(30,settings['k']),len(docs)))
             channels.append([ids[int(i)] for i in positions[0]])
         if method in ('dense','hybrid'):
             v=np.asarray(model.encode([question],batch_size=1,max_length=cfg['max_length'],return_dense=True,
                 return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
-            faiss.normalize_L2(v);_,positions=index.search(v,min(30,len(docs)))
+            faiss.normalize_L2(v);_,positions=index.search(v,min(max(30,settings['k']),len(docs)))
             channels.append([ids[int(i)] for i in positions[0] if i>=0])
         return channels[0] if len(channels)==1 else rrf(channels)
     for method in ('bm25','dense','hybrid'):search(method,queries[0]['question'])
@@ -151,15 +155,27 @@ def run_zalo(run_dir,settings):
         for repeat in range(settings['repeats']):
             for q in queries:
                 for method in ('bm25','dense','hybrid'):
-                    started=time.perf_counter();ranked=search(method,q['question'])
+                    sync_device(settings['device']);started=time.perf_counter();ranked=search(method,q['question']);sync_device(settings['device'])
                     row={'id':q['id'],'question':q['question'],'method':method,'repeat':repeat+1,'status':'OK',
                       'elapsed_ms':(time.perf_counter()-started)*1000,'top_ids':ranked[:settings['k']],
+                      'metrics_by_k':{str(k):ir_metrics(ranked,q['relevant_ids'],k) for k in settings.get('ks',[settings['k']])},
                       **ir_metrics(ranked,q['relevant_ids'],settings['k'])}
                     records.append(row);f.write(json.dumps(row,ensure_ascii=False)+'\n');f.flush()
                 for method in ('bm25','dense','hybrid'):
                     values=[r for r in records if r['method']==method]
                     summary['methods'][method]={key:mean([r[key] for r in values]) for key in ['recall_at_k','precision_at_k','mrr_at_k','ndcg_at_k','elapsed_ms']}
-                    summary['methods'][method]['attempts']=len(values)
+                    summary['methods'][method].update(attempts=len(values),unique_queries=len({r['id'] for r in values}),p95_ms=percentile([r['elapsed_ms'] for r in values],.95))
                 summary['complete']=len(records)==summary['expected_attempts'];save(out/'summary.json',summary)
                 print(f'ZALO_QUERY {repeat+1} {q["id"]}',flush=True)
+    summary['metrics_by_k']={method:{str(k):{metric:bootstrap_ci(query_macro([r for r in records if r['method']==method],lambda r:r['metrics_by_k'][str(k)][metric]).values()) for metric in ('recall_at_k','precision_at_k','mrr_at_k','ndcg_at_k')} for k in settings.get('ks',[settings['k']])} for method in ('bm25','dense','hybrid')}
+    save(out/'summary.json',summary)
     return summary
+
+
+def pin_model_revision(repo,cache):
+    from huggingface_hub import HfApi
+    path=Path(cache)/'evaluation_pins'/('model_'+hashlib.sha256(repo.encode()).hexdigest()+'.json')
+    if path.exists():return read(path)['revision']
+    revision=HfApi().model_info(repo).sha
+    save(path,{'repo':repo,'revision':revision})
+    return revision

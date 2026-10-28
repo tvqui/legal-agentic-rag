@@ -161,5 +161,6 @@ def status_comparison(expected,actual):
     # Actual dispositions alone NEVER establish substantive legal correctness.
     if not expected:return None
     acceptable={'ANSWERABLE':{'SUFFICIENT'},'NEED_MORE_FACTS':{'NEED_MORE_FACTS'},
-                'INSUFFICIENT_EVIDENCE':{'INSUFFICIENT_EVIDENCE','ABSTAIN'}}
-    return actual in acceptable[expected]
+                'INSUFFICIENT_EVIDENCE':{'INSUFFICIENT_EVIDENCE','ABSTAIN'},
+                'ABSTAIN':{'ABSTAIN'},'OUT_OF_SCOPE':{'ABSTAIN'}}
+    return actual in acceptable[expected] if expected in acceptable else None

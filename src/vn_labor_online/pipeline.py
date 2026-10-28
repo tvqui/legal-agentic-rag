@@ -289,6 +289,13 @@ class OnlinePipeline:
           'dense_requested':self.cfg.retrieval.dense_enabled and not (exact_only or profile_only),
           'reranker_requested':self.cfg.reranker.enabled and not (exact_only or profile_only)})
         items=rerank(items,self.cfg)
+        if self.cfg.retrieval.exception_context_top_k:
+            context,context_report=observed('exact',self.retriever.exception_context,items,self.cfg.retrieval.exception_context_top_k,
+              technology='Python · định vị ngoại lệ được nguồn dẫn chiếu',summary=lambda r:r[1])
+            context,context_removed=temporal_filter(context,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
+            context,context_authority_removed=authority_filter(context,strict=not self.cfg.provisional_mode)
+            items+=context; removed+=context_removed; authority_removed+=context_authority_removed
+            trace.events.append({'event':'explicit_exception_context',**context_report,'retained':len(context)})
         trace.timings_ms['seed_retrieval']=round((time.perf_counter()-stage)*1000,2)
         audit_started=time.perf_counter()
         audited=observed('source_audit',deterministic_audit,self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end,summary=lambda v:{'vuot_kiem_tra_may':sum(x.verified for x in v),'co_loi_cung':sum(not x.verified for x in v),'so_nguon_co_canh_bao':sum(bool(x.audit_warnings) for x in v)},status=lambda v:'WARNING' if any(x.audit_warnings or not x.verified for x in v) else 'DONE')
@@ -300,8 +307,10 @@ class OnlinePipeline:
         trace.timings_ms['applicability_audit']=round((time.perf_counter()-applicability_started)*1000,2)
         warnings+=app_warnings
         extended_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
-        if extended_plan.mandatory_slots!=plan.mandatory_slots:
+        if extended_plan!=plan:
             plan=extended_plan
+            plan,context_notes=self.retriever.resolve_article_plan(plan,analysis.query_date,analysis.query_date_end)
+            analysis=analysis.model_copy(update={'resolved_rule_requirements':plan.slot_requirements})
             trace.events.append({'event':'evidence_plan_extended','mandatory_slots':plan.mandatory_slots})
         state=observed('coverage',state_for,verified,plan,analysis.query_date,allow_fallback,summary=lambda v:{'coverage':v.coverage,'o_con_thieu':v.gaps},status=lambda v:'WARNING' if v.gaps else 'DONE')
         trace.timings_ms['seed_retrieval_and_audit']=round((time.perf_counter()-stage)*1000,2)
@@ -342,6 +351,10 @@ class OnlinePipeline:
                     expanded,round_decisions,round_warnings=observed('auditor',self.applicability.audit,[x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,summary=audit_summary)
                     decisions+=round_decisions; warnings+=round_warnings
                     verified=rerank(list({x.unit_id:x for x in verified+expanded}.values()),self.cfg)
+                    next_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
+                    if next_plan!=plan:
+                        plan,_=self.retriever.resolve_article_plan(next_plan,analysis.query_date,analysis.query_date_end)
+                        analysis=analysis.model_copy(update={'resolved_rule_requirements':plan.slot_requirements})
                     state=state_for(verified,plan,analysis.query_date,allow_fallback)
                 trace.evidence_gaps.append({'round':round_no,'missing':state.gaps,'coverage':state.coverage})
                 trace.graph_round_details.append({'round':round_no,'frontier':len(frontier),'added':round_stats['nodes_added'],

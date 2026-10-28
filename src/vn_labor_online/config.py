@@ -10,6 +10,7 @@ class StrictModel(BaseModel):
 
 class RetrievalConfig(StrictModel):
     profile_fast_path:bool=True
+    exception_context_top_k:int=Field(8,ge=0,le=32)
     exact_lookup:bool=True; bm25_enabled:bool=True; bm25_top_k:int=Field(30,ge=1); dense_enabled:bool=True
     dense_top_k:int=Field(30,ge=1); issue_anchor_enabled:bool=True; issue_anchor_top_k:int=Field(20,ge=1)
     case_law_enabled:bool=True; case_law_top_k:int=Field(10,ge=1)

@@ -65,9 +65,11 @@ def score_judge(question,reference,answer,citations,settings):
         return {'status':'AI_JUDGED','model':model,**raw}
     except Exception as exc:
         # Provider exception messages can contain endpoint/key details.
-        return {'status':'ERROR','error_type':type(exc).__name__}
+        from protocol import safe_failure
+        return {'status':'ERROR',**safe_failure(exc)}
 
-def answer_summary(records):
+def answer_summary(records,include_ci=False):
+    from protocol import qa_protocol_summary
     good=[r for r in records if r['status']=='OK']
     judged=[r['judge'] for r in good if r.get('judge',{}).get('status')=='AI_JUDGED']
     labelled=[r for r in records if r.get('expected_status') and r.get('status_score_eligible',True)]
@@ -86,4 +88,4 @@ def answer_summary(records):
       'ai_completeness':mean([r['completeness'] for r in judged]),
       'ai_evidence_support':mean([r['evidence_support'] for r in judged]),
       'reference_id_audit_pass_rate':mean([r.get('reference_audit')=='PASS' for r in good]),
-      **latency(good)}
+      **latency(good),**qa_protocol_summary(records,include_ci)}

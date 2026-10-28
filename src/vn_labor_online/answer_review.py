@@ -195,6 +195,61 @@ def accounting_schema(model, claim_ids=(), task_ids=()):
     return schema
 
 
+KEYED_ACCOUNTING_INSTRUCTION=(' For this decoder contract, claims and coverage (when requested) are objects keyed by the exact required IDs. '
+    'Include each required key once; do not repeat claim_id or task_id inside its value. All source quotations and verdict requirements remain unchanged.')
+
+
+def reviewer_call(provider, system, payload, schema):
+    """Constrain accounting by object keys before inference, then validate locally.
+
+    Array length and enum do not prevent duplicate IDs. A fixed required-key
+    object removes that decoder choice without relaxing quotations, semantic
+    guards, task dependencies or the existing number of review attempts.
+    Legacy arrays still pass through the same strict local validator.
+    """
+    from copy import deepcopy
+    wire=deepcopy(schema)
+    expected={}
+    claim_sources={c['claim_id']:c.get('evidence_ids',[]) for c in payload.get('claims',[])}
+    allowed_claims=list(claim_sources) or [c['claim_id'] for c in payload.get('checked_claims',[])]
+    for field,definition,identifier in (
+        ('claims','ClaimVerdict','claim_id'),('coverage','CoverageVerdict','task_id')):
+        if field not in wire.get('properties',{}): continue
+        if field=='claims': ids=list(payload.get('required_claim_ids',[]))
+        else: ids=list(payload.get('required_task_ids',[]))
+        expected[field]=(ids,identifier)
+        properties={}
+        for uid in ids:
+            entry=deepcopy(wire['$defs'][definition])
+            entry['properties'].pop(identifier,None)
+            entry['required']=[key for key in entry.get('required',[]) if key!=identifier]
+            if field=='claims':
+                grounding=deepcopy(wire['$defs']['Grounding'])
+                if claim_sources.get(uid): grounding['properties']['evidence_id']['enum']=claim_sources[uid]
+                entry['properties']['grounding']['items']=grounding
+            elif allowed_claims:
+                entry['properties']['claim_ids']['items']={'type':'string','enum':allowed_claims}
+            properties[uid]=entry
+        wire['properties'][field]={'type':'object','properties':properties,'required':ids,'additionalProperties':False}
+    instructions=system+KEYED_ACCOUNTING_INSTRUCTION
+    raw=provider.structured(instructions,json.dumps(payload,ensure_ascii=False),wire)
+    if not isinstance(raw,dict): raise StructuredOutputError('REVIEW_NON_OBJECT')
+    result=deepcopy(raw)
+    for field,(ids,identifier) in expected.items():
+        values=result.get(field)
+        if not isinstance(values,dict): continue  # Legacy shape: local validator checks it fully.
+        if set(values)!=set(ids):
+            raise StructuredOutputError('semantic review must judge each claim exactly once' if field=='claims'
+              else 'semantic review task accounting mismatch')
+        result[field]=[]
+        for uid in ids:
+            value=values[uid]
+            if not isinstance(value,dict) or identifier in value:
+                raise StructuredOutputError('REVIEW_KEYED_VALUE_INVALID')
+            result[field].append({**value,identifier:uid})
+    return result
+
+
 def audit_in_batches(provider, payload, draft, pack, tasks):
     """Keep full sources for entailment; do not enlarge or truncate the window.
 
@@ -207,10 +262,10 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
     payload={**payload,'required_claim_ids':[c.claim_id for c in draft.claims],
         'required_task_ids':[t.task_id for t in tasks]}
     encoded=json.dumps(payload,ensure_ascii=False)
-    context_overflow=isinstance(budget,int) and len((SYSTEM+encoded).encode())+output+256>budget
+    context_overflow=isinstance(budget,int) and len((SYSTEM+KEYED_ACCOUNTING_INSTRUCTION+encoded).encode())+output+256>budget
     accounting_retry=payload.get('previous_validation_error')=='CLAIM_ACCOUNTING_MISMATCH' and len(draft.claims)>4
     if not context_overflow and len(draft.claims)<=8 and not accounting_retry:
-        return Review.model_validate(provider.structured(SYSTEM,encoded,accounting_schema(
+        return Review.model_validate(reviewer_call(provider,SYSTEM,payload,accounting_schema(
             Review,payload['required_claim_ids'],payload['required_task_ids'])))
     checks=[]
     by_source={e.evidence_id:e for e in pack.evidence}
@@ -227,8 +282,8 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
             'required_claim_ids':[claim.claim_id for claim in batch],
             'required_task_ids':[],
             'evidence':[source_payload(e) for uid,e in by_source.items() if uid in source_ids]}
-        raw=ClaimChecks.model_validate(provider.structured(SYSTEM+' Return only claim verdicts for this batch; question coverage is checked separately.',
-            json.dumps(single,ensure_ascii=False),accounting_schema(ClaimChecks,single['required_claim_ids'])))
+        raw=ClaimChecks.model_validate(reviewer_call(provider,SYSTEM+' Return only claim verdicts for this batch; question coverage is checked separately.',
+            single,accounting_schema(ClaimChecks,single['required_claim_ids'])))
         if len(raw.claims)!=len(batch) or {claim.claim_id for claim in raw.claims}!=ids:
             raise StructuredOutputError('claim batch accounting mismatch')
         # Validate quotation and hard guards immediately, before coverage sees it.
@@ -239,9 +294,9 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
     compact={k:v for k,v in payload.items() if k not in {'claims','evidence','required_claim_ids'}}
     compact['checked_claims']=[c.model_dump() for c in draft.claims if c.claim_id in supported]
     compact['grounding']=[c.model_dump() for c in checks if c.claim_id in supported]
-    coverage=QuestionCoverage.model_validate(provider.structured(
+    coverage=QuestionCoverage.model_validate(reviewer_call(provider,
         SYSTEM+' Entailment was independently checked with full sources. Assess only whether the checked claims answer the entire question and every task. Do not add any new legal claim or evidence.',
-        json.dumps(compact,ensure_ascii=False),accounting_schema(QuestionCoverage,task_ids=payload['required_task_ids'])))
+        compact,accounting_schema(QuestionCoverage,task_ids=payload['required_task_ids'])))
     return Review(claims=checks,**coverage.model_dump())
 
 def review_error_code(exc):

@@ -19,6 +19,11 @@ def remap(rows,store,fingerprint):
     for original in rows:
         row=copy.deepcopy(original);old=row.get('corpus_fingerprint')
         if old!=fingerprint:
+            if not row.get('retrieval_eligible',True) and not row.get('required_groups'):
+                # Out-of-scope/clarification QA labels need no invented positive qrels.
+                row.update(corpus_fingerprint=fingerprint,required_groups=[],required_group_locators=[],
+                    review_status='DRAFT',reviewer=None,reviewed_at=None,migration='NEW_BUILD_REQUIRES_REVIEW')
+                changes.append(row['id']);result.append(row);continue
             locators=row.get('required_group_locators')
             if not locators:raise ValueError('Changed build and no portable locators: '+row['id'])
             groups=[]
@@ -49,7 +54,8 @@ def remap(rows,store,fingerprint):
     return result,changes
 
 def source_manifest(project):
-    paths=list((project/'src/vn_labor_online').glob('*.py'))+list(HERE.glob('*.py'))
+    paths=list((project/'src').rglob('*.py'))+list(HERE.glob('*.py'))
+    paths+=list((project/'config').glob('*.yaml'))+[project/'pyproject.toml']
     paths+=list(HERE.glob('*_notes.json'))
     return {str(p.relative_to(project)) if project in p.parents else p.name:sha(p) for p in sorted(paths)}
 
@@ -93,7 +99,10 @@ def prepare(output,settings,project):
         seed=output/'seed_generated.jsonl'
         labor.prepare(argparse.Namespace(artifact=str(artifact),cache=settings['cache'],device=settings['device'],date=settings['labor_seed_date'],gold=str(seed)))
         rows=jsonl(seed)
-    rows,changes=remap(rows,store,fp);labor.validate_gold(rows,store,fp)
+    rows,changes=remap(rows,store,fp)
+    if len({r['id'] for r in rows})!=len(rows) or any(not r.get('question') or not r.get('query_date') for r in rows):
+        raise ValueError('Gold requires unique IDs, question and explicit query_date')
+    labor.validate_gold([r for r in rows if r.get('retrieval_eligible',True)],store,fp)
     from gold import select_rows
     all_rows=rows;rows=select_rows(rows,settings.get('labor_limit'))
     retrieval=[r for r in rows if r.get('retrieval_eligible',True)]
@@ -107,11 +116,43 @@ def prepare(output,settings,project):
         'selection':'ALL' if settings.get('labor_limit') is None else 'STRATIFIED_SMOKE_NOT_ALL_GOLD'})
     save(output/'gold_migration.json',{'remapped_query_ids':changes,'needs_review':bool(changes) or any(r.get('review_status')!='APPROVED' for r in rows)})
     save(output/'compatibility.json',report.model_dump(mode='json'))
+    from protocol import VERSION,validate_annotation
+    template=[{'id':r['id'],'corpus_fingerprint':fp,'review_status':'DRAFT','reviewer':None,'reviewed_at':None,
+       'facts':[],'candidate_evidence_groups':r['required_groups'],
+       'instructions':'Add atomic fact descriptions and exact support quotes from source units. Do not use predictions as gold. Empty facts is a template, NOT an approved annotation.'} for r in retrieval]
+    (output/'evidence_annotations_template.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in template),encoding='utf-8')
+    if settings.get('evidence_annotations'):
+        annotations=jsonl(resolve(settings['evidence_annotations'],project))
+        if len({a['id'] for a in annotations})!=len(annotations):raise ValueError('Duplicate evidence annotation query IDs')
+        if set(a['id'] for a in annotations)-set(r['id'] for r in retrieval):raise ValueError('Evidence annotations outside selected queries')
+        for a in annotations:validate_annotation(a,store.units_by_id,fp)
+        (output/'evidence_annotations.jsonl').write_text(''.join(json.dumps(a,ensure_ascii=False)+'\n' for a in annotations),encoding='utf-8')
+    save(output/'protocol.json',{'version':VERSION,'primary_k':settings['k'],'ks':settings.get('ks',[settings['k']]),
+      'independent_queries':len(retrieval),'retrieval_repeats':settings['repeats'],'qa_repeats':settings.get('qa_repeats',1),
+      'gold_leakage_policy':'Qrels, reference answers and support annotations reserved only for scoring',
+      'qa_order':'query blocks, variant rotation; external judge deferred until generation finishes',
+      'timing':'model/index warmup excluded, external judge excluded, no frontend/network-proxy time'})
+    from vn_labor_online.config import load_config
+    save(output/'effective_config.json',redact(load_config(output/'online_pinned.yaml').model_dump(mode='json')))
+    from environment import snapshot
+    save(output/'environment.json',snapshot())
     return settings,fp
 
 def archive_run(output):
     # Always include the run folder name: Path.with_suffix would collide for
     # arbitrary dotted output-directory names.
+    # Preserve only small resolved revision metadata, not model/vector caches.
+    # A fresh Kaggle session must not resolve model 'main' again during resume.
+    settings_file=output/'settings_resolved.json'
+    if settings_file.exists():
+        settings=read(settings_file)
+        pin_dir=Path(settings['cache'])/'evaluation_pins'
+        if pin_dir.exists():
+            portable=output/'model_revision_pins';portable.mkdir(exist_ok=True)
+            for path in pin_dir.glob('*.json'):
+                target=portable/path.name
+                if target.exists() and read(target)!=read(path):raise ValueError('Resolved revision changed during the run')
+                save(target,read(path))
     archive=output.parent/(output.name+'.zip')
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
         for p in sorted(output.rglob('*')):
@@ -191,6 +232,8 @@ def report(output):
       '- OFFLINE mới có thể làm Gold mất hiệu lực: migration luôn hạ về DRAFT, cần rà soát lại.']
     (output/'comparison_tables.md').write_text('\n'.join(lines),encoding='utf-8')
     save(output/'comparison_tables.json',{'stages':status['stages'],'rows':rows})
+    from reporting import publish
+    publish(output,status,rows)
 
 def worker(stage,output):
     settings=read(output/'settings_resolved.json')
@@ -198,10 +241,12 @@ def worker(stage,output):
         import labor_retrieval as labor
         return labor.run(argparse.Namespace(artifact=settings['artifact'],cache=settings['cache'],device=settings['device'],
           gold=str(output/'labor_retrieval_gold.jsonl'),out=str(output/'retrieval'),methods=settings['retrieval_methods'],
-          repeats=settings['repeats'],k=settings['k']))
+          repeats=settings['repeats'],k=settings['k'],ks=settings.get('ks'),
+          evidence_annotations=str(output/'evidence_annotations.jsonl') if (output/'evidence_annotations.jsonl').exists() else None))
     if stage=='ablation':
         from qa import evaluate
         result=evaluate(output,settings)
+        if result.get('stop_reason'):return 2
         return 0 if result.get('complete') and all(v['errors']==0 for v in result['variants'].values()) else 1
     if stage=='zalo':
         from external import prepare_zalo,run_zalo
@@ -210,6 +255,7 @@ def worker(stage,output):
         from external import prepare_vlsp
         from qa import evaluate
         prepare_vlsp(output,settings);result=evaluate(output,settings,vlsp=True)
+        if result.get('stop_reason'):return 2
         return 0 if result.get('complete') and result['variants']['full']['errors']==0 else 1
     raise ValueError(stage)
 
@@ -267,18 +313,38 @@ def main():
     if output.exists() and any(output.iterdir()) and not args.resume:raise FileExistsError('Use new output or --resume')
     output.mkdir(parents=True,exist_ok=True)
     settings=yaml.safe_load(Path(args.settings).read_text(encoding='utf-8'))
+    if args.action=='run' and {'ablation','vlsp'} & set(args.stages) and settings.get('judge',{}).get('enabled'):
+        model=os.getenv(settings['judge'].get('model_env','GEMINI_EVAL_MODEL')) or os.getenv('GEMINI_MODEL')
+        if not os.getenv('GEMINI_API_KEY') or not model:
+            raise ValueError('QA judge is enabled: configure GEMINI_API_KEY and judge model before a long run, or explicitly disable judge')
+    ks=settings.get('ks',[settings['k']])
+    if not ks or any(type(k) is not int or not 1<=k<=30 for k in ks) or settings['k'] not in ks:raise ValueError('ks must include primary k; all cutoffs in 1..30')
     if args.artifact:settings['artifact']=args.artifact
     if args.device:settings['device']=args.device
     if settings['repeats']<1 or settings['k']<1:raise ValueError('Positive repeats and k required')
     if type(settings.get('qa_repeats',settings['repeats'])) is not int or settings.get('qa_repeats',settings['repeats'])<1:raise ValueError('Positive qa_repeats required')
     methods=settings['retrieval_methods']
-    if not methods or len(methods)!=len(set(methods)) or set(methods)-{'bm25','dense','hybrid','hybrid_graph'}:raise ValueError('Invalid retrieval methods')
+    if not methods or len(methods)!=len(set(methods)) or set(methods)-set(__import__('labor_retrieval').METHODS):raise ValueError('Invalid retrieval methods')
     sources=source_manifest(project)
     if args.resume:
         previous=read(output/'settings_resolved.json')
+        portable=output/'model_revision_pins'
+        if portable.exists():
+            pin_dir=Path(previous['cache'])/'evaluation_pins';pin_dir.mkdir(parents=True,exist_ok=True)
+            for path in portable.glob('*.json'):
+                target=pin_dir/path.name
+                if target.exists() and read(target)!=read(path):raise ValueError('Model/data revision cache conflicts with frozen run')
+                save(target,read(path))
         if read(output/'source_manifest.json')!=sources:raise ValueError('Code changed: start a new run, do not mix versions')
+        from vn_labor_online.config import load_config
+        current=redact(load_config(output/'online_pinned.yaml').model_dump(mode='json'))
+        if read(output/'effective_config.json')!=current:raise ValueError('Effective model/provider/settings changed; start a new run')
+        from environment import snapshot
+        if read(output/'environment.json')!=snapshot():raise ValueError('Runtime packages/hardware changed; start a new run')
         old=read(output/'state.json');state=old
         frozen=read(output/'run_info.json')['frozen_files']
+        annotation_sha=read(output/'run_info.json').get('source_annotation_sha256')
+        if annotation_sha and (not settings.get('evidence_annotations') or sha(resolve(settings['evidence_annotations'],project))!=annotation_sha):raise ValueError('Evidence annotation source changed')
         old_gold_sha=read(output/'run_info.json').get('source_gold_sha256')
         if old_gold_sha and (not settings.get('labor_gold') or sha(resolve(settings['labor_gold'],project))!=old_gold_sha):
             raise ValueError('Source Gold changed: start a new run')
@@ -302,19 +368,22 @@ def main():
         commit=subprocess.run(['git','rev-parse','HEAD'],cwd=project,capture_output=True,text=True)
         save(output/'run_info.json',{'commit':commit.stdout.strip() if commit.returncode==0 else None,
           'source_gold_sha256':sha(resolve(settings['labor_gold'],project)) if settings.get('labor_gold') else None,
+          'source_annotation_sha256':sha(resolve(settings['evidence_annotations'],project)) if settings.get('evidence_annotations') else None,
           'corpus_fingerprint':fp,'started_at':datetime.now(timezone.utc).isoformat(),'python':sys.version,
-          'frozen_files':{name:sha(output/name) for name in ['online_pinned.yaml','labor_gold.jsonl','labor_retrieval_gold.jsonl','gold_selection.json','settings_resolved.json']}})
+          'frozen_files':{name:sha(output/name) for name in ['online_pinned.yaml','labor_gold.jsonl','labor_retrieval_gold.jsonl','gold_selection.json','settings_resolved.json','protocol.json','effective_config.json','environment.json']+(['evidence_annotations.jsonl'] if (output/'evidence_annotations.jsonl').exists() else [])}})
         state={'stages':{}}
     save(output/'state.json',state)
     if args.action=='prepare':
         report(output);archive_run(output)
         print('PREPARATION_ONLY: no models/API evaluation was run',flush=True)
         return 0
-    started=time.monotonic()
+    started=time.monotonic();paused_qa_this_run=False
     try:
         for stage in args.stages:
+            if stage=='vlsp' and paused_qa_this_run:
+                state['stages'][stage]={'status':'NOT_RUN','reason':'SHARED_QA_PROVIDER_PAUSED'};save(output/'state.json',state);continue
             if args.resume and state['stages'].get(stage,{}).get('status')=='COMPLETE':continue
-            if args.resume:retain_previous_attempt(output,stage)
+            if args.resume and stage not in {'ablation','vlsp'}:retain_previous_attempt(output,stage)
             state['stages'][stage]={'status':'RUNNING'};save(output/'state.json',state)
             print('START '+stage,flush=True)
             try:
@@ -323,7 +392,8 @@ def main():
                     state['stages'][stage]={'status':'NOT_RUN','reason':'TOTAL_BUDGET_EXHAUSTED'}
                     save(output/'state.json',state);break
                 code,seconds=execute(stage,output,min(settings['stage_timeout_seconds'],remaining))
-                state['stages'][stage]={'status':'COMPLETE' if code==0 else 'ERROR','exit_code':code,'seconds':seconds}
+                state['stages'][stage]={'status':'COMPLETE' if code==0 else 'PAUSED_UPSTREAM' if code==2 else 'ERROR','exit_code':code,'seconds':seconds}
+                if stage=='ablation' and code==2:paused_qa_this_run=True
             except Exception as exc:state['stages'][stage]={'status':'ERROR','error_type':type(exc).__name__}
             save(output/'state.json',state);report(output)
     finally:

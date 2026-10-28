@@ -35,6 +35,32 @@ class Retriever:
         self._profile_units=defaultdict(list)
         for unit in store.units:
             self._profile_units[(unit.get('document_number'),str(unit.get('article_number') or ''))].append(unit)
+    def exception_context(self,items:list[Evidence],limit:int)->tuple[list[Evidence],dict]:
+        """Append explicitly referenced exception units before audit, not to RRF.
+
+        Same document edition and article only; dates/authority/provenance and
+        applicability still require their normal checks. This is not a sweep
+        over all sibling provisions or unrestricted NEXT edges.
+        """
+        from .exception_references import exception_locators
+        seen={x.unit_id for x in items};added=[];references=0
+        for seed in items:
+            if not seed.document_id: continue
+            for locator in exception_locators(seed):
+                references+=1
+                if len(added)>=limit: continue
+                candidates=self._profile_units.get((seed.document_number,str(seed.article_number)),[])
+                for unit in candidates:
+                    if len(added)>=limit: break
+                    if unit.get('document_id')!=seed.document_id or unit.get('kind')!='PROVISION': continue
+                    if str(unit.get('clause_number') or '')!=locator.clause: continue
+                    uid=unit['unit_id']
+                    if uid in seen: continue
+                    seen.add(uid)
+                    added.append(as_evidence(unit,seed.score*.95,'exception_context',len(items)+len(added)+1,
+                      {'exception_context':1.0}))
+        return added,{'explicit_exception_references':references,'added':len(added),'limit':limit}
+
     def exact(self,refs:list[ExplicitReference])->list[Evidence]:
         result=[]
         for ref in refs:

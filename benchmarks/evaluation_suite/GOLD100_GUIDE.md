@@ -1,3 +1,5 @@
+> **Bộ đo v2 ngày 28/10/2026 đã thay quy trình cũ.** Đọc [hướng dẫn chạy mới](RUN_GUIDE_V2.md) và [giao thức/bảng đã chốt](PROTOCOL.md) trước. Dùng result_28-10 và notebook mới; các ví dụ result_14-10/bốn cấu hình bên dưới là ghi nhận phiên bản cũ.
+
 # Đo với Gold 100 từ đầu đến cuối
 
 ## 1. Kết quả kiểm tra bộ bạn cung cấp

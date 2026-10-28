@@ -1,3 +1,5 @@
+> **Bộ đo v2 ngày 28/10/2026 đã thay quy trình cũ.** Đọc [hướng dẫn chạy mới](RUN_GUIDE_V2.md) và [giao thức/bảng đã chốt](PROTOCOL.md) trước. Dùng result_28-10 và notebook mới; các ví dụ result_14-10/bốn cấu hình bên dưới là ghi nhận phiên bản cũ.
+
 # Bộ đánh giá thống nhất — Pháp Điển AI
 
 Toàn bộ code cần chạy nằm trong **một thư mục `benchmarks/evaluation_suite/`**.
