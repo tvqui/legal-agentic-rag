@@ -11,6 +11,7 @@ from .models import Claim, ProviderClaims
 from .claim_validation import fold, semantic_issues
 from .errors import StructuredOutputError,ProviderRateLimited
 from .runtime import RequestStopped
+from .numeric_answers import probation_minimum_amount,requests_probation_amount
 
 class Grounding(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -111,6 +112,70 @@ def hard_issues(claim, evidence, *, context_query=''):
         issues.append('HEADING_ONLY_SUPPORT')
     return list(dict.fromkeys(issues))
 
+
+def _probation_amount_requirement(task, pack):
+    if not hasattr(pack,'query') or not hasattr(pack,'evidence'):
+        return None
+    if task.legal_subissues and 'CONTRACT.PROBATION_PAY' not in task.legal_subissues:
+        return None
+    task_text=' '.join((task.description,task.retrieval_query)).lower()
+    # Global query text must not make every unrelated task a wage calculation.
+    if (not requests_probation_amount(pack.query) or 'thử việc' not in task_text
+        or not re.search(r'lương|tiền',task_text)
+        or (re.search(r'phần trăm|tỷ lệ',task_text) and not requests_probation_amount(task_text))):
+        return None
+    amount=probation_minimum_amount(pack.query,
+        salary_base_amount=pack.facts.get('salary_base_amount'),
+        salary_base_unit=pack.facts.get('salary_base_unit'))
+    if amount is None:
+        return None
+    rule=next((item for item in pack.evidence
+        if item.article in {'26','28'}
+        and all(term in fold(item.full_text or item.text)
+            for term in ('luong', 'thu viec', 'it nhat', '85%', 'cong viec'))
+        and item.audit_status=='PASS' and item.norm_role=='RULE'),None)
+    if rule is None:
+        return None
+    return f'{amount[0]} đồng/{amount[1]}',rule.evidence_id
+
+
+def repair_required_computations(draft, pack, tasks):
+    """Put exact, source-backed arithmetic in the draft before semantic review."""
+    candidate=draft
+    for task in tasks:
+        required=_probation_amount_requirement(task,pack)
+        if required is None: continue
+        expected,evidence_id=required
+        if expected in candidate.answer_summary and any(
+            expected in claim.text and evidence_id in claim.evidence_ids for claim in candidate.claims):
+            continue
+        claims=list(candidate.claims)
+        target=next((i for i,claim in enumerate(claims)
+            if evidence_id in claim.evidence_ids and '85%' in claim.text),None)
+        if target is not None:
+            old=claims[target]
+            new=old.model_copy(update={'text':old.text+f' Mức thử việc thấp nhất tương ứng là {expected}.'})
+            claims[target]=new
+            summary=candidate.answer_summary.replace(old.text,new.text)
+            if summary==candidate.answer_summary:
+                summary=candidate.answer_summary.rstrip()+f'\n- {new.text} '+ ' '.join(f'[{uid}]' for uid in new.evidence_ids)
+        else:
+            rule=next(item for item in pack.evidence if item.evidence_id==evidence_id)
+            claim_id='claim_computed_probation_pay'
+            suffix=2
+            existing={claim.claim_id for claim in claims}
+            while claim_id in existing:
+                claim_id=f'claim_computed_probation_pay_{suffix}'
+                suffix+=1
+            new=Claim(claim_id=claim_id,
+                text=f'Mức thử việc thấp nhất tương ứng là {expected}, tính theo mức lương công việc đã nêu và tỷ lệ tối thiểu 85%.',
+                evidence_ids=[evidence_id])
+            claims.append(new)
+            summary=candidate.answer_summary.rstrip()+f'\n- {new.text} [{evidence_id}]'
+        candidate=candidate.model_copy(update={'claims':claims,'answer_summary':summary})
+    return candidate
+
+
 def validate_review(review, draft, pack, tasks):
     expected = {c.claim_id for c in draft.claims}
     actual = [c.claim_id for c in review.claims]
@@ -150,6 +215,20 @@ def validate_review(review, draft, pack, tasks):
     # Preserve independently supported claims, but never call a dependent task
     # complete while its prerequisite is missing or only partially answered.
     by_task={item.task_id:item for item in review.coverage}
+    task_by_id={task.task_id:task for task in tasks}
+    for coverage in review.coverage:
+        if coverage.status!='ANSWERED': continue
+        required=_probation_amount_requirement(task_by_id[coverage.task_id],pack)
+        if required is None: continue
+        expected,evidence_id=required
+        grounded_amount=any(
+            claim_id in by_claim
+            and expected in by_claim[claim_id].text
+            and evidence_id in by_claim[claim_id].evidence_ids
+            for claim_id in coverage.claim_ids
+        )
+        if expected not in draft.answer_summary or not grounded_amount:
+            raise StructuredOutputError('answered task omits required numeric result')
     for _ in tasks:
         changed=False
         for task in tasks:
@@ -322,6 +401,7 @@ def review_error_code(exc):
           'coverage depends on an unproved claim':'COVERAGE_USES_UNSUPPORTED_CLAIM',
           'unanswered task requires explanation':'UNANSWERED_TASK_MISSING_EXPLANATION',
           'unknown cited source':'UNKNOWN_CITED_SOURCE',
+          'answered task omits required numeric result':'REQUIRED_NUMERIC_RESULT_MISSING',
         }
         return labels.get(message,'REVIEW_STRUCTURED_OUTPUT_INVALID')
     return type(exc).__name__
@@ -342,6 +422,7 @@ def review_answer(provider, draft, pack, repair_attempts=1):
     from .models import AnswerTask
     tasks = pack.answer_tasks or [AnswerTask(task_id='question', request_quote=pack.query,
         description=pack.query, retrieval_query=pack.query)]
+    draft=repair_required_computations(draft,pack,tasks)
     reports = []
     candidate = draft
     previous_validation_error=None
@@ -390,6 +471,7 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                     # cleanup before the reviewer accounts for its exact IDs.
                     from .answer_quality import clean_draft
                     candidate=clean_draft(candidate,pack.query)
+                    candidate=repair_required_computations(candidate,pack,tasks)
                     continue
                 except (ProviderRateLimited,RequestStopped):
                     raise

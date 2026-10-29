@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import wraps
 import json,os,re,threading,time
+from .gemini_diagnostics import FIELDS as GEMINI_ERROR_FIELDS,HINTS as GEMINI_ERROR_REASONS,STATUSES as GEMINI_API_STATUSES
 
 SPECS={
  'api':('Tiếp nhận yêu cầu','Backend API','FastAPI · Pydantic','QueryRequest đã kiểm tra'),
@@ -41,7 +42,14 @@ SPECS={
 }
 STATUSES={'RUNNING','DONE','SKIPPED','WARNING','ERROR','CANCELLED'}
 LAYERS={'rule':'Rule Graph','fact':'Fact Graph','ontology':'Ontology Graph','document':'Document','derived':'Derived'}
-
+SAFE_ERROR_CODES={
+    'GEMINI_TIMEOUT','GEMINI_CLIENT_ERROR','PROMPT_CONTEXT_BUDGET_EXCEEDED',
+    'OUTPUT_TOKEN_LIMIT','INVALID_JSON','NON_OBJECT_STRUCTURED_OUTPUT',
+    'DUPLICATE_JSON_KEY','NON_TEXT_STRUCTURED_OUTPUT','GEMINI_EMPTY_RESPONSE',
+    'GEMINI_SCHEMA_VALIDATION_FAILED','GEMINI_PROBE_RESPONSE_MISMATCH',
+    'ADAPTIVE_CLAIM_LIMIT_EXCEEDED','SEMANTIC_CLAIM_REJECTED',
+}
+SAFE_ERROR_REASONS={'REQUEST_CANCELLED','REQUEST_DEADLINE_EXCEEDED'}
 def clean(value,depth=0):
     """Apply bounds even to internal summaries. Callers must not pass raw text."""
     if depth>3:return '[giới hạn cấu trúc]'
@@ -57,12 +65,33 @@ def clean(value,depth=0):
 def public_error(exc):
     data={'loai_loi':type(exc).__name__}
     reason=getattr(exc,'reason',None)
-    if isinstance(reason,str) and re.fullmatch(r'[A-Z0-9_]{1,80}',reason):data['ma_loi']=reason
+    if isinstance(reason,str) and reason in SAFE_ERROR_REASONS:data['ma_loi']=reason
+    code=getattr(exc,'safe_code',None)
+    if isinstance(code,str) and (
+        code in SAFE_ERROR_CODES
+        or re.fullmatch(r'GEMINI_HTTP_[45]\d\d',code)
+    ):
+        data['ma_loi']=code
     code=getattr(getattr(exc,'response',None),'status_code',None)
-    if type(code) is int:data['http']=code
+    if type(code) is int and 100<=code<=599:data['http']=code
     message=str(exc)
-    if re.fullmatch(r'(?:GEMINI_HTTP_\d{3}|PROMPT_CONTEXT_BUDGET_EXCEEDED|OUTPUT_TOKEN_LIMIT|INVALID_JSON|NON_OBJECT_STRUCTURED_OUTPUT)',message):
+    if message in SAFE_ERROR_CODES or re.fullmatch(r'GEMINI_HTTP_[45]\d\d',message):
         data['ma_loi']=message
+    diagnostics=getattr(exc,'safe_diagnostics',None)
+    if isinstance(diagnostics,dict):
+        safe={}
+        api_status=diagnostics.get('api_status')
+        if isinstance(api_status,str) and api_status in GEMINI_API_STATUSES:
+            safe['api_status']=api_status
+        error_reason=diagnostics.get('error_reason')
+        if isinstance(error_reason,str) and error_reason in GEMINI_ERROR_REASONS:
+            safe['error_reason']=error_reason
+        fields=diagnostics.get('error_fields')
+        if isinstance(fields,list):
+            safe_fields=sorted({item for item in fields
+                if isinstance(item,str) and item in GEMINI_ERROR_FIELDS})
+            if safe_fields:safe['error_fields']=safe_fields
+        if safe:data['diagnostics']=safe
     # Never str(exc): providers can embed URLs, credentials and private text.
     return data
 

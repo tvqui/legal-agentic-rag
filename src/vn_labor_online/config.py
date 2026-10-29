@@ -9,6 +9,8 @@ class StrictModel(BaseModel):
     model_config=ConfigDict(extra='forbid')
 
 class RetrievalConfig(StrictModel):
+    # Experimental: keep off until its benefit is measured for this workload.
+    request_cache_enabled:bool=False
     profile_fast_path:bool=True
     exception_context_top_k:int=Field(8,ge=0,le=32)
     exact_lookup:bool=True; bm25_enabled:bool=True; bm25_top_k:int=Field(30,ge=1); dense_enabled:bool=True

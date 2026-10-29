@@ -22,10 +22,23 @@ class BenchmarkQuestionPlanTests(unittest.TestCase):
         row={'id':'one','question':'Question?','conversation_turns':[{'role':'user','turn_id':'one','content':'Previous'}]}
         self.assertEqual(benchmark.plan(self.write([row])),[row])
 
+    def test_custom_conversations_are_isolated_unless_a_group_id_is_explicit(self):
+        first={'id':'one','question':'Question?'}
+        second={'id':'two','question':'Follow-up?','conversation_turns':[{'role':'user','turn_id':'one','content':'Previous'}]}
+        with patch.object(benchmark.secrets,'token_hex',side_effect=['aaaa','bbbb']):
+            self.assertEqual(benchmark.conversation_id_for(first),'bench_aaaa')
+            self.assertEqual(benchmark.conversation_id_for(second),'bench_bbbb')
+        self.assertEqual(benchmark.conversation_id_for({'batch':'USER_5'}),'reliability_user5')
+        self.assertEqual(benchmark.conversation_id_for({'conversation_id':'case-1'}),'case-1')
+
     def test_empty_duplicate_or_missing_questions_are_rejected(self):
         for value in ([],{},[{}],[{'id':'a','question':' '}],
                       [{'id':'a','question':'Q?'},{'id':'a','question':'Q?'}]):
             with self.subTest(value=value),self.assertRaises(ValueError): benchmark.plan(self.write(value))
+
+    def test_custom_conversation_id_is_validated(self):
+        with self.assertRaisesRegex(ValueError,'conversation_id'):
+            benchmark.plan(self.write([{'id':'a','question':'Q?','conversation_id':'not safe / invalid'}]))
 
     def test_export_counts_the_actual_custom_plan(self):
         (self.root/'questions.json').write_text(json.dumps([{'id':str(i),'question':'Q'} for i in range(100)]))

@@ -9,14 +9,21 @@ from .errors import StructuredOutputError
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
 from .taxonomy import classify_subissues,original_documents,profile_covers_issues,annual_leave_points,annual_leave_combination_only
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
+from .numeric_answers import probation_minimum_amount,requests_probation_amount
 from .demo_progress import call as observed,skip as skip_step,observe_result,draft_summary
 
 def _fold(value:str)->str:
     value=unicodedata.normalize('NFD',value.lower()).replace('đ','d')
     return ' '.join(''.join(char for char in value if unicodedata.category(char)!='Mn').split())
 
-def probation_pay_application(query):
-    """Compare only the stated salary base; never silently substitute region minima."""
+def probation_pay_application(query,facts=None):
+    """Calculate only from an explicit job-wage base after the 85% source is verified."""
+    facts=facts or {}
+    result=(probation_minimum_amount(query,salary_base_amount=facts.get('salary_base_amount'),
+      salary_base_unit=facts.get('salary_base_unit')) if requests_probation_amount(query) else None)
+    if result is not None:
+        amount,unit=result
+        return f'Với mức lương của công việc bạn nêu, mức thử việc thấp nhất tương ứng là {amount} đồng/{unit}.'
     q=query.lower()
     match=re.search(r'(?:trả|nhận|hưởng|bằng)[^.]{0,35}?(\d{1,3})\s*%',q)
     if not match or not any(term in q for term in ('lương của công việc','lương công việc','lương chính thức')): return ''
@@ -359,7 +366,7 @@ def _contract_rule_answer(pack,partial,assumptions):
         rule=_find(pack,'26')
         if not rule or '85%' not in rule.text: return None
         text='Điều 26: tiền lương trong thời gian thử việc do hai bên thỏa thuận nhưng ít nhất phải bằng 85% mức lương của công việc đó.'
-        application=probation_pay_application(pack.query)
+        application=probation_pay_application(pack.query,pack.facts)
         if application: text+=' '+application
         add(rule,text)
     else:

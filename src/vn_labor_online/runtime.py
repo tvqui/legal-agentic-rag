@@ -29,6 +29,9 @@ class RequestBudget:
     stage: str = 'intake'
     timings: dict = field(default_factory=dict)
     progress: ProgressLog = field(default_factory=ProgressLog)
+    retrieval_cache: dict = field(default_factory=dict)
+    retrieval_cache_hits: int = 0
+    retrieval_cache_misses: int = 0
 
     def remaining(self):
         if self.cancelled.is_set():
@@ -44,14 +47,26 @@ _current: ContextVar[RequestBudget | None] = ContextVar('online_budget', default
 
 @contextmanager
 def request_budget(seconds, existing=None):
-    budget = existing or _current.get() or RequestBudget(seconds)
+    parent = _current.get()
+    budget = existing or parent or RequestBudget(seconds)
     token = _current.set(budget)
     try:
         budget.remaining()
         yield budget
         budget.remaining()
     finally:
+        if parent is None:
+            # The retry registry may retain this budget; do not retain query
+            # keys or retrieved source copies after request completion/failure.
+            budget.retrieval_cache.clear()
         _current.reset(token)
+
+
+def retrieval_cache_summary():
+    budget = _current.get()
+    return {'scope':'REQUEST_ONLY','hits':budget.retrieval_cache_hits,
+        'misses':budget.retrieval_cache_misses} if budget else {
+        'scope':'REQUEST_ONLY','hits':0,'misses':0}
 
 
 def checkpoint(stage=None):

@@ -28,8 +28,10 @@ class CompletionPhaseTests(unittest.TestCase):
         self.assertTrue(any('đặc thù' in question for question in analysis.missing_facts))
 
     def test_out_of_scope_is_detected_without_retrieval_hint(self):
-        analysis=analyze(intake('Tội giết người bị xử lý hình sự như thế nào?',[]))
-        self.assertFalse(analysis.in_scope)
+        for question in ('Tội giết người bị xử lý hình sự như thế nào?','How do I reset my Gmail password?'):
+            with self.subTest(question=question):
+                analysis=analyze(intake(question,[]))
+                self.assertFalse(analysis.in_scope)
 
     def test_temporal_regime_boundaries_are_half_open(self):
         self.assertEqual(legal_regime_for('2020-12-31'),'BLLD_2012')

@@ -2,6 +2,7 @@ from __future__ import annotations
 import json,tempfile,unittest,zipfile
 from datetime import date,timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 from vn_labor_online.analysis import intake,analyze,evidence_slots,plan_evidence
@@ -20,6 +21,14 @@ from vn_labor_online.generation import LegalAdjudicator,adjudicate
 
 def write_jsonl(path,rows):
     path.parent.mkdir(parents=True,exist_ok=True); path.write_text(''.join(json.dumps(x,ensure_ascii=False)+'\n' for x in rows),encoding='utf-8')
+
+class IterationTrackedList(list):
+    def __init__(self,values):
+        super().__init__(values);self.iterations=0
+    def __iter__(self):
+        self.iterations+=1
+        return super().__iter__()
+
 def fixture(root:Path):
     a=root/'artifacts'; url='https://vbpl.vn/example'
     units=[{'unit_id':'prov_1','kind':'PROVISION','text':'Bộ luật Lao động > 145/2020/ND-CP > Điều 1\nQuy định tiền lương.',
@@ -171,6 +180,35 @@ class OnlineTests(unittest.TestCase):
         self.assertTrue(any('bảo vệ đặc biệt' in prompt for prompt in unknown.missing_facts))
     def test_exact_lookup(self):
         a=analyze(intake('Điều 1 của 145/2020/ND-CP quy định gì?',[])); got=Retriever(self.store,self.cfg).exact(a.explicit_references); self.assertEqual(got[0].unit_id,'prov_1')
+    def test_exact_lookup_and_hierarchy_use_indexes_after_retriever_initialization(self):
+        child={**self.store.units_by_id['prov_1'],'unit_id':'clause_1','level':'CLAUSE',
+          'clause_number':'1','provision_identity_id':'pid_clause_1','provision_version_id':'clause_1'}
+        case={**self.store.units_by_id['prov_1'],'unit_id':'case_1','kind':'CASE',
+          'document_number':'03/2024/LĐ-PT','instrument_number':'03/2024/LĐ-PT',
+          'document_title':'Bản án lao động','text':'Bản án về chấm dứt hợp đồng lao động.'}
+        units=IterationTrackedList([*self.store.units,child,case])
+        edges=IterationTrackedList([*self.store.edges,
+          {'id':'part_1','source':'clause_1','target':'prov_1','type':'PART_OF','properties':{}}])
+        nodes=IterationTrackedList(self.store.nodes)
+        store=SimpleNamespace(units=units,edges=edges,nodes=nodes,
+          units_by_id={**self.store.units_by_id,'clause_1':child,'case_1':case})
+        retriever=Retriever(store,self.cfg)
+        units.iterations=0;edges.iterations=0;nodes.iterations=0
+        refs=analyze(intake('Điều 1 của 145/2020/ND-CP quy định gì?',[])).explicit_references
+        exact=retriever.exact(refs)
+        self.assertEqual([item.unit_id for item in exact],['prov_1'])
+        self.assertEqual(units.iterations,0)
+        descendants=retriever.hierarchy_descendants(exact,10)
+        self.assertEqual([item.unit_id for item in descendants],['clause_1'])
+        self.assertEqual(edges.iterations,0)
+        self.assertEqual([item.unit_id for item in retriever.issue_anchor(['TERMINATION'])],['prov_1'])
+        self.assertEqual(nodes.iterations,0)
+        self.assertEqual(edges.iterations,0)
+        self.assertEqual([item.unit_id for item in retriever.case_law('Bản án về chấm dứt hợp đồng lao động',1)],['case_1'])
+        self.assertEqual(units.iterations,0)
+        self.assertFalse(retriever.policy_anchor(['TERMINATION'],
+          {'actor':'EMPLOYEE','contract_type':'INDEFINITE','notice_exception':False,'notice_days':10}))
+        self.assertEqual(units.iterations,0)
     def test_exact_hierarchy_expands_children_in_source_order(self):
         child={**self.store.units_by_id['prov_1'],'unit_id':'clause_1','provision_identity_id':'pid_clause_1',
           'provision_version_id':'clause_1','level':'CLAUSE','clause_number':'1','source_text':'1. Nội dung khoản một.',
@@ -439,6 +477,19 @@ class OnlineTests(unittest.TestCase):
         out=p.ask(QueryRequest(question='Tôi ký hợp đồng không xác định thời hạn và muốn nghỉ sau 20 ngày. Tôi có được nghỉ không?'))
         self.assertEqual(out.status,Stop.NEED_MORE_FACTS); self.assertFalse(out.citations)
         self.assertNotIn('worked_months',out.facts)
+    def test_pipeline_explains_material_context_conflict_instead_of_topic_ambiguity(self):
+        out=OnlinePipeline(self.cfg).ask(QueryRequest(
+            question='Hợp đồng của tôi là loại không xác định thời hạn.',
+            conversation_context=[
+                'Tôi muốn nghỉ việc. Hợp đồng của tôi là loại xác định thời hạn 12 tháng và tôi đã báo trước 30 ngày; công ty có thể yêu cầu gì?'
+            ],
+        ))
+
+        self.assertEqual(out.status,Stop.NEED_MORE_FACTS)
+        self.assertIn('CONVERSATION_CONTEXT_CONFLICT',out.warnings)
+        self.assertIn('mâu thuẫn',out.answer)
+        self.assertNotIn('Cần xác định chủ đề',out.answer)
+        self.assertIn('loại hợp đồng',out.questions[0])
     def test_pipeline_rejects_untrusted_review_bypass(self):
         from pydantic import ValidationError
         with self.assertRaises(ValidationError):

@@ -71,7 +71,7 @@ def preflight(connection,out):
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timezone
 from pathlib import Path
-import argparse,json,secrets,time
+import argparse,json,secrets,sys,time
 
 
 QUESTIONS=[
@@ -88,11 +88,22 @@ def plan(question_file=None):
         if not isinstance(rows,list) or not rows or any(not isinstance(row,dict) or not row.get('id') or not str(row.get('question','')).strip() for row in rows):
             raise ValueError('Question file must contain a nonempty list of question objects with id and question')
         if len({row['id'] for row in rows})!=len(rows): raise ValueError('Duplicate question IDs')
+        for row in rows:
+            conversation_id=row.get('conversation_id')
+            if conversation_id is not None and not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',str(conversation_id)):
+                raise ValueError('conversation_id must contain 1-100 ASCII letters, digits, underscores, or hyphens')
         return rows
     rows=[{'id':f'USER-{i}','question':q,'batch':'USER_5','origin':'USER_QUESTION'} for i,q in enumerate(QUESTIONS,1)]
     rows+=json.loads((ROOT/'artifacts/online_benchmarks/labor_285_v4_20261009T124602Z.questions.json').read_text(encoding='utf-8-sig'))
     assert len(rows)==290 and len({row['id'] for row in rows})==290
     return rows
+
+def conversation_id_for(row):
+    if row.get('conversation_id'):
+        return str(row['conversation_id'])
+    if row.get('batch')=='USER_5':
+        return 'reliability_user5'
+    return 'bench_'+secrets.token_hex(8)
 
 def run(folder,ids,timeout,resume,question_file=None):
     folder.mkdir(parents=True,exist_ok=True)
@@ -121,7 +132,7 @@ def run(folder,ids,timeout,resume,question_file=None):
             index=int(row['id'].split('-')[1])-1
             history=[{'turn_id':f'user_{i}','role':'user','content':q} for i,q in enumerate(QUESTIONS[:index],1)]
         body={'question':row['question'],'conversation_turns':history,
-          'conversation_id':'reliability_user5' if history else 'bench_'+secrets.token_hex(8),'message_id':message_id}
+          'conversation_id':conversation_id_for(row),'message_id':message_id}
         if row.get('query_date'): body['query_date']=row['query_date']
         if row.get('facts'): body['facts']=row['facts']
         started=time.monotonic(); progress=[]; started_at=datetime.now(timezone.utc).isoformat()
@@ -221,6 +232,9 @@ def export(folder):
 
 
 def main():
+    for stream in (sys.stdout,sys.stderr):
+        reconfigure=getattr(stream,'reconfigure',None)
+        if reconfigure: reconfigure(encoding='utf-8',errors='backslashreplace')
     parser=argparse.ArgumentParser(description='Sequential Kaggle benchmark, resumable results, no frontend or credential printing.')
     parser.add_argument('--out',type=Path,default=ROOT/'artifacts/online_benchmarks/reliability_20261020/candidate')
     parser.add_argument('--ids',nargs='*'); parser.add_argument('--resume',action='store_true')
@@ -256,7 +270,10 @@ def main():
         print('Backend taxonomy differs from the required deployment; no answer requests were submitted.'); return 2
     def signature(report):
         body=report.get('readiness',{}).get('body') or {}
-        return {'build':body.get('compatibility',{}).get('build_id'),'taxonomy':body.get('taxonomy_version'),'features':body.get('online_features'),
+        return {'build':body.get('compatibility',{}).get('build_id'),
+          'online_source_fingerprint':body.get('online_source_fingerprint'),
+          'online_config_fingerprint':body.get('online_config_fingerprint'),
+          'taxonomy':body.get('taxonomy_version'),'features':body.get('online_features'),
           'policy':body.get('quality_policy'),
           'models':{key:{k:value.get(k) for k in ('provider','model')} for key,value in (body.get('components') or {}).items() if isinstance(value,dict)}}
     if (args.out/'responses.jsonl').exists() and (previous is None or signature(previous)!=signature(checked)):

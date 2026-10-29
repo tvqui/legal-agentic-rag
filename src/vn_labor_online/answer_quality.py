@@ -50,6 +50,57 @@ def clean_source_excerpt(text: str, query: str) -> str:
     return clean_display(text, allow_admin=bool(_ADMIN_QUERY.search(query)))
 
 
+def _notice_claim_signature(text: str):
+    folded=unicodedata.normalize('NFD',text.lower()).replace('đ','d')
+    folded=''.join(char for char in folded if unicodedata.category(char)!='Mn')
+    folded=' '.join(folded.split())
+    if 'nguoi su dung lao dong' in folded or re.search(r'\bcong ty\b',folded):
+        actor='EMPLOYER'
+    elif 'nguoi lao dong' in folded or re.search(r'\btoi\b',folded):
+        actor='EMPLOYEE'
+    else:
+        return None
+    if 'khong xac dinh thoi han' in folded:
+        contract='INDEFINITE'
+    elif 'xac dinh thoi han' in folded:
+        contract='FIXED_TERM'
+    else:
+        return None
+    if any(term in folded for term in ('khong can bao truoc','khong phai bao truoc','khong phai thong bao truoc')):
+        notice='NOT_REQUIRED'
+    elif 'phai bao truoc' in folded or 'can bao truoc' in folded:
+        notice='REQUIRED'
+    else:
+        return None
+    quantities=tuple(re.findall(r'\b\d+(?:[.,]\d+)*\s*(?:ngay lam viec|ngay|thang)\b',folded))
+    if not quantities:
+        return None
+    # Only collapse the narrow, unqualified notice paraphrases understood here.
+    # Anything beyond this vocabulary stays a separate claim for legal review.
+    neutral_notice_words=set(('theo quy dinh tai dieu khoan diem a b c d cua bo luat '
+        'van ban hop nhat lao dong nguoi su dung lam viec hop dong khong xac dinh '
+        'thoi han co quyen don phuong cham dut nhung phai can thong bao truoc it '
+        'nhat toi thieu ngay khi nghi').split())
+    if set(re.findall(r'[a-z]+',folded))-neutral_notice_words:
+        return None
+    # The *contents* of a qualification matter, not just the presence of 'if'.
+    # In particular, 'đã' and 'chưa' must never collapse into the same claim.
+    qualification_text=re.sub(
+        r'\btruoc khi don phuong (?:nghi viec|cham dut(?: hop dong(?: lao dong)?)?)\b',
+        '',folded)
+    conditions=tuple(re.findall(
+        r'\b(?:neu|tru truong hop|ngoai tru|chi khi|khong thuoc truong hop|'
+        r'ke tu|tu ngay|truoc khi|sau khi)\b[^.;]*',qualification_text))
+    bound='MAXIMUM' if 'toi da' in folded or 'khong qua' in folded else (
+        'MINIMUM' if 'it nhat' in folded or 'toi thieu' in folded else 'UNQUALIFIED')
+    # Preserve extra assertions and qualifications outside the narrow notice
+    # paraphrases. Shared source IDs do not establish semantic equivalence.
+    protected=tuple(term for term in ('khong hop phap','trai phap luat','duoc boi thuong',
+        'khong duoc boi thuong','da thanh toan','chua thanh toan','nganh nghe dac thu',
+        'cong viec dac thu','khong ap dung','khong phai','chi ap dung') if term in folded)
+    return actor,contract,notice,quantities,conditions,bound,protected
+
+
 def language_issues(text: str, *, allow_admin: bool = False) -> list[str]:
     """Detect observable defects, not arbitrary grammar or OCR substitutions."""
     issues = []
@@ -84,17 +135,24 @@ def clean_draft(draft: AdjudicationDraft, query: str) -> AdjudicationDraft:
     allow_admin = bool(_ADMIN_QUERY.search(query))
     claims = [claim.model_copy(update={'text': clean_display(claim.text, allow_admin=allow_admin)})
               for claim in draft.claims]
-    unique=[]; by_text={}
+    unique=[]; by_text={}; by_notice={}
     for claim in claims:
         key=' '.join(claim.text.lower().split())
         # A neutral connective adds no legal proposition. All remaining words,
         # numbers and qualifications must still match exactly to deduplicate.
         key=re.sub(r'^ngoài ra,\s*','',key)
-        if key in by_text:
-            index=by_text[key]; previous=unique[index]
+        signature=_notice_claim_signature(claim.text)
+        notice_key=(signature,tuple(sorted(claim.evidence_ids))) if signature else None
+        index=by_text.get(key)
+        if index is None and notice_key is not None: index=by_notice.get(notice_key)
+        if index is not None:
+            previous=unique[index]
             unique[index]=previous.model_copy(update={'evidence_ids':list(dict.fromkeys(previous.evidence_ids+claim.evidence_ids))})
         else:
-            by_text[key]=len(unique); unique.append(claim)
+            index=len(unique)
+            by_text[key]=index
+            if notice_key is not None: by_notice[notice_key]=index
+            unique.append(claim)
     answer = clean_display(draft.answer_summary, allow_admin=allow_admin)
     # Keep summary and public claim excerpts in sync.
     for old, new in zip(draft.claims, claims):

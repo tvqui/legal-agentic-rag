@@ -133,14 +133,24 @@ class ContextTests(TestCase):
 
     def test_provenance_offsets_refer_to_original_turn_not_collapsed_whitespace(self):
         text='Tôi đang thử việc.\n\nTôi muốn nghỉ việc và báo   trước 20 ngày.'
-        result=resolve_context(question('Còn thời gian thử việc?', [text]))
+        current='Còn thời gian thử việc?'
+        result=resolve_context(question(current, [text]))
         for fact in result.provenance:
-            self.assertEqual(text[fact['char_start']:fact['char_end']],fact['source_quote'])
+            source=text if fact['turn_id']=='0' else current
+            self.assertEqual(source[fact['char_start']:fact['char_end']],fact['source_quote'])
 
-    def test_correction_overrides_old_user_fact(self):
+    def test_unmarked_conflicting_fact_requires_confirmation(self):
         result=resolve_context(question('Tôi chỉ báo trước 30 ngày.', ['Tôi ký hợp đồng không xác định thời hạn và muốn nghỉ việc, báo trước 20 ngày.']))
+        self.assertTrue(result.clarification)
+        self.assertNotIn('notice_days',result.facts)
+        self.assertTrue(any(p.get('field')=='notice_days' and p.get('status')=='CONFLICT' for p in result.provenance))
+
+    def test_explicit_correction_overrides_old_user_fact(self):
+        result=resolve_context(question('Đính chính: tôi chỉ báo trước 30 ngày.', ['Tôi ký hợp đồng không xác định thời hạn và muốn nghỉ việc, báo trước 20 ngày.']))
         self.assertEqual(result.facts.get('notice_days'),30)
-        self.assertNotIn('notice_days',{p['field'] for p in result.provenance})
+        records=[p for p in result.provenance if p['field']=='notice_days']
+        self.assertTrue(any(p['status']=='SUPERSEDED' for p in records))
+        self.assertTrue(any(p['turn_id']=='current_request' and p['status']=='USER_REPORTED' for p in records))
 
 
 class RuntimeTests(TestCase):

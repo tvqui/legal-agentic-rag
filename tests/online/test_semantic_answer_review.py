@@ -55,6 +55,36 @@ class SemanticAnswerReviewTests(unittest.TestCase):
         p,d,v=sample(); v['claims'][0]['verdict']='UNSUPPORTED'
         with self.assertRaises(StructuredOutputError): validate_review(Review.model_validate(v),d,p,p.answer_tasks)
 
+    def test_valid_review_json_cannot_support_late_wage_claim_omitting_exception(self):
+        p,d,_=sample()
+        question='Người lao động bị chậm trả lương có được nghỉ không cần báo trước không?'
+        source=('Người lao động có quyền đơn phương chấm dứt hợp đồng lao động không cần báo trước '
+            'nếu không được trả đủ lương hoặc trả lương không đúng thời hạn, trừ trường hợp quy định '
+            'tại khoản 4 Điều 97 của Bộ luật này.')
+        evidence=p.evidence[0].model_copy(update={
+            'instrument_number':'18/VBHN-VPQH','article':'35','clause':'2','point':'b',
+            'text':source,'full_text':source,
+        })
+        task=AnswerTask(task_id='entitlement',request_quote=question,
+            description='Điều kiện nghỉ không báo trước',retrieval_query=question)
+        p=p.model_copy(update={'query':question,'evidence':[evidence],'answer_tasks':[task]})
+        claim=Claim(claim_id='claim',
+            text='Người lao động được nghỉ không cần báo trước trong mọi trường hợp bị chậm trả lương.',
+            evidence_ids=['source'])
+        d=d.model_copy(update={'claims':[claim]})
+        review={
+            'claims':[{'claim_id':'claim','verdict':'SUPPORTED',
+                'grounding':[{'evidence_id':'source','quote':source}],
+                'reason':'Câu trả lời đã được căn cứ hỗ trợ.'}],
+            'coverage':[{'task_id':'entitlement','status':'ANSWERED','claim_ids':['claim'],'missing':''}],
+            'question_fully_addressed':True,'missing_requirements':[],
+        }
+
+        parsed=Review.model_validate(review)
+        self.assertEqual(parsed.claims[0].verdict,'SUPPORTED')
+        with self.assertRaises(StructuredOutputError):
+            validate_review(parsed,d,p,p.answer_tasks)
+
     def test_false_completion_with_declared_missing_part_is_rejected(self):
         p,d,v=sample(); v['missing_requirements']=['Còn thiếu hậu quả']
         with self.assertRaises(StructuredOutputError): validate_review(Review.model_validate(v),d,p,p.answer_tasks)
@@ -217,4 +247,3 @@ class ContextAndRepairTests(unittest.TestCase):
         self.assertFalse(any('quản lý' in x.lower() and 'trả công' in x.lower() for x in a.missing_facts))
 
 if __name__=='__main__': unittest.main()
-

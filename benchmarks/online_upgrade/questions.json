@@ -1,0 +1,204 @@
+[
+  {
+    "id": "smoke-01",
+    "batch": "literal_lookup",
+    "question": "Điều 35 Bộ luật Lao động 2019 quy định những trường hợp nào người lao động được đơn phương chấm dứt hợp đồng mà không cần báo trước?"
+  },
+  {
+    "id": "smoke-02",
+    "batch": "historical_law",
+    "query_date": "2020-12-15",
+    "question": "Tại ngày 15/12/2020, người lao động có hợp đồng không xác định thời hạn muốn nghỉ vì lý do cá nhân thì phải báo trước bao lâu? Nêu văn bản và điều khoản áp dụng vào thời điểm đó."
+  },
+  {
+    "id": "smoke-03",
+    "batch": "multiple_tasks",
+    "question": "Với công việc đòi hỏi trình độ cao đẳng, thời gian thử việc tối đa là bao lâu và mức lương thử việc tối thiểu bằng bao nhiêu phần trăm mức lương công việc? Nêu căn cứ riêng cho từng ý."
+  },
+  {
+    "id": "smoke-04",
+    "batch": "monetary_output",
+    "question": "Mức lương của công việc là 11,2 triệu đồng/tháng. Tiền lương thử việc tối thiểu là bao nhiêu đồng mỗi tháng?"
+  },
+  {
+    "id": "smoke-05",
+    "batch": "exception",
+    "question": "Khi nào người lao động có thể đơn phương chấm dứt hợp đồng mà không cần báo trước? Hãy nêu điều kiện của từng trường hợp."
+  },
+  {
+    "id": "smoke-06",
+    "batch": "missing_facts",
+    "conversation_id": "upgrade-liability-followup",
+    "question": "Tôi muốn nghỉ việc và công ty yêu cầu bồi thường. Tôi có phải trả tiền không?"
+  },
+  {
+    "id": "smoke-07",
+    "batch": "context_followup",
+    "conversation_id": "upgrade-liability-followup",
+    "conversation_turns": [
+      {
+        "turn_id": "liability-initial",
+        "role": "user",
+        "content": "Tôi muốn nghỉ việc và công ty yêu cầu bồi thường. Tôi có phải trả tiền không?"
+      }
+    ],
+    "question": "Bổ sung cho cùng vụ việc: hợp đồng của tôi không xác định thời hạn, tôi chỉ báo trước 12 ngày và không thuộc trường hợp được miễn báo trước. Công ty còn yêu cầu hoàn trả chi phí đào tạo nhưng tôi chưa biết thỏa thuận đào tạo ghi gì. Nghĩa vụ nào có thể kết luận và cần làm rõ gì?"
+  },
+  {
+    "id": "smoke-08",
+    "batch": "explicit_correction",
+    "conversation_id": "upgrade-correction",
+    "conversation_turns": [
+      {
+        "turn_id": "correction-prior",
+        "role": "user",
+        "content": "Tôi đang làm theo hợp đồng lao động không xác định thời hạn."
+      }
+    ],
+    "question": "Tôi xin đính chính cho cùng vụ việc: hợp đồng thực tế là loại xác định thời hạn 12 tháng. Nếu tôi đã báo trước 30 ngày thì còn phải kiểm tra điều kiện nào?"
+  },
+  {
+    "id": "smoke-09",
+    "batch": "unresolved_conflict",
+    "conversation_id": "upgrade-conflict",
+    "conversation_turns": [
+      {
+        "turn_id": "conflict-prior",
+        "role": "user",
+        "content": "Hợp đồng của tôi là loại không xác định thời hạn."
+      }
+    ],
+    "question": "Tôi muốn nghỉ việc. Hợp đồng của tôi là loại xác định thời hạn 12 tháng và tôi đã báo trước 30 ngày; công ty có thể yêu cầu gì?"
+  },
+  {
+    "id": "smoke-10",
+    "batch": "new_scenario",
+    "conversation_id": "upgrade-new-scenario",
+    "conversation_turns": [
+      {
+        "turn_id": "scenario-prior",
+        "role": "user",
+        "content": "Tôi đang thử việc tại công ty A."
+      }
+    ],
+    "question": "Tình huống mới ở công ty B: tôi đã ký hợp đồng 12 tháng và muốn nghỉ ngay, không báo trước. Tôi có phải bồi thường không?"
+  },
+  {
+    "id": "smoke-11",
+    "batch": "employer_actor",
+    "question": "Công ty muốn đơn phương chấm dứt hợp đồng của người lao động vì thường xuyên không hoàn thành công việc. Cần kiểm tra điều kiện và thủ tục nào?"
+  },
+  {
+    "id": "smoke-12",
+    "batch": "out_of_scope",
+    "question": "How do I reset my Gmail password?"
+  },
+  {
+    "id": "smoke-13",
+    "batch": "td006_original",
+    "query_date": "2026-10-23",
+    "question": "Tôi tự ý nghỉ việc, công ty yêu cầu bồi thường. Tôi có phải bồi thường không?"
+  },
+  {
+    "id": "smoke-14",
+    "batch": "td006_reworded",
+    "query_date": "2026-10-23",
+    "question": "Tôi chủ động xin nghỉ, công ty không đồng ý và đòi tiền bồi thường. Chỉ với thông tin đó thì tôi có phải trả không?"
+  },
+  {
+    "id": "smoke-15",
+    "batch": "td006_employer_actor",
+    "query_date": "2026-10-23",
+    "question": "Công ty chủ động chấm dứt hợp đồng của tôi rồi yêu cầu tôi bồi thường. Có thể kết luận trách nhiệm của tôi chỉ từ việc công ty yêu cầu không?"
+  },
+  {
+    "id": "smoke-16",
+    "batch": "td006_missing_notice_facts",
+    "query_date": "2026-10-23",
+    "question": "Tôi nghỉ việc ngay và công ty yêu cầu bồi thường. Tôi có phải trả tiền không?"
+  },
+  {
+    "id": "smoke-17",
+    "batch": "td006_exception_rule",
+    "query_date": "2026-10-23",
+    "question": "Người lao động nghỉ không báo trước vì bị chậm trả lương thì điều kiện nào và ngoại lệ nào phải kiểm tra trước khi kết luận?"
+  },
+  {
+    "id": "smoke-18",
+    "batch": "cd001_notice_dedup",
+    "query_date": "2026-10-23",
+    "question": "Tôi làm theo hợp đồng không xác định thời hạn và muốn đơn phương chấm dứt. Phải báo trước bao lâu?"
+  },
+  {
+    "id": "smoke-19",
+    "batch": "tv001_probation_pay",
+    "query_date": "2026-10-23",
+    "question": "Công ty trả 70% lương của công việc trong thời gian thử việc. Có đúng luật không?"
+  },
+  {
+    "id": "smoke-20",
+    "batch": "tv003_baseline_amount",
+    "query_date": "2026-10-23",
+    "question": "Mức lương của vị trí là 8 triệu đồng/tháng. Lương thử việc thấp nhất theo luật là bao nhiêu?"
+  },
+  {
+    "id": "smoke-21",
+    "batch": "tv003_amount_variant",
+    "query_date": "2026-10-23",
+    "question": "Lương công việc là 15,75 triệu đồng mỗi tháng. Tiền lương tối thiểu trong thời gian thử việc là bao nhiêu đồng/tháng?"
+  },
+  {
+    "id": "smoke-22",
+    "batch": "tg001_normal_hours",
+    "query_date": "2026-10-23",
+    "question": "Theo chế độ thời giờ làm việc bình thường tính theo ngày, luật giới hạn tối đa mấy giờ một ngày và một tuần?"
+  },
+  {
+    "id": "smoke-23",
+    "batch": "hd001_oral_short_contract",
+    "query_date": "2026-10-23",
+    "question": "Tôi ký hợp đồng làm việc 20 ngày cho công việc thông thường bằng lời nói, có được không?"
+  },
+  {
+    "id": "smoke-24",
+    "batch": "hd002_oral_six_month_contract",
+    "query_date": "2026-10-23",
+    "question": "Công ty ký hợp đồng lao động 6 tháng với tôi nhưng chỉ thỏa thuận miệng. Như vậy có đúng hình thức không?"
+  },
+  {
+    "id": "smoke-25",
+    "batch": "np001_weekly_rest",
+    "query_date": "2026-10-23",
+    "question": "Theo quy định chung, một tuần người lao động phải được nghỉ ít nhất bao nhiêu giờ liên tục?"
+  },
+  {
+    "id": "review-26",
+    "batch": "multi_task_numeric",
+    "query_date": "2026-09-01",
+    "question": "Lương công việc là 11,2 triệu đồng/tháng. Lương thử việc tối thiểu tương ứng bao nhiêu tiền? Tôi 30 tuổi, không khuyết tật, làm công việc bình thường đủ 12 tháng, thì được bao nhiêu ngày phép năm?"
+  },
+  {
+    "id": "review-27",
+    "batch": "confirmation",
+    "query_date": "2026-09-01",
+    "question": "Tôi xác nhận hợp đồng của tôi là không xác định thời hạn. Tôi nghỉ vì lý do cá nhân, không thuộc trường hợp miễn báo trước, không làm công việc đặc thù. Vậy tôi cần báo trước bao lâu?",
+    "conversation_turns": [
+      {
+        "turn_id": "a",
+        "role": "user",
+        "content": "Tôi làm hợp đồng không xác định thời hạn và muốn nghỉ việc."
+      },
+      {
+        "turn_id": "b",
+        "role": "user",
+        "content": "Còn hợp đồng của tôi là xác định thời hạn 12 tháng."
+      }
+    ]
+  },
+  {
+    "id": "review-28",
+    "batch": "ambiguous_salary",
+    "query_date": "2026-09-01",
+    "question": "Lương công việc là 8 triệu đồng/tháng. Lương công việc là 10 triệu đồng/tháng. Lương thử việc tối thiểu bằng bao nhiêu tiền?"
+  }
+]

@@ -57,19 +57,27 @@ class OnlinePipeline:
             resolved=observed('context',resolve_context,request,summary=lambda r:{'luot_ngu_canh':len(r.used_turns),'can_hoi_lai':bool(r.clarification),'truong_du_kien':sorted(r.facts)})
             checkpoint('understanding')
             if resolved.clarification:
-                Step('scope_gate').finish({'ket_qua':'NEED_MORE_FACTS','ly_do':'Chưa rõ chủ đề hỏi nối tiếp'},'WARNING')
-                skip_after_gate('Chưa rõ chủ đề nối tiếp; cần người dùng làm rõ trước')
+                fact_conflict=resolved.clarification_reason=='MATERIAL_FACT_CONFLICT'
+                reason='Mâu thuẫn dữ kiện quan trọng trong cùng vụ việc' if fact_conflict else 'Chưa rõ chủ đề hỏi nối tiếp'
+                answer=(
+                    'Dữ kiện quan trọng trong cùng vụ việc đang mâu thuẫn. Vui lòng xác nhận thông tin được hỏi bên dưới trước khi tiếp tục tra cứu.'
+                    if fact_conflict else
+                    'Cần xác định chủ đề của câu hỏi nối tiếp trước khi tra cứu.'
+                )
+                warning='CONVERSATION_CONTEXT_CONFLICT' if fact_conflict else 'CONVERSATION_CONTEXT_AMBIGUOUS'
+                Step('scope_gate').finish({'ket_qua':'NEED_MORE_FACTS','ly_do':reason},'WARNING')
+                skip_after_gate(reason)
                 env=intake(request.question,request.conversation_context,request.query_date,request.facts)
                 trace=Trace(trace_id='trace_'+hashlib.sha256(str(time.time_ns()).encode()).hexdigest()[:16],
                   query_id=env.query_id,build_id=self.store.report.build_id or '',route=Route.STANDARD,
-                  route_reason='ambiguous follow-up',stop_reason=Stop.NEED_MORE_FACTS,
+                  route_reason='conflicting conversation facts' if fact_conflict else 'ambiguous follow-up',stop_reason=Stop.NEED_MORE_FACTS,
                   events=[{'event':'context_clarification','model_calls':0}])
                 snapshot=execution_snapshot(); trace.execution_steps=snapshot['steps']; trace.execution_steps_dropped=snapshot['dropped']
                 persist(trace,self.cfg.trace_dir)
                 return AnswerResponse(query_id=env.query_id,status=Stop.NEED_MORE_FACTS,
-                  answer='Cần xác định chủ đề của câu hỏi nối tiếp trước khi tra cứu.',
+                  answer=answer,
                   questions=[resolved.clarification],evidence_status='NOT_RETRIEVED',
-                  warnings=['CONVERSATION_CONTEXT_AMBIGUOUS'],build_id=self.store.report.build_id or '',
+                  warnings=[warning],build_id=self.store.report.build_id or '',
                   trace_id=trace.trace_id,trace=trace)
             effective=request.model_copy(update={'question':resolved.query,
               'facts':{**resolved.facts,**request.facts},
@@ -77,9 +85,11 @@ class OnlinePipeline:
               'query_date':request.query_date or resolved.query_date})
             response=self._ask(effective)
             checkpoint('completed')
-            from .runtime import measured_timings
+            from .runtime import measured_timings,retrieval_cache_summary
             if response.trace:
                 response.trace.timings_ms.update(measured_timings())
+                response.trace.events.append({'event':'retrieval_request_cache',
+                    'enabled':self.cfg.retrieval.request_cache_enabled,**retrieval_cache_summary()})
                 snapshot=execution_snapshot(); response.trace.execution_steps=snapshot['steps']; response.trace.execution_steps_dropped=snapshot['dropped']
                 persist(response.trace,self.cfg.trace_dir)
             response.legal_status=getattr(self.store.report,'legal_status','PROVISIONAL')

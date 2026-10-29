@@ -85,9 +85,12 @@ class ClarificationFollowupTests(TestCase):
 
     def test_current_negative_correction_overrides_previous_positive_category(self):
         previous = FIRST + ' Tôi làm ngành nghề đặc thù.'
-        context, analysis = resolve(REPLY, [previous])
+        context, analysis = resolve('Đính chính: ' + REPLY, [previous])
         self.assertIs(analysis.facts['special_occupation'], False)
-        self.assertNotIn('special_occupation', {p['field'] for p in context.provenance})
+        records=[p for p in context.provenance if p['field']=='special_occupation']
+        self.assertTrue(any(p['status']=='SUPERSEDED' for p in records))
+        self.assertTrue(any(p['turn_id']=='current_request' and p['status']=='USER_REPORTED'
+            and 'không' in p['source_quote'].lower() for p in records))
 
     def test_no_history_does_not_invent_contract_type(self):
         context, analysis = resolve(REPLY)

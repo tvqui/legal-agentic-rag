@@ -45,6 +45,20 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         if REQUEST.search(span): request_spans.append(span)
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
+        if topic.key=='minimum_wage' and 'CONTRACT.PROBATION_PAY' in subissues and 'thử việc' in query.lower():
+            regional_wage_requested=any(
+                term in span.lower()
+                for span in request_spans
+                for term in ('lương tối thiểu vùng','mức lương tối thiểu vùng','lương tối thiểu theo vùng')
+            )
+            if not regional_wage_requested: continue
+        if topic.key=='normal_hours' and 'WORKING_TIME.NORMAL_HOURS' in subissues:
+            requests_rest=any(
+                term in span.lower()
+                for span in request_spans
+                for term in ('nghỉ giữa giờ','nghỉ hằng tuần','nghỉ hàng tuần','thời giờ nghỉ')
+            )
+            if not requests_rest: continue
         if any(any(key.startswith(prefix) for prefix in topic.profile_prefixes) for key in subissues): continue
         if _leave_beneficiary_context(topic,request_spans,subissues): continue
         if topic.key=='remedies' and 'CONTRACT.PROBATION_SANCTION' in subissues:

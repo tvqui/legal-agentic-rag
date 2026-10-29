@@ -1,5 +1,7 @@
 from __future__ import annotations
 import re,threading,unicodedata
+from functools import wraps
+from copy import deepcopy
 from pathlib import Path
 from collections import defaultdict
 from datetime import date
@@ -17,6 +19,38 @@ def _terms(value):
     normalized=unicodedata.normalize('NFD',str(value).lower()).replace('đ','d')
     folded=''.join(char for char in normalized if unicodedata.category(char)!='Mn')
     return {term for term in re.findall(r'\w+',folded) if len(term)>2}
+
+
+def request_cached_retrieval(fn):
+    """Reuse raw channel results within one budget; never cache legal verdicts.
+
+    ArtifactStore and configuration are immutable during an inference request.
+    Collection identity/length also protects the append-only test-store contract.
+    No cache is used by retrieval benchmarks outside request_budget().
+    """
+    @wraps(fn)
+    def wrapped(self,query,k=None):
+        from .runtime import _current
+        budget=_current.get()
+        if budget is None or not self.cfg.retrieval.request_cache_enabled:
+            return fn(self,query,k)
+        budget.remaining()
+        collections_key=tuple((id(value),len(value)) for value in (
+            self.store.units,getattr(self.store,'nodes',()),getattr(self.store,'edges',())))
+        effective_k=k or getattr(self.cfg.retrieval,fn.__name__+'_top_k')
+        key=(id(self),fn.__name__,query,effective_k,collections_key)
+        if key in budget.retrieval_cache:
+            budget.retrieval_cache_hits+=1
+            return deepcopy(budget.retrieval_cache[key])
+        result=fn(self,query,k)
+        budget.remaining()
+        budget.retrieval_cache_misses+=1
+        if len(result)<=64:
+            if len(budget.retrieval_cache)>=16:
+                budget.retrieval_cache.pop(next(iter(budget.retrieval_cache)))
+            budget.retrieval_cache[key]=deepcopy(result)
+        return result
+    return wrapped
 def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evidence:
     keys={'ancestor_context','unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status'}
     data={k:unit.get(k) for k in keys}; data.update(score=float(score),retrieval_method=method,rank=rank,component_scores=components or {})
@@ -32,9 +66,58 @@ def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evid
 class Retriever:
     def __init__(self,store:ArtifactStore,cfg:OnlineConfig):
         self.store=store; self.cfg=cfg; self._bm25=None; self._faiss=None; self._model=None; self._reranker=None; self._lock=threading.Lock()
-        self._profile_units=defaultdict(list)
-        for unit in store.units:
+        self._profile_units=defaultdict(list); self._units_by_article=defaultdict(list)
+        self._units_by_instrument=defaultdict(list); self._part_of_children=defaultdict(list)
+        self._case_units=[]
+        self._issue_nodes_by_key=defaultdict(set); self._issue_node_ids=set()
+        self._issue_units_by_node=defaultdict(list)
+        self._units_by_id=getattr(store,'units_by_id',None) or {}
+        self._indexed_unit_count=0;self._indexed_node_count=0;self._indexed_edge_count=0
+        self._refresh_indexes()
+
+    def _refresh_indexes(self):
+        new_units=self.store.units[self._indexed_unit_count:]
+        for unit in new_units:
             self._profile_units[(unit.get('document_number'),str(unit.get('article_number') or ''))].append(unit)
+            if unit.get('unit_id'):self._units_by_id[unit['unit_id']]=unit
+            article=_norm(unit.get('article_number'))
+            instrument=_norm(unit.get('instrument_number') or unit.get('document_number'))
+            if article:self._units_by_article[article].append(unit)
+            if instrument:self._units_by_instrument[instrument].append(unit)
+            if unit.get('kind')=='CASE':self._case_units.append(unit)
+        self._indexed_unit_count=len(self.store.units)
+        new_nodes=getattr(self.store,'nodes',[])[self._indexed_node_count:]
+        for node in new_nodes:
+            if node.get('label')=='LegalIssue':
+                key=(node.get('properties') or {}).get('issue_key')
+                if key:
+                    self._issue_nodes_by_key[key].add(node['id'])
+                    self._issue_node_ids.add(node['id'])
+        self._indexed_node_count=len(getattr(self.store,'nodes',[]))
+        new_edges=getattr(self.store,'edges',[])[self._indexed_edge_count:]
+        touched_parents=set()
+        for edge in new_edges:
+            if (edge.get('type')=='PART_OF' and edge.get('source') in self._units_by_id
+              and edge.get('target') in self._units_by_id):
+                self._part_of_children[edge['target']].append((edge,edge['source']))
+                touched_parents.add(edge['target'])
+            if edge.get('type')=='RELATES_TO_ISSUE':
+                source=edge.get('source');target=edge.get('target')
+                if source in self._issue_node_ids and target in self._units_by_id:
+                    self._issue_units_by_node[source].append(target)
+                elif target in self._issue_node_ids and source in self._units_by_id:
+                    self._issue_units_by_node[target].append(source)
+        self._indexed_edge_count=len(getattr(self.store,'edges',[]))
+        for parent in touched_parents:
+            self._part_of_children[parent].sort(key=self._child_source_order)
+
+    def _child_source_order(self,row):
+        edge,unit_id=row; unit=self._units_by_id[unit_id]
+        span=unit.get('provenance_span') or {}
+        position=span.get('document_char_start')
+        if position is None:position=span.get('char_start')
+        if position is None:position=10**18
+        return position,unit_id,edge.get('id') or ''
     def exception_context(self,items:list[Evidence],limit:int)->tuple[list[Evidence],dict]:
         """Append explicitly referenced exception units before audit, not to RRF.
 
@@ -62,11 +145,18 @@ class Retriever:
         return added,{'explicit_exception_references':references,'added':len(added),'limit':limit}
 
     def exact(self,refs:list[ExplicitReference])->list[Evidence]:
+        self._refresh_indexes()
         result=[]
         for ref in refs:
             candidates=[]
             desired_level='POINT' if ref.point else 'CLAUSE' if ref.clause else 'ARTICLE' if ref.article else None
-            for u in self.store.units:
+            if ref.instrument_number:
+                units=self._units_by_instrument.get(_norm(ref.instrument_number),[])
+            elif ref.article:
+                units=self._units_by_article.get(_norm(ref.article),[])
+            else:
+                units=self.store.units
+            for u in units:
                 number=u.get('instrument_number') or u.get('document_number')
                 if ref.instrument_number and _norm(number)!=_norm(ref.instrument_number): continue
                 if ref.article and _norm(u.get('article_number'))!=_norm(ref.article): continue
@@ -87,26 +177,14 @@ class Retriever:
         deterministic and bounded; it does not open the broader adaptive graph.
         """
         if limit<=0 or not seeds: return []
-        children=defaultdict(list)
-        for edge in self.store.edges:
-            if edge.get('type')!='PART_OF': continue
-            child=edge.get('source'); parent=edge.get('target')
-            if child in self.store.units_by_id and parent in self.store.units_by_id:
-                children[parent].append((edge,child))
-        def source_order(row):
-            edge,uid=row; unit=self.store.units_by_id[uid]; span=unit.get('provenance_span') or {}
-            position=span.get('document_char_start')
-            if position is None: position=span.get('char_start')
-            if position is None: position=10**18
-            return (position,uid,edge.get('id') or '')
-        for values in children.values(): values.sort(key=source_order)
+        self._refresh_indexes()
         out=[]; seen={item.unit_id for item in seeds}
         def visit(parent_id:str,path:list[str],depth:int):
-            for edge,uid in children.get(parent_id,[]):
+            for edge,uid in self._part_of_children.get(parent_id,[]):
                 if len(out)>=limit: return
                 if uid in seen: continue
                 seen.add(uid); edge_id=edge.get('id') or ''
-                evidence=as_evidence(self.store.units_by_id[uid],max(.8,.95-depth*.04-len(out)*.001),
+                evidence=as_evidence(self._units_by_id[uid],max(.8,.95-depth*.04-len(out)*.001),
                   'exact_hierarchy',len(out)+1,{'exact_hierarchy':1/(depth+1)})
                 evidence=evidence.model_copy(update={'graph_path':path+[edge_id],
                   'graph_relations':['PART_OF']*(depth+1),'graph_directions':['IN']*(depth+1)})
@@ -116,6 +194,7 @@ class Retriever:
             visit(seed.unit_id,list(seed.graph_path),0)
             if len(out)>=limit: break
         return out
+    @request_cached_retrieval
     def bm25(self,query:str,k:int|None=None)->list[Evidence]:
         with measured('bm25.dependencies_import'):
             import bm25s
@@ -130,6 +209,7 @@ class Retriever:
             uid=doc.get('id') if isinstance(doc,dict) else str(doc)
             if uid in self.store.units_by_id: out.append(as_evidence(self.store.units_by_id[uid],float(score),'bm25',i,{'bm25':float(score)}))
         return out
+    @request_cached_retrieval
     def dense(self,query:str,k:int|None=None)->list[Evidence]:
         try:
             with measured('dense.dependencies_import'):
@@ -186,12 +266,9 @@ class Retriever:
     def issue_anchor(self,issues:list[str],k:int|None=None)->list[Evidence]:
         wanted=graph_issue_keys(issues)
         if not wanted: return []
-        anchors={n['id'] for n in self.store.nodes if n.get('label')=='LegalIssue' and (n.get('properties') or {}).get('issue_key') in wanted}
-        unit_ids=[]
-        for edge in self.store.edges:
-            if edge.get('type')!='RELATES_TO_ISSUE': continue
-            if edge.get('source') in anchors and edge.get('target') in self.store.units_by_id: unit_ids.append(edge['target'])
-            elif edge.get('target') in anchors and edge.get('source') in self.store.units_by_id: unit_ids.append(edge['source'])
+        self._refresh_indexes()
+        anchors=set().union(*(self._issue_nodes_by_key.get(key,set()) for key in wanted))
+        unit_ids=[unit_id for anchor in anchors for unit_id in self._issue_units_by_node.get(anchor,[])]
         unique=list(dict.fromkeys(unit_ids))
         unique.sort(key=lambda uid:(-int(self.store.units_by_id[uid].get('authority_rank') or 0),uid))
         limit=k or self.cfg.retrieval.issue_anchor_top_k
@@ -236,17 +313,17 @@ class Retriever:
             return self.profile_anchors(plan)
         if not locations: return []
         matched=[]
-        for unit in self.store.units:
-            if unit.get('kind')!='PROVISION' or unit.get('document_number') not in allowed_documents: continue
-            article=str(unit.get('article_number') or ''); clause=str(unit.get('clause_number') or ''); point=str(unit.get('point_number') or '').lower()
-            text=' '.join(' '.join(str(unit.get(field) or '').split()) for field in ('breadcrumb','text','source_text')).lower()
-            required=(article,clause,point) in locations
-            # Article 66 is the implementing rule only in Decree 145; similarly,
-            # Article 7 belongs to that decree while the remaining anchors belong
-            # to the Labour Code or its consolidated text.
-            if article in {'66','7'} and unit.get('document_number')!='145/2020/NĐ-CP': required=False
-            if article not in {'66','7'} and unit.get('document_number')=='145/2020/NĐ-CP': required=False
-            if required: matched.append(unit)
+        self._refresh_indexes()
+        for article,clause,point in locations:
+            for document in allowed_documents:
+                for unit in self._profile_units.get((document,article),[]):
+                    if unit.get('kind')!='PROVISION':continue
+                    if str(unit.get('clause_number') or '')!=clause or str(unit.get('point_number') or '').lower()!=point:continue
+                    # Article 66 is the implementing rule only in Decree 145;
+                    # Article 7 belongs there while other anchors use the Code.
+                    if article in {'66','7'} and document!='145/2020/NĐ-CP':continue
+                    if article not in {'66','7'} and document=='145/2020/NĐ-CP':continue
+                    matched.append(unit)
         # Prefer the clean consolidated text for each structural location, while
         # retaining the original act as a fallback when no consolidated unit exists.
         by_location={}
@@ -256,6 +333,7 @@ class Retriever:
         return [as_evidence(unit,1.0-index*.01,'policy',index,{'policy':1.0})
           for index,unit in enumerate(by_location.values(),1)]
     def profile_anchors(self,plan)->list[Evidence]:
+        self._refresh_indexes()
         chosen={}
         for groups in plan.slot_requirements.values():
             for alternatives in groups:
@@ -285,10 +363,10 @@ class Retriever:
 
     def case_law(self,query:str,k:int|None=None)->list[Evidence]:
         """Dedicated judicial channel so case questions do not depend on a global top-k."""
+        self._refresh_indexes()
         terms={term for term in re.findall(r'\w+',query.lower()) if len(term)>2}
         scored=[]
-        for unit in self.store.units:
-            if unit.get('kind')!='CASE': continue
+        for unit in self._case_units:
             text=' '.join(str(unit.get(field) or '') for field in ('document_number','document_title','breadcrumb','text','source_text')).lower()
             tokens=set(re.findall(r'\w+',text)); overlap=len(terms&tokens)/max(1,len(terms))
             identifier_bonus=.5 if unit.get('document_number') and _norm(unit['document_number']) in _norm(query) else 0

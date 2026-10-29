@@ -13,7 +13,7 @@ from .taxonomy import locator_matches,probation_duration_clauses,sanction_instru
 PROFILE_KEYS={
     'CONTRACT.PROBATION_DURATION','CONTRACT.PROBATION_REPEAT','CONTRACT.PROBATION_SANCTION',
     'TRAINING.RELATIONSHIP_COMPARISON','TRAINING.APPRENTICESHIP',
-    'TRAINING.COST_REPAYMENT','WORKING_TIME.OVERTIME_LIMITS',
+    'TRAINING.COST_REPAYMENT','WORKING_TIME.OVERTIME_LIMITS','WORKING_TIME.NORMAL_HOURS',
     'WAGE.OVERTIME_PAY','WAGE.NIGHT_PAY',
 }
 
@@ -173,6 +173,9 @@ def render_profile(pack,partial,assumptions):
           'Không thể khẳng định cứ nghỉ trước thời hạn cam kết là phải trả mọi khoản công ty yêu cầu. Cần đối chiếu hợp đồng đào tạo, trách nhiệm hoàn trả và chi phí có chứng từ theo các quy định dưới đây:')
     elif 'TRAINING.APPRENTICESHIP' in keys:
         intro='Học nghề và tập nghề để làm việc cho người sử dụng lao động khác với thực tập theo chương trình của trường. Các quy định trực tiếp trong bộ dữ liệu gồm:'
+    elif 'WORKING_TIME.NORMAL_HOURS' in keys:
+        mode='tuần' if re.search(r'(?:tính|theo)\s+tuần',query) else 'ngày'
+        intro=f'Theo chế độ tính thời giờ làm việc bình thường theo {mode}, căn cứ trực tiếp được truy xuất là:'
     elif 'WORKING_TIME.OVERTIME_LIMITS' in keys:
         intro='Giới hạn làm thêm giờ gồm điều kiện đồng ý, giới hạn theo ngày/tháng/năm và điều kiện áp dụng mức đến 300 giờ/năm. Đây là quy tắc trong phiên bản dữ liệu được tra cứu:'
     elif 'WAGE.NIGHT_PAY' in keys and 'WAGE.OVERTIME_PAY' in keys:
