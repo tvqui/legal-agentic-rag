@@ -1,0 +1,35 @@
+{
+  "artifact": "D:\\data_thô\\result\\result_28-10\\vn_labor_results.zip",
+  "compatibility": {
+    "compatible": true,
+    "build_id": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+    "graph_fingerprint": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+    "retrieval_unit_fingerprint": "dffd4aabc4066e361eca7300921a330a116e2cdb2a59673d94366c6dbd1a38d3",
+    "dense_fingerprint": "ca16358ab8a52c1408f891f31e4dc583c4e4e899eab2bb08bee34b0cc4934513",
+    "gold_build_id": "1373b6543fba3e018edae6c37c2527d58d61a9a7dec7241f95f31fdb1b13bfe8",
+    "issues": [],
+    "provisional_reasons": [
+      "SOURCE_CATALOG_HUMAN_REVIEW_INCOMPLETE",
+      "PROVISION_TEMPORAL_REVIEW_INCOMPLETE",
+      "GOLD_NOT_APPROVED"
+    ],
+    "source_catalog_records": 95,
+    "corpus_snapshot_as_of": "2026-09-15",
+    "technical_compatible": true,
+    "legal_ready": false,
+    "legal_status": "PROVISIONAL",
+    "archive_sha256": "469ac1ef01f527afe2b2176bdae85abbdd59a76037c07de6d16f4d1bb34316fd"
+  },
+  "questions": 120,
+  "dated_exact_all_groups_found": 120,
+  "positive_questions": 108,
+  "bm25_all_required_groups": {
+    "10": 78,
+    "20": 86,
+    "100": 95
+  },
+  "important": "BM25 misses are retrieval failures, NOT proof that a question is absent from the corpus. Keep those hard questions; never curate labels from model predictions.",
+  "model_inference": "NOT_RUN",
+  "dense_inference": "NOT_RUN",
+  "human_legal_review": "NOT_APPROVED"
+}

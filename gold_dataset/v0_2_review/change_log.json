@@ -1,0 +1,1749 @@
+[
+  {
+    "question_id": "HD001",
+    "changed_fields": [
+      "question",
+      "applicable_date"
+    ],
+    "reason": "Nêu rõ dữ kiện loại trừ các trường hợp buộc lập văn bản, tránh đồng nhất công việc thông thường với mọi ngoại lệ.",
+    "before": {
+      "question": "Tôi ký hợp đồng làm việc 20 ngày cho công việc thông thường bằng lời nói, có được không?",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi 30 tuổi, tự ký hợp đồng làm việc 20 ngày cho công việc thông thường, không phải giúp việc gia đình và không ký qua người được nhóm lao động ủy quyền. Hai bên có thể giao kết bằng lời nói không?",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD002",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD003",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD004",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD005",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD006",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD007",
+    "changed_fields": [
+      "question",
+      "applicable_date"
+    ],
+    "reason": "Làm rõ lao động thông thường, tránh dùng quy tắc chuyển loại hợp đồng như kết luận vô điều kiện cho nhóm ngoại lệ.",
+    "before": {
+      "question": "Hợp đồng 24 tháng đã hết hạn, tôi tiếp tục làm việc 40 ngày và hai bên không ký hợp đồng mới. Hợp đồng trở thành loại nào?",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi 30 tuổi, là công dân Việt Nam, không thuộc nhóm lao động cao tuổi hoặc trường hợp đặc biệt được ký nhiều lần hợp đồng xác định thời hạn. Hợp đồng 24 tháng đã hết hạn, tôi tiếp tục làm việc 40 ngày, hai bên không ký mới. Hợp đồng trở thành loại nào?",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD008",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD009",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Câu hỏi yêu cầu quy tắc chung và các ngoại lệ đã được nêu trong chính căn cứ, không suy đoán loại lao động cụ thể.",
+    "before": {
+      "question": "Tôi đã ký hai hợp đồng xác định thời hạn liên tiếp ở công ty tư nhân thông thường. Nếu tiếp tục làm việc, có thể ký lần thứ ba cùng loại không?",
+      "gold_answer": "Thông thường không. Sau lần ký thêm một hợp đồng xác định thời hạn, nếu tiếp tục làm việc thì phải ký hợp đồng không xác định thời hạn, trừ trường hợp luật quy định ngoại lệ.",
+      "gold_evidence_ids": [
+        "prov_2e5b7bcec4c52e66"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Theo quy tắc chung, sau hai hợp đồng xác định thời hạn liên tiếp, nếu người lao động tiếp tục làm việc thì phải ký loại hợp đồng nào? Nêu các nhóm ngoại lệ được dẫn tại điểm c khoản 2 Điều 20.",
+      "gold_answer": "Theo điểm c khoản 2 Điều 20, sau khi ký thêm một hợp đồng xác định thời hạn, nếu tiếp tục làm việc thì phải ký hợp đồng không xác định thời hạn. Ngoại lệ được dẫn gồm người được thuê làm giám đốc trong doanh nghiệp có vốn nhà nước; người lao động cao tuổi theo khoản 1 Điều 149; lao động nước ngoài theo khoản 2 Điều 151; và việc gia hạn đến hết nhiệm kỳ cho thành viên ban lãnh đạo tổ chức đại diện người lao động tại cơ sở theo khoản 4 Điều 177. Ngoại lệ cuối là gia hạn bảo vệ nhiệm kỳ, không phải quyền ký lại vô hạn cho mọi người lao động.",
+      "gold_evidence_ids": [
+        "prov_2e5b7bcec4c52e66",
+        "prov_54b4f534a1bf8e11",
+        "prov_d924b8b840530aaa",
+        "prov_23156e9aec981adc"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD012",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD013",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "HD014",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV001",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV002",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV003",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV004",
+    "changed_fields": [
+      "question",
+      "applicable_date"
+    ],
+    "reason": "Loại trừ rõ chức danh quản lý doanh nghiệp, phân biệt yêu cầu công việc với bằng cấp cá nhân.",
+    "before": {
+      "question": "Vị trí chuyên môn đòi hỏi trình độ cao đẳng, công ty thử việc 90 ngày có vượt giới hạn không?",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Vị trí chuyên môn yêu cầu trình độ cao đẳng, không phải công việc của người quản lý doanh nghiệp. Công ty yêu cầu thử việc 90 ngày có vượt giới hạn không?",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV005",
+    "changed_fields": [
+      "gold_answer",
+      "applicable_date"
+    ],
+    "reason": "Giới hạn kết luận vào thời lượng, không suy ra toàn bộ thỏa thuận thử việc hợp pháp.",
+    "before": {
+      "gold_answer": "Có. Thời gian thử việc tối đa trong trường hợp này là 60 ngày.",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Chỉ xét thời lượng, 45 ngày không vượt giới hạn 60 ngày của khoản 2 Điều 25 đối với công việc này. Điều đó không tự xác nhận mọi nội dung khác của thỏa thuận thử việc đều hợp pháp.",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV006",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV007",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV008",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV009",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV012",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV013",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TV014",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL001",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL002",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL003",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL004",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL005",
+    "changed_fields": [
+      "gold_answer",
+      "applicable_date"
+    ],
+    "reason": "Bổ sung công thức đền bù đầy đủ từ chính nguồn; không bịa lãi suất hoặc số tiền khi thiếu dữ kiện.",
+    "before": {
+      "gold_answer": "Có. Khi trả lương chậm từ 15 ngày trở lên trong trường hợp này, công ty phải đền bù ít nhất theo mức lãi được Điều 97 khoản 4 quy định.",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Có. Vì chậm từ 15 ngày trở lên, khoản 4 Điều 97 yêu cầu đền bù ít nhất bằng tiền lãi của số tiền trả chậm, tính theo lãi suất huy động tiền gửi kỳ hạn 01 tháng do ngân hàng nơi công ty mở tài khoản trả lương công bố tại thời điểm trả lương. Chưa có số tiền và lãi suất thực tế để tính một khoản tiền cụ thể.",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL006",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL007",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL008",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL009",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL012",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL013",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TL014",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG001",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG002",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG003",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG004",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG005",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG006",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG007",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG008",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG009",
+    "changed_fields": [
+      "gold_answer",
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Bổ sung đồng thuận, giới hạn ngày/tháng và thông báo bằng văn bản; không coi ngành dệt may là đủ mọi điều kiện.",
+    "before": {
+      "gold_answer": "Có thể được bố trí làm thêm đến 300 giờ trong năm khi thuộc trường hợp được luật cho phép và đáp ứng các điều kiện liên quan.",
+      "gold_evidence_ids": [
+        "prov_ea4944bd15922c19",
+        "prov_26921bbfe43debe0"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Có thể, nếu thuộc hoạt động sản xuất, gia công xuất khẩu hàng dệt, may tại điểm a khoản 3 Điều 107; giới hạn năm không quá 300 giờ. Vẫn phải đáp ứng khoản 2 về sự đồng ý và giới hạn ngày, tháng; khi tổ chức theo khoản 3 phải thông báo bằng văn bản theo khoản 4 Điều 107. Không phải cứ doanh nghiệp dệt may là tự động được bỏ các điều kiện này.",
+      "gold_evidence_ids": [
+        "prov_ea4944bd15922c19",
+        "prov_26921bbfe43debe0",
+        "prov_2315c425c1eaa518",
+        "prov_4ae9d3f661c91bf1",
+        "prov_1872be719bc6dd58"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG012",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG013",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TG014",
+    "changed_fields": [
+      "gold_answer",
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Kết hợp phần mở đầu Điều 108 với khoản 2 để chứng minh quyền vượt giới hạn, vẫn giữ ngoại lệ an toàn.",
+    "before": {
+      "gold_answer": "Có thể yêu cầu làm thêm giờ trong trường hợp bảo vệ tính mạng và khắc phục hậu quả theo Điều 108, trừ khi có nguy cơ ảnh hưởng tính mạng, sức khỏe của người lao động theo pháp luật an toàn, vệ sinh lao động.",
+      "gold_evidence_ids": [
+        "prov_d800881aee215246"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Có thể yêu cầu làm thêm trong trường hợp bảo vệ tính mạng con người, phòng ngừa hoặc khắc phục thiên tai theo phần mở đầu và khoản 2 Điều 108, không bị giới hạn số giờ tại Điều 107. Tuy nhiên, vẫn giữ ngoại lệ có nguy cơ ảnh hưởng tính mạng, sức khỏe người lao động theo pháp luật an toàn, vệ sinh lao động.",
+      "gold_evidence_ids": [
+        "prov_5e2b1eb558e1e991",
+        "prov_d800881aee215246"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP001",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP002",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP003",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP004",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP005",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Loại trừ nhóm hưởng 14 ngày và thâm niên; hỏi số cụ thể trong đúng một kỳ 12 tháng.",
+    "before": {
+      "question": "Người làm đủ 12 tháng trong điều kiện bình thường có bao nhiêu ngày nghỉ hằng năm hưởng nguyên lương?",
+      "gold_answer": "12 ngày làm việc nghỉ hằng năm hưởng nguyên lương.",
+      "gold_evidence_ids": [
+        "prov_4634c77f09c25fc0"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi 30 tuổi, không phải người khuyết tật, làm công việc trong điều kiện bình thường và vừa đủ 12 tháng cho cùng một công ty. Trong kỳ 12 tháng đó tôi được hưởng bao nhiêu ngày nghỉ hằng năm có lương?",
+      "gold_answer": "Theo điểm a khoản 1 Điều 113, được nghỉ hằng năm 12 ngày làm việc và hưởng nguyên lương theo hợp đồng lao động. Dữ kiện mới đủ 12 tháng chưa phát sinh ngày tăng thêm do đủ 5 năm theo Điều 114; không tự cộng thêm thâm niên không được cung cấp.",
+      "gold_evidence_ids": [
+        "prov_4634c77f09c25fc0",
+        "prov_a0c75b34c1abb058"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP006",
+    "changed_fields": [
+      "question",
+      "applicable_date"
+    ],
+    "reason": "Hỏi mức cơ sở theo nhóm công việc để không vô tình bỏ ngày tăng thêm do thâm niên.",
+    "before": {
+      "question": "Người làm nghề nặng nhọc, độc hại, nguy hiểm đủ 12 tháng được nghỉ phép năm bao nhiêu ngày?",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Người làm nghề nặng nhọc, độc hại, nguy hiểm đủ 12 tháng cho một người sử dụng lao động được hưởng mức nghỉ hằng năm cơ sở bao nhiêu ngày làm việc, chưa tính ngày tăng thêm do thâm niên?",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP007",
+    "changed_fields": [
+      "question",
+      "applicable_date"
+    ],
+    "reason": "Hỏi mức cơ sở, không giả định thâm niên bằng 0.",
+    "before": {
+      "question": "Người làm nghề đặc biệt nặng nhọc, độc hại, nguy hiểm đủ 12 tháng có bao nhiêu ngày phép năm?",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Người làm nghề đặc biệt nặng nhọc, độc hại, nguy hiểm đủ 12 tháng cho một người sử dụng lao động được hưởng mức nghỉ hằng năm cơ sở bao nhiêu ngày làm việc, chưa tính ngày tăng thêm do thâm niên?",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP008",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP009",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP012",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP013",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "NP014",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD001",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "applicable_date"
+    ],
+    "reason": "Cung cấp đủ dữ kiện quyết định thời hạn báo trước; không ép chatbot hỏi lại điều đã biết.",
+    "before": {
+      "question": "Tôi làm theo hợp đồng không xác định thời hạn, muốn đơn phương nghỉ việc bình thường. Cần báo trước tối thiểu bao nhiêu ngày?",
+      "gold_answer": "Thông thường phải báo trước ít nhất 45 ngày, trừ ngành nghề/công việc đặc thù hoặc trường hợp được nghỉ không báo trước.",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi làm theo hợp đồng không xác định thời hạn, nghỉ vì lý do cá nhân, không thuộc trường hợp được nghỉ không cần báo trước và không làm ngành, nghề, công việc đặc thù. Tôi phải báo trước tối thiểu bao lâu?",
+      "gold_answer": "Phải báo trước ít nhất 45 ngày, theo điểm a khoản 1 Điều 35. Đây là thời hạn cho dữ kiện đã loại trừ ngành nghề đặc thù và quyền nghỉ không cần báo trước.",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD002",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "applicable_date"
+    ],
+    "reason": "Cung cấp đủ dữ kiện quyết định thời hạn báo trước; không ép chatbot hỏi lại điều đã biết.",
+    "before": {
+      "question": "Tôi có hợp đồng xác định thời hạn 24 tháng, muốn đơn phương nghỉ việc trong trường hợp thông thường. Phải báo trước bao lâu?",
+      "gold_answer": "Ít nhất 30 ngày, trừ trường hợp được quyền nghỉ không báo trước hoặc ngành nghề/công việc đặc thù.",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi làm theo hợp đồng xác định thời hạn 24 tháng, nghỉ vì lý do cá nhân, không thuộc trường hợp được nghỉ không cần báo trước và không làm ngành, nghề, công việc đặc thù. Tôi phải báo trước tối thiểu bao lâu?",
+      "gold_answer": "Phải báo trước ít nhất 30 ngày, theo điểm b khoản 1 Điều 35. Đây là thời hạn cho dữ kiện đã loại trừ ngành nghề đặc thù và quyền nghỉ không cần báo trước.",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD003",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "applicable_date"
+    ],
+    "reason": "Cung cấp đủ dữ kiện quyết định thời hạn báo trước; không ép chatbot hỏi lại điều đã biết.",
+    "before": {
+      "question": "Tôi có hợp đồng xác định thời hạn 9 tháng, đơn phương nghỉ bình thường. Phải báo trước tối thiểu mấy ngày?",
+      "gold_answer": "Ít nhất 3 ngày làm việc, trừ trường hợp được nghỉ không báo trước hoặc ngành nghề/công việc đặc thù.",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi làm theo hợp đồng xác định thời hạn 9 tháng, nghỉ vì lý do cá nhân, không thuộc trường hợp được nghỉ không cần báo trước và không làm ngành, nghề, công việc đặc thù. Tôi phải báo trước tối thiểu bao lâu?",
+      "gold_answer": "Phải báo trước ít nhất 03 ngày làm việc, theo điểm c khoản 1 Điều 35. Đây là thời hạn cho dữ kiện đã loại trừ ngành nghề đặc thù và quyền nghỉ không cần báo trước.",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD004",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD005",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD006",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD007",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Bổ sung hợp đồng, tình trạng được bảo vệ và căn cứ báo trước, không chỉ dẫn lý do chấm dứt.",
+    "before": {
+      "question": "Doanh nghiệp có thể đơn phương cho thôi việc do nhân viên thường xuyên không hoàn thành công việc theo tiêu chí đánh giá hợp lệ không?",
+      "gold_answer": "Có thể, nếu thật sự thường xuyên không hoàn thành công việc theo tiêu chí quy chế đánh giá hợp lệ, bảo đảm nghĩa vụ tham khảo ý kiến khi áp dụng và thời hạn báo trước tương ứng.",
+      "gold_evidence_ids": [
+        "prov_d4fa00662ab1421d"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Nhân viên có hợp đồng 24 tháng, không làm công việc đặc thù và không thuộc trường hợp được bảo vệ tại Điều 37. Người này thường xuyên không hoàn thành công việc theo tiêu chí đánh giá hợp lệ, được ban hành sau khi tham khảo ý kiến tổ chức đại diện người lao động tại cơ sở nơi có tổ chức này. Công ty có quyền đơn phương chấm dứt không và phải báo trước bao lâu?",
+      "gold_answer": "Có thể thực hiện quyền đơn phương theo điểm a khoản 1 Điều 36 nếu tình trạng thường xuyên không hoàn thành công việc thật sự đáp ứng tiêu chí hợp lệ. Với hợp đồng 24 tháng và dữ kiện đã loại trừ nhóm đặc thù, phải báo trước ít nhất 30 ngày theo điểm b khoản 2 Điều 36. Không suy từ một lần không hoàn thành công việc thành điều kiện thường xuyên.",
+      "gold_evidence_ids": [
+        "prov_d4fa00662ab1421d",
+        "prov_f939772b4657f702"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD008",
+    "changed_fields": [
+      "question",
+      "applicable_date"
+    ],
+    "reason": "Tách quyền không báo trước với thủ tục sa thải; đã loại trừ trường hợp bảo vệ.",
+    "before": {
+      "question": "Người lao động tự ý bỏ việc không lý do chính đáng trong 5 ngày làm việc liên tục. Công ty có cần báo trước khi đơn phương chấm dứt không?",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Người lao động không thuộc các trường hợp bảo vệ tại Điều 37, tự ý bỏ việc không có lý do chính đáng đủ 5 ngày làm việc liên tục. Nếu công ty đơn phương chấm dứt theo điểm e khoản 1 Điều 36 thì có phải báo trước không?",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD009",
+    "changed_fields": [
+      "gold_answer",
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Bổ sung quy định trực tiếp cấm chấm dứt vì mang thai; khoản 3 Điều 37 vẫn là căn cứ bảo vệ.",
+    "before": {
+      "gold_answer": "Không. Bộ luật Lao động có quy định bảo vệ người lao động nữ mang thai, không cho người sử dụng lao động thực hiện quyền đơn phương chấm dứt trong trường hợp này.",
+      "gold_evidence_ids": [
+        "prov_ecd7c26c6f8188e0"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Không được đơn phương chấm dứt chỉ vì người lao động mang thai. Khoản 3 Điều 37 quy định trường hợp người sử dụng lao động không được thực hiện quyền đơn phương; khoản 3 Điều 137 còn trực tiếp cấm sa thải hoặc đơn phương chấm dứt vì lý do mang thai, với các trường hợp ngoại lệ về tình trạng của người sử dụng lao động được luật nêu. Không đồng nhất hết hạn hợp đồng với đơn phương chấm dứt.",
+      "gold_evidence_ids": [
+        "prov_ecd7c26c6f8188e0",
+        "prov_a0f7427780595ab9"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD012",
+    "changed_fields": [
+      "gold_answer",
+      "applicable_date"
+    ],
+    "reason": "Nêu rõ các nhóm nghĩa vụ trong nguồn thay cho cụm quyền lợi liên quan quá chung; giữ điều kiện phát sinh.",
+    "before": {
+      "gold_answer": "Có. Theo khoản 1 Điều 41, công ty phải nhận lại người lao động, thanh toán quyền lợi liên quan trong thời gian không làm việc và trả thêm ít nhất hai tháng lương hợp đồng.",
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Có. Theo khoản 1 Điều 41, công ty phải nhận người lao động trở lại, trả tiền lương và đóng bảo hiểm xã hội, bảo hiểm y tế, bảo hiểm thất nghiệp cho những ngày không được làm việc, đồng thời trả thêm ít nhất 02 tháng tiền lương theo hợp đồng. Nếu vi phạm thời hạn báo trước tại khoản 2 Điều 36 thì còn trả khoản tương ứng ngày thiếu báo trước. Người lao động hoàn trả trợ cấp thôi việc, mất việc đã nhận nếu có; nếu không còn vị trí cũ mà vẫn muốn làm việc thì hai bên thỏa thuận sửa đổi hợp đồng.",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD013",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD014",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "CD015",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD001",
+    "changed_fields": [
+      "gold_evidence_ids",
+      "missing_facts",
+      "applicable_date"
+    ],
+    "reason": "Căn cứ cho các nhánh chính, đặc thù và quyền không báo trước đều có thật; ngày tra cứu đã được cung cấp riêng.",
+    "before": {
+      "gold_evidence_ids": [
+        "prov_e091631d0168c360",
+        "prov_c75b6504b5c1069f",
+        "prov_85a2c41c4237c73d"
+      ],
+      "missing_facts": [
+        "Loại và thời hạn hợp đồng",
+        "Nghề đặc thù hay không",
+        "Lý do nghỉ"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_evidence_ids": [
+        "prov_e091631d0168c360",
+        "prov_c75b6504b5c1069f",
+        "prov_85a2c41c4237c73d",
+        "prov_bfc5906f1e003421",
+        "prov_186d81901fe081bc"
+      ],
+      "missing_facts": [
+        "Loại và thời hạn hợp đồng",
+        "Ngành, nghề, công việc có thuộc nhóm đặc thù",
+        "Lý do nghỉ và tình tiết được nghỉ không cần báo trước"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD002",
+    "changed_fields": [
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Thiếu căn cứ nhóm quản lý trong v0.1; bổ sung khoản 1 Điều 25.",
+    "before": {
+      "gold_evidence_ids": [
+        "prov_0d899ce39134b1a5",
+        "prov_900510b9768da439",
+        "prov_82b3c0a297633594",
+        "prov_d9651e6941d38a25"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_evidence_ids": [
+        "prov_0d899ce39134b1a5",
+        "prov_d3c76fc9dfd1296a",
+        "prov_900510b9768da439",
+        "prov_82b3c0a297633594",
+        "prov_d9651e6941d38a25"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD003",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "missing_facts",
+      "applicable_date"
+    ],
+    "reason": "Số 6 triệu tự nó không buộc phải biết vùng trong mọi cách hiểu. Làm rõ đây là tổng thu nhập có cả tăng ca/thưởng, chưa biết lương công việc và giờ bình thường; không dùng ngưỡng ngoài qrels.",
+    "before": {
+      "question": "Công ty trả tôi lương 6 triệu đồng một tháng, như vậy có thấp hơn mức lương tối thiểu không?",
+      "gold_answer": "Cần biết địa bàn vùng lương tối thiểu, kỳ áp dụng và cách trả lương; chỉ với số 6 triệu đồng chưa đủ để kết luận.",
+      "missing_facts": [
+        "Vùng/địa bàn làm việc",
+        "Ngày áp dụng",
+        "Lương tháng theo thời giờ làm việc bình thường"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Công ty thông báo tổng thu nhập của tôi khoảng 6 triệu đồng/tháng, gồm cả tiền tăng ca và thưởng nhưng chưa tách lương công việc. Chỉ dựa vào số này có kết luận đã đáp ứng mức lương tối thiểu không?",
+      "gold_answer": "Chưa thể kết luận chỉ từ tổng thu nhập gồm cả tăng ca và thưởng. Cần biết phần lương theo công việc hoặc chức danh, thời giờ làm việc bình thường và cách trả lương, cùng địa bàn áp dụng để đối chiếu mức tối thiểu tương ứng. Khoản 2 Điều 90 yêu cầu mức lương theo công việc hoặc chức danh không thấp hơn mức tối thiểu; khoản 2 Điều 91 xác lập mức tối thiểu theo vùng, tháng hoặc giờ. Không lấy tổng thu nhập 6 triệu để mặc nhiên chứng minh phần lương công việc đã đạt mức tối thiểu.",
+      "missing_facts": [
+        "Lương theo công việc hoặc chức danh, tách tiền tăng ca và thưởng",
+        "Địa bàn áp dụng",
+        "Thời giờ làm việc bình thường và hình thức trả lương"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD004",
+    "changed_fields": [
+      "gold_evidence_ids",
+      "missing_facts",
+      "applicable_date"
+    ],
+    "reason": "Bổ sung điều khoản tỷ lệ cho người làm chưa đủ năm, khuyết tật/tuổi cũng là dữ kiện phân nhóm.",
+    "before": {
+      "gold_evidence_ids": [
+        "prov_4634c77f09c25fc0",
+        "prov_42bcd849a0a30ecd",
+        "prov_1fab8366c4ce639b",
+        "prov_a0c75b34c1abb058"
+      ],
+      "missing_facts": [
+        "Thời gian đã làm",
+        "Nhóm công việc",
+        "Thâm niên tại cùng doanh nghiệp"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_evidence_ids": [
+        "prov_4634c77f09c25fc0",
+        "prov_42bcd849a0a30ecd",
+        "prov_1fab8366c4ce639b",
+        "prov_1c22b690b094979c",
+        "prov_a0c75b34c1abb058"
+      ],
+      "missing_facts": [
+        "Số tháng và thâm niên làm việc cho cùng người sử dụng lao động",
+        "Nhóm điều kiện công việc",
+        "Độ tuổi và tình trạng khuyết tật nếu liên quan phân nhóm"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD005",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD006",
+    "changed_fields": [
+      "gold_evidence_ids",
+      "missing_facts",
+      "applicable_date"
+    ],
+    "reason": "Bổ sung định nghĩa trái luật, phạm vi báo trước và hậu quả; không dùng phần mở đầu một khoản như toàn bộ quy tắc.",
+    "before": {
+      "gold_evidence_ids": [
+        "prov_2c5826083ebc3bd3",
+        "prov_186d81901fe081bc",
+        "prov_ef06e74f0e045edb"
+      ],
+      "missing_facts": [
+        "Loại hợp đồng",
+        "Lý do nghỉ",
+        "Đã báo trước bao lâu"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_evidence_ids": [
+        "prov_e091631d0168c360",
+        "prov_c75b6504b5c1069f",
+        "prov_85a2c41c4237c73d",
+        "prov_bfc5906f1e003421",
+        "prov_186d81901fe081bc",
+        "prov_3b1d15590711065e",
+        "prov_ef06e74f0e045edb"
+      ],
+      "missing_facts": [
+        "Loại và thời hạn hợp đồng",
+        "Lý do nghỉ; trường hợp không cần báo trước",
+        "Số ngày đã báo trước",
+        "Có thuộc công việc đặc thù",
+        "Công ty có thỏa thuận cho nghỉ sớm hay không"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD007",
+    "changed_fields": [
+      "gold_answer",
+      "gold_evidence_ids",
+      "missing_facts",
+      "applicable_date"
+    ],
+    "reason": "Phân biệt xác định quyền hưởng với tính mức, không chỉ dùng thời gian đóng bảo hiểm làm điều kiện duy nhất.",
+    "before": {
+      "gold_answer": "Cần biết cách chấm dứt hợp đồng, thời gian làm việc, thời gian đóng bảo hiểm thất nghiệp và các khoản trợ cấp đã nhận.",
+      "gold_evidence_ids": [
+        "prov_63c8f3873485bc6c",
+        "prov_b062a537009a24b3"
+      ],
+      "missing_facts": [
+        "Lý do/loại chấm dứt",
+        "Tổng thời gian làm việc",
+        "Thời gian đóng bảo hiểm thất nghiệp"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_answer": "Cần biết trường hợp chấm dứt hợp đồng, thời gian làm việc thường xuyên và có thuộc diện hưởng lương hưu hoặc trường hợp loại trừ ở Điều 46 hay không để xác định quyền hưởng. Để tính mức còn cần thời gian đã tham gia bảo hiểm thất nghiệp, thời gian đã được chi trả trợ cấp và tiền lương bình quân theo khoản 3 Điều 46. Không thể kết luận cứ nghỉ việc là được trợ cấp.",
+      "gold_evidence_ids": [
+        "prov_63c8f3873485bc6c",
+        "prov_b062a537009a24b3",
+        "prov_b669449b1f69f70b"
+      ],
+      "missing_facts": [
+        "Trường hợp chấm dứt",
+        "Thời gian làm việc thường xuyên",
+        "Có thuộc trường hợp loại trừ",
+        "Thời gian bảo hiểm thất nghiệp và trợ cấp đã nhận; lương tính trợ cấp nếu cần tính mức"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD008",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD009",
+    "changed_fields": [
+      "question",
+      "gold_answer",
+      "gold_evidence_ids",
+      "missing_facts",
+      "applicable_date"
+    ],
+    "reason": "Câu cũ có thể trả lời quy tắc chung mà không cần mọi dữ kiện. Đổi sang yêu cầu tính số tiền cụ thể để nhãn thiếu dữ kiện có cơ sở.",
+    "before": {
+      "question": "Ngày nghỉ lễ tôi được hưởng khoản tiền làm thêm như thế nào?",
+      "gold_answer": "Cần biết bạn có thực tế làm việc vào ngày lễ không, có làm thêm giờ hay không và hình thức trả lương để áp dụng đúng mức.",
+      "gold_evidence_ids": [
+        "prov_8237a4a48bf3afc5",
+        "prov_1b27c4459a712e61"
+      ],
+      "missing_facts": [
+        "Có làm việc vào ngày lễ không",
+        "Giờ làm thêm",
+        "Hình thức hưởng lương"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "question": "Tôi đi làm vào một ngày nghỉ lễ và có cả giờ làm ban đêm. Công ty phải trả cho tôi chính xác bao nhiêu tiền cho ngày đó?",
+      "gold_answer": "Chưa tính được số tiền cụ thể. Cần biết tiền lương hoặc đơn giá của công việc, số giờ làm ban ngày/ban đêm và hình thức hưởng lương. Khoản 1 điểm c Điều 98 đặt mức làm thêm ngày lễ ít nhất 300%; khoản 2 và khoản 3 quy định các khoản làm đêm và làm thêm ban đêm. Không được chỉ trả lời 300% rồi bỏ các khoản làm đêm, hoặc bịa số tiền khi chưa có giờ và đơn giá.",
+      "gold_evidence_ids": [
+        "prov_1b27c4459a712e61",
+        "prov_2f6168d4affe1f8e",
+        "prov_2cc57893b123d3a8"
+      ],
+      "missing_facts": [
+        "Tiền lương hoặc đơn giá công việc",
+        "Số giờ làm ban ngày và ban đêm",
+        "Hình thức hưởng lương"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD010",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD011",
+    "changed_fields": [
+      "applicable_date"
+    ],
+    "reason": "Đọc đối chiếu câu hỏi/đáp án và căn cứ trong corpus; ghim ngày đo về snapshot thực tế.",
+    "before": {
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD012",
+    "changed_fields": [
+      "gold_evidence_ids",
+      "applicable_date"
+    ],
+    "reason": "Thay căn cứ tiêu đề Điều 14 bằng hai khoản chứa quy tắc thực chất.",
+    "before": {
+      "gold_evidence_ids": [
+        "prov_20c7d6a91ea43d3a"
+      ],
+      "applicable_date": "2026-10-23"
+    },
+    "after": {
+      "gold_evidence_ids": [
+        "prov_89771ca82d7c7b0f",
+        "prov_7eabe4f30f5393d9"
+      ],
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD013",
+    "changed_fields": [
+      "category",
+      "question",
+      "gold_answer",
+      "expected_status",
+      "applicable_date"
+    ],
+    "reason": "Thay câu yêu cầu con số năm 2028 không có trong artifact bằng câu quy tắc được corpus hỗ trợ; bản gốc giữ riêng cho phép thử từ chối.",
+    "before": {
+      "category": "Thiếu dữ kiện/căn cứ",
+      "question": "Vào ngày 01/01/2028, mức lương tối thiểu vùng I chính xác là bao nhiêu?",
+      "gold_answer": "Chưa thể khẳng định mức cụ thể cho ngày 01/01/2028 từ bộ dữ liệu được chốt năm 2026. Cần văn bản quy định mức lương tối thiểu có hiệu lực tại thời điểm tương lai này.",
+      "expected_status": "INSUFFICIENT_EVIDENCE",
+      "applicable_date": "2028-01-01"
+    },
+    "after": {
+      "category": "Tiền lương",
+      "question": "Theo Bộ luật Lao động, cơ quan nào quyết định và công bố mức lương tối thiểu, dựa trên khuyến nghị của cơ quan nào?",
+      "gold_answer": "Theo khoản 4 Điều 91, Chính phủ quyết định và công bố mức lương tối thiểu trên cơ sở khuyến nghị của Hội đồng tiền lương quốc gia.",
+      "expected_status": "ANSWERABLE",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD014",
+    "changed_fields": [
+      "category",
+      "question",
+      "gold_answer",
+      "gold_evidence_ids",
+      "expected_status",
+      "applicable_date"
+    ],
+    "reason": "Thay yêu cầu lịch dương năm 2028 chưa có nguồn bằng quy tắc Quốc khánh và thẩm quyền chọn ngày có trong corpus.",
+    "before": {
+      "category": "Thiếu dữ kiện/căn cứ",
+      "question": "Năm 2028 lịch nghỉ Tết Âm lịch chính thức theo quyết định của Thủ tướng sẽ rơi vào những ngày dương lịch nào?",
+      "gold_answer": "Không đủ căn cứ để nêu lịch nghỉ cụ thể của năm 2028 từ bộ dữ liệu đang chốt năm 2026; lịch thực hiện phải đối chiếu quyết định chính thức áp dụng cho năm đó.",
+      "gold_evidence_ids": [
+        "prov_e2358e1908b63e10"
+      ],
+      "expected_status": "INSUFFICIENT_EVIDENCE",
+      "applicable_date": "2028-02-01"
+    },
+    "after": {
+      "category": "Nghỉ phép và nghỉ lễ",
+      "question": "Theo Bộ luật Lao động, người lao động Việt Nam được nghỉ Quốc khánh mấy ngày hưởng nguyên lương? Ngoài ngày 2 tháng 9 thì ai quyết định ngày nghỉ còn lại?",
+      "gold_answer": "Điểm đ khoản 1 Điều 112 quy định Quốc khánh nghỉ 02 ngày hưởng nguyên lương: ngày 02 tháng 9 dương lịch và 01 ngày liền kề trước hoặc sau. Theo khoản 3 Điều 112, hằng năm Thủ tướng Chính phủ quyết định cụ thể ngày nghỉ này; quy tắc khung không tự xác định lịch cụ thể của một năm chưa có quyết định.",
+      "gold_evidence_ids": [
+        "prov_83ad45cb6e887545",
+        "prov_e2358e1908b63e10"
+      ],
+      "expected_status": "ANSWERABLE",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  },
+  {
+    "question_id": "TD015",
+    "changed_fields": [
+      "category",
+      "question",
+      "gold_answer",
+      "gold_evidence_ids",
+      "expected_status",
+      "applicable_date"
+    ],
+    "reason": "Thay dự báo sửa luật năm 2029 bằng quy tắc các khoản làm thêm ban đêm đã có trong corpus, không cộng các tỷ lệ khác cơ sở một cách máy móc.",
+    "before": {
+      "category": "Thiếu dữ kiện/căn cứ",
+      "question": "Năm 2029 Chính phủ sẽ nâng số giờ làm thêm tối đa thông thường lên mức nào, nếu có thay đổi luật?",
+      "gold_answer": "Không có căn cứ pháp lý đã ban hành và được xác minh về một sửa đổi giả định năm 2029; không thể đưa ra con số chính xác chỉ dựa vào dự báo.",
+      "gold_evidence_ids": [
+        "prov_7ebbd1a871c548bc"
+      ],
+      "expected_status": "INSUFFICIENT_EVIDENCE",
+      "applicable_date": "2029-01-01"
+    },
+    "after": {
+      "category": "Tiền lương",
+      "question": "Khi người lao động làm thêm giờ vào ban đêm, ngoài tiền làm thêm giờ và khoản làm đêm 30%, luật còn quy định trả thêm khoản nào? Nêu rõ cơ sở tính, không cần tính thành số tiền.",
+      "gold_answer": "Theo khoản 3 Điều 98, ngoài tiền trả theo khoản 1 và khoản 2, còn được trả thêm 20% tiền lương tính theo đơn giá hoặc tiền lương theo công việc làm vào ban ngày của ngày làm việc bình thường, ngày nghỉ hằng tuần hoặc ngày nghỉ lễ, tết tương ứng. Không cộng máy móc 20% vào mọi tổng tỷ lệ nếu cơ sở tính khác nhau.",
+      "gold_evidence_ids": [
+        "prov_2cc57893b123d3a8",
+        "prov_2f6168d4affe1f8e",
+        "prov_ecbe024a3498e5dc"
+      ],
+      "expected_status": "ANSWERABLE",
+      "applicable_date": "2026-09-15"
+    },
+    "review_kind": "ENGINEERING_CONTENT_REVIEW_NOT_EXPERT_APPROVAL"
+  }
+]

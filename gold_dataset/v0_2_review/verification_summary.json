@@ -1,0 +1,20 @@
+{
+  "python_and_notebook_syntax": "PASS",
+  "zip_crc_and_sha": "PASS",
+  "diff_check_passed": true,
+  "preexisting_staged_changes_unchanged": true,
+  "original_v01_unchanged": true,
+  "benchmark_tests": {
+    "passed": 55,
+    "failed": 0,
+    "scope": "evaluation_suite_only"
+  },
+  "corpus_probe": {
+    "questions": 120,
+    "dated_exact_all_groups_found": 120,
+    "llm_answers_retested": false
+  },
+  "legal_review": "NOT_APPROVED",
+  "offline_rerun_required": false,
+  "commit_or_push": false
+}

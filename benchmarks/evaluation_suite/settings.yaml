@@ -2,7 +2,7 @@
 artifact: auto
 input_root: /kaggle/input
 base_config: config/online_kaggle.yaml
-labor_gold: gold_dataset/PhapDienAI_Gold_100_Labor_v0_1.zip
+labor_gold: gold_dataset/PhapDienAI_Gold_100_Labor_v0_2.zip
 labor_limit: null
 labor_seed_date: '2026-10-23'
 device: cuda:0

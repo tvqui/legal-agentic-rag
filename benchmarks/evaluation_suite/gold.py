@@ -51,6 +51,10 @@ def import_candidate(path,store,fingerprint):
     if manifest.get('size')!=len(rows) or manifest.get('distinct_evidence_ids')!=len(evidence):raise ValueError('Manifest count mismatch')
     if manifest.get('counts_by_expected_status')!=dict(Counter(r['expected_status'] for r in rows)):raise ValueError('Manifest status counts mismatch')
     date.fromisoformat(manifest['data_cutoff'])
+    binding=manifest.get('corpus_binding') or {}
+    for field in ('build_id','retrieval_unit_fingerprint'):
+        if binding.get(field) and binding[field]!=getattr(store.report,field,None):
+            raise ValueError('Curated Gold corpus binding mismatch: '+field+'. Re-review the Gold for this OFFLINE build; do not disable this check.')
     snapshot=store.report.corpus_snapshot_as_of
     mapped={};checks=[];migrations=[]
     from vn_labor_online.retrieval import as_evidence,temporal_filter
@@ -74,11 +78,16 @@ def import_candidate(path,store,fingerprint):
             if norm(entry['evidence_text'])!=norm(unit.get('source_text') or unit['text']):
                 raise ValueError('Gold quotation differs from corpus: '+uid)
             if unit.get('source_url')!=entry.get('source_url'):raise ValueError('Gold source URL mismatch: '+uid)
+            if 'ancestor_context' in entry and norm(entry['ancestor_context'])!=norm(unit.get('ancestor_context') or ''):
+                raise ValueError('Gold ancestor context differs from corpus: '+uid)
+            if entry.get('source_text_sha256') and hashlib.sha256((unit.get('source_text') or unit['text']).encode()).hexdigest()!=entry['source_text_sha256']:
+                raise ValueError('Gold source text hash mismatch: '+uid)
         mapped[uid]=candidates
         checks.append({'evidence_id':uid,'resolved_ids':[u['unit_id'] for u in candidates],
             'locator':entry['locator'],'text_match':'WHITESPACE_NFC_ONLY','document_match':True,
             'source_url_match':True,'provision_temporal_verified':all(bool(u.get('provision_temporal_verified')) for u in candidates)})
     result=[];questions=[]
+    if len({norm(r['question']) for r in rows})!=len(rows):raise ValueError('Duplicate question text')
     for original in rows:
         qid=original['question_id'];status=original['expected_status']
         if status not in STATUSES:raise ValueError('Unknown expected status: '+qid)
@@ -93,6 +102,8 @@ def import_candidate(path,store,fingerprint):
             if not entry or detail['evidence_id'] not in refs or locator(detail['locator'])!=locator(entry['locator']):
                 raise ValueError('Invalid evidence_details: '+qid)
             if norm(detail['evidence_excerpt']) not in norm(entry['evidence_text']):raise ValueError('Altered evidence excerpt: '+qid)
+            if 'ancestor_context' in detail and norm(detail['ancestor_context'])!=norm(entry.get('ancestor_context') or ''):
+                raise ValueError('Altered evidence ancestor context: '+qid)
         groups=[];portable=[]
         for uid,loc in zip(refs,locs):
             if uid not in mapped:raise ValueError('Unknown catalog ID: '+qid)
@@ -117,6 +128,7 @@ def import_candidate(path,store,fingerprint):
             'retrieval_exclusion_reason':None if status=='ANSWERABLE' else 'NOT_POSITIVE_ANSWERABLE_RETRIEVAL_QREL',
             # This is explicitly a draft, dataset-relative disposition metric.
             'status_scoring_scope':'DRAFT_CORPUS_RELATIVE_NOT_LEGAL_ACCURACY'}
+        if original.get('scoring_note'):row['scoring_note']=original['scoring_note']
         row['annotation_review']=notes.get(qid,{})
         row['status_score_eligible']=row['annotation_review'].get('status_score_eligible',True)
         row['qa_judge_eligible']=row['annotation_review'].get('qa_judge_eligible',True)
@@ -138,7 +150,8 @@ def import_candidate(path,store,fingerprint):
         'warnings':['Candidate labels and non-exhaustive evidence, not legal expert Gold.',
             'Reference cutoff is a dataset assertion, not proof of corpus completeness.',
             'Future-law abstention is corpus-relative, not a universal legal answer.',
-            'Single consolidated law; no independent coverage of all labour law, historical law or dialogue.'],
+            'Single consolidated law; no independent coverage of all labour law, historical law or dialogue.',
+            'Evidence presence and dated mapping do not prove successful retrieval or a correct model answer.'],
         'evidence_checks':checks,'question_checks':questions}
     return result,report
 

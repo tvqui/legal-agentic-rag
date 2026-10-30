@@ -1,0 +1,2042 @@
+{
+  "schema_version": 1,
+  "source_zip_sha256": "26c278386a69160b3c1479e9280253c0a24838e4fe7d3f9830b2a5cb2d55a7c3",
+  "source_manifest": {
+    "dataset_name": "PhapDienAI_Gold_120_Labor_v0_2",
+    "created_at": "2026-10-30",
+    "data_cutoff": "2026-09-15",
+    "size": 120,
+    "counts_by_category": {
+      "Hợp đồng": 14,
+      "Thử việc": 14,
+      "Tiền lương": 16,
+      "Thời giờ làm việc": 14,
+      "Nghỉ phép và nghỉ lễ": 16,
+      "Chấm dứt hợp đồng": 15,
+      "Thiếu dữ kiện/căn cứ": 12,
+      "Kỷ luật": 5,
+      "Nội quy": 1,
+      "Lao động chưa thành niên": 2,
+      "Lao động nữ": 2,
+      "Lao động cao tuổi": 1,
+      "Lao động nước ngoài": 1,
+      "Đào tạo": 1,
+      "Tranh chấp": 2,
+      "Nghỉ việc riêng": 1,
+      "Quyền và nghĩa vụ": 1,
+      "Đa yêu cầu": 2
+    },
+    "counts_by_expected_status": {
+      "ANSWERABLE": 108,
+      "NEED_MORE_FACTS": 12
+    },
+    "distinct_evidence_ids": 110,
+    "source": "18/VBHN-VPQH (2026) integrated Labor Code, matched by document_id to provided OFFLINE retrieval_units.jsonl",
+    "source_document_id": "doc_d98ede4425ed3133",
+    "source_url": "https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-18-vbhn-vpqh-468971.htm",
+    "corpus_zip": "vn_labor_results.zip (result_28-10)",
+    "review_status": "DRAFT - corpus-aligned engineering review, no human legal approval",
+    "use_restriction": "Development comparison only; edited using prior failures, not independent hold-out or proof of complete legal coverage. No prediction of future law.",
+    "id_semantics": "gold_evidence_ids are exact `unit_id` values present in artifacts/06_indexes/retrieval_units.jsonl for this build; may not transfer across builds",
+    "temporal_limitation": "All core query dates deliberately fixed to corpus snapshot 2026-09-15, not represented as present-day legal advice. Provision intervals and sources remain provisional.",
+    "source_parent_zip": "PhapDienAI_Gold_100_Labor_v0_1.zip",
+    "source_parent_zip_sha256": "03d4aff611026fe4e1be4b27d5522af3bc501c242d2be37b37dd871bf318b4ab",
+    "corpus_binding": {
+      "build_id": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+      "retrieval_unit_fingerprint": "dffd4aabc4066e361eca7300921a330a116e2cdb2a59673d94366c6dbd1a38d3"
+    },
+    "coverage_scope": "One consolidated Labor Code; optional 20 additions broaden topics, but not every document, historical period, case law, conversation or every legal issue."
+  },
+  "corpus_build_id": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+  "corpus_fingerprint": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+  "corpus_snapshot_as_of": "2026-09-15",
+  "questions": 120,
+  "evidence_records": 110,
+  "counts_by_status": {
+    "ANSWERABLE": 108,
+    "NEED_MORE_FACTS": 12
+  },
+  "counts_by_category": {
+    "Hợp đồng": 14,
+    "Thử việc": 14,
+    "Tiền lương": 16,
+    "Thời giờ làm việc": 14,
+    "Nghỉ phép và nghỉ lễ": 16,
+    "Chấm dứt hợp đồng": 15,
+    "Thiếu dữ kiện/căn cứ": 12,
+    "Kỷ luật": 5,
+    "Nội quy": 1,
+    "Lao động chưa thành niên": 2,
+    "Lao động nữ": 2,
+    "Lao động cao tuổi": 1,
+    "Lao động nước ngoài": 1,
+    "Đào tạo": 1,
+    "Tranh chấp": 2,
+    "Nghỉ việc riêng": 1,
+    "Quyền và nghĩa vụ": 1,
+    "Đa yêu cầu": 2
+  },
+  "retrieval_questions": 108,
+  "retrieval_excluded_ids": [
+    "TD001",
+    "TD002",
+    "TD003",
+    "TD004",
+    "TD005",
+    "TD006",
+    "TD007",
+    "TD008",
+    "TD009",
+    "TD010",
+    "TD011",
+    "TD012"
+  ],
+  "status_scoring_excluded_review_ids": [],
+  "annotation_review_notes": {},
+  "duplicate_question_texts": [],
+  "query_after_snapshot_ids": [],
+  "migrated_evidence_ids": [],
+  "mapping_status": "PASS",
+  "legal_approval": "NOT_APPROVED",
+  "warnings": [
+    "Candidate labels and non-exhaustive evidence, not legal expert Gold.",
+    "Reference cutoff is a dataset assertion, not proof of corpus completeness.",
+    "Future-law abstention is corpus-relative, not a universal legal answer.",
+    "Single consolidated law; no independent coverage of all labour law, historical law or dialogue.",
+    "Evidence presence and dated mapping do not prove successful retrieval or a correct model answer."
+  ],
+  "evidence_checks": [
+    {
+      "evidence_id": "prov_0d899ce39134b1a5",
+      "resolved_ids": [
+        "prov_0d899ce39134b1a5"
+      ],
+      "locator": "Điều 25",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_172ec8146ddad51d",
+      "resolved_ids": [
+        "prov_172ec8146ddad51d"
+      ],
+      "locator": "Điều 20 khoản 2 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_186d81901fe081bc",
+      "resolved_ids": [
+        "prov_186d81901fe081bc"
+      ],
+      "locator": "Điều 35 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_1872be719bc6dd58",
+      "resolved_ids": [
+        "prov_1872be719bc6dd58"
+      ],
+      "locator": "Điều 107 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_19a4359c74f30ce5",
+      "resolved_ids": [
+        "prov_19a4359c74f30ce5"
+      ],
+      "locator": "Điều 146 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_1b27c4459a712e61",
+      "resolved_ids": [
+        "prov_1b27c4459a712e61"
+      ],
+      "locator": "Điều 98 khoản 1 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_1c22b690b094979c",
+      "resolved_ids": [
+        "prov_1c22b690b094979c"
+      ],
+      "locator": "Điều 113 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_1d6455baf3b29261",
+      "resolved_ids": [
+        "prov_1d6455baf3b29261"
+      ],
+      "locator": "Điều 105 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_1fab8366c4ce639b",
+      "resolved_ids": [
+        "prov_1fab8366c4ce639b"
+      ],
+      "locator": "Điều 113 khoản 1 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_21e0f3a7838dca22",
+      "resolved_ids": [
+        "prov_21e0f3a7838dca22"
+      ],
+      "locator": "Điều 90 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_221173ca085623ba",
+      "resolved_ids": [
+        "prov_221173ca085623ba"
+      ],
+      "locator": "Điều 115 khoản 1 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_23156e9aec981adc",
+      "resolved_ids": [
+        "prov_23156e9aec981adc"
+      ],
+      "locator": "Điều 177 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_2315c425c1eaa518",
+      "resolved_ids": [
+        "prov_2315c425c1eaa518"
+      ],
+      "locator": "Điều 107 khoản 2 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_23ab5c10842d91bb",
+      "resolved_ids": [
+        "prov_23ab5c10842d91bb"
+      ],
+      "locator": "Điều 115 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_26921bbfe43debe0",
+      "resolved_ids": [
+        "prov_26921bbfe43debe0"
+      ],
+      "locator": "Điều 107 khoản 3 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_2adc7f9dc0763f92",
+      "resolved_ids": [
+        "prov_2adc7f9dc0763f92"
+      ],
+      "locator": "Điều 41 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_2c9ccb218fe09f49",
+      "resolved_ids": [
+        "prov_2c9ccb218fe09f49"
+      ],
+      "locator": "Điều 122 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_2cc57893b123d3a8",
+      "resolved_ids": [
+        "prov_2cc57893b123d3a8"
+      ],
+      "locator": "Điều 98 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_2e5b7bcec4c52e66",
+      "resolved_ids": [
+        "prov_2e5b7bcec4c52e66"
+      ],
+      "locator": "Điều 20 khoản 2 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_2f6168d4affe1f8e",
+      "resolved_ids": [
+        "prov_2f6168d4affe1f8e"
+      ],
+      "locator": "Điều 98 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_38ac614a6bf6bd16",
+      "resolved_ids": [
+        "prov_38ac614a6bf6bd16"
+      ],
+      "locator": "Điều 26",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_3a94ad168f98ed30",
+      "resolved_ids": [
+        "prov_3a94ad168f98ed30"
+      ],
+      "locator": "Điều 137 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_3b1d15590711065e",
+      "resolved_ids": [
+        "prov_3b1d15590711065e"
+      ],
+      "locator": "Điều 39",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_3e64de55e3685bbd",
+      "resolved_ids": [
+        "prov_3e64de55e3685bbd"
+      ],
+      "locator": "Điều 109 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_42bcd849a0a30ecd",
+      "resolved_ids": [
+        "prov_42bcd849a0a30ecd"
+      ],
+      "locator": "Điều 113 khoản 1 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_43e1acb177967336",
+      "resolved_ids": [
+        "prov_43e1acb177967336"
+      ],
+      "locator": "Điều 128 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_4634c77f09c25fc0",
+      "resolved_ids": [
+        "prov_4634c77f09c25fc0"
+      ],
+      "locator": "Điều 113 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_4ae9d3f661c91bf1",
+      "resolved_ids": [
+        "prov_4ae9d3f661c91bf1"
+      ],
+      "locator": "Điều 107 khoản 2 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_4be7b2c148f793c9",
+      "resolved_ids": [
+        "prov_4be7b2c148f793c9"
+      ],
+      "locator": "Điều 20 khoản 2 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_54b4f534a1bf8e11",
+      "resolved_ids": [
+        "prov_54b4f534a1bf8e11"
+      ],
+      "locator": "Điều 149 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_59f1169f2ed834cb",
+      "resolved_ids": [
+        "prov_59f1169f2ed834cb"
+      ],
+      "locator": "Điều 19 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_5ca4551f0dadf19d",
+      "resolved_ids": [
+        "prov_5ca4551f0dadf19d"
+      ],
+      "locator": "Điều 188 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_5df400a38695727b",
+      "resolved_ids": [
+        "prov_5df400a38695727b"
+      ],
+      "locator": "Điều 127 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_5e2b1eb558e1e991",
+      "resolved_ids": [
+        "prov_5e2b1eb558e1e991"
+      ],
+      "locator": "Điều 108",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_5f5938ce9a5cc319",
+      "resolved_ids": [
+        "prov_5f5938ce9a5cc319"
+      ],
+      "locator": "Điều 98 khoản 1 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_63c8f3873485bc6c",
+      "resolved_ids": [
+        "prov_63c8f3873485bc6c"
+      ],
+      "locator": "Điều 46 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_647a0139266983ae",
+      "resolved_ids": [
+        "prov_647a0139266983ae"
+      ],
+      "locator": "Điều 29 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_654ffdee9dc4a294",
+      "resolved_ids": [
+        "prov_654ffdee9dc4a294"
+      ],
+      "locator": "Điều 98 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_6b3cb5ac9f3d4385",
+      "resolved_ids": [
+        "prov_6b3cb5ac9f3d4385"
+      ],
+      "locator": "Điều 111 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_6c2cec3004d06013",
+      "resolved_ids": [
+        "prov_6c2cec3004d06013"
+      ],
+      "locator": "Điều 29 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_6c44500f527daee3",
+      "resolved_ids": [
+        "prov_6c44500f527daee3"
+      ],
+      "locator": "Điều 128 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_6d28298ea26cd99c",
+      "resolved_ids": [
+        "prov_6d28298ea26cd99c"
+      ],
+      "locator": "Điều 35 khoản 2 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_729a76bf772cdd5a",
+      "resolved_ids": [
+        "prov_729a76bf772cdd5a"
+      ],
+      "locator": "Điều 21 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_77a1146dda103c8b",
+      "resolved_ids": [
+        "prov_77a1146dda103c8b"
+      ],
+      "locator": "Điều 96 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_7996e840d8c7327b",
+      "resolved_ids": [
+        "prov_7996e840d8c7327b"
+      ],
+      "locator": "Điều 37 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_7eabe4f30f5393d9",
+      "resolved_ids": [
+        "prov_7eabe4f30f5393d9"
+      ],
+      "locator": "Điều 14 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_7ebbd1a871c548bc",
+      "resolved_ids": [
+        "prov_7ebbd1a871c548bc"
+      ],
+      "locator": "Điều 107 khoản 2 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_7f32e76a1b97fffe",
+      "resolved_ids": [
+        "prov_7f32e76a1b97fffe"
+      ],
+      "locator": "Điều 16 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_80e299cace3d3f78",
+      "resolved_ids": [
+        "prov_80e299cace3d3f78"
+      ],
+      "locator": "Điều 115 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_8137aaf80e052e3c",
+      "resolved_ids": [
+        "prov_8137aaf80e052e3c"
+      ],
+      "locator": "Điều 99 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_818556cdbe6f62d1",
+      "resolved_ids": [
+        "prov_818556cdbe6f62d1"
+      ],
+      "locator": "Điều 35 khoản 2 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_81f9bc50c9ee723f",
+      "resolved_ids": [
+        "prov_81f9bc50c9ee723f"
+      ],
+      "locator": "Điều 29 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_8221ca545b4daebd",
+      "resolved_ids": [
+        "prov_8221ca545b4daebd"
+      ],
+      "locator": "Điều 111 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_82b3c0a297633594",
+      "resolved_ids": [
+        "prov_82b3c0a297633594"
+      ],
+      "locator": "Điều 25 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_83ad45cb6e887545",
+      "resolved_ids": [
+        "prov_83ad45cb6e887545"
+      ],
+      "locator": "Điều 112 khoản 1 điểm đ",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_85a2c41c4237c73d",
+      "resolved_ids": [
+        "prov_85a2c41c4237c73d"
+      ],
+      "locator": "Điều 35 khoản 1 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_89771ca82d7c7b0f",
+      "resolved_ids": [
+        "prov_89771ca82d7c7b0f"
+      ],
+      "locator": "Điều 14 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_8d520006f3444892",
+      "resolved_ids": [
+        "prov_8d520006f3444892"
+      ],
+      "locator": "Điều 190 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_8d6abd4301d76eca",
+      "resolved_ids": [
+        "prov_8d6abd4301d76eca"
+      ],
+      "locator": "Điều 90 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_8e893a2a422be546",
+      "resolved_ids": [
+        "prov_8e893a2a422be546"
+      ],
+      "locator": "Điều 48 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_900510b9768da439",
+      "resolved_ids": [
+        "prov_900510b9768da439"
+      ],
+      "locator": "Điều 25 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_91e75398d7e4027f",
+      "resolved_ids": [
+        "prov_91e75398d7e4027f"
+      ],
+      "locator": "Điều 105 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_97b26f33779f203b",
+      "resolved_ids": [
+        "prov_97b26f33779f203b"
+      ],
+      "locator": "Điều 113 khoản 6",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_9bbc86f4b42624cf",
+      "resolved_ids": [
+        "prov_9bbc86f4b42624cf"
+      ],
+      "locator": "Điều 97 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_9e2818163eeff843",
+      "resolved_ids": [
+        "prov_9e2818163eeff843"
+      ],
+      "locator": "Điều 27 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_9ec607dd7e8334ef",
+      "resolved_ids": [
+        "prov_9ec607dd7e8334ef"
+      ],
+      "locator": "Điều 113 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_a0c75b34c1abb058",
+      "resolved_ids": [
+        "prov_a0c75b34c1abb058"
+      ],
+      "locator": "Điều 114",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_a0f7427780595ab9",
+      "resolved_ids": [
+        "prov_a0f7427780595ab9"
+      ],
+      "locator": "Điều 137 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_a4f684c81a7aa430",
+      "resolved_ids": [
+        "prov_a4f684c81a7aa430"
+      ],
+      "locator": "Điều 20 khoản 1 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_a6e64de43653d5c6",
+      "resolved_ids": [
+        "prov_a6e64de43653d5c6"
+      ],
+      "locator": "Điều 111 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_aa345bddaf7bfd0d",
+      "resolved_ids": [
+        "prov_aa345bddaf7bfd0d"
+      ],
+      "locator": "Điều 24 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_b062a537009a24b3",
+      "resolved_ids": [
+        "prov_b062a537009a24b3"
+      ],
+      "locator": "Điều 46 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_b44555d589adb6e2",
+      "resolved_ids": [
+        "prov_b44555d589adb6e2"
+      ],
+      "locator": "Điều 17 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_b5063a47e2bac4d6",
+      "resolved_ids": [
+        "prov_b5063a47e2bac4d6"
+      ],
+      "locator": "Điều 115 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_b669449b1f69f70b",
+      "resolved_ids": [
+        "prov_b669449b1f69f70b"
+      ],
+      "locator": "Điều 46 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_beb1ce2c8e4b667c",
+      "resolved_ids": [
+        "prov_beb1ce2c8e4b667c"
+      ],
+      "locator": "Điều 188 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_bedd2ba152efaf3d",
+      "resolved_ids": [
+        "prov_bedd2ba152efaf3d"
+      ],
+      "locator": "Điều 118 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_bf356c8b0ac8c9ed",
+      "resolved_ids": [
+        "prov_bf356c8b0ac8c9ed"
+      ],
+      "locator": "Điều 106",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_bfc5906f1e003421",
+      "resolved_ids": [
+        "prov_bfc5906f1e003421"
+      ],
+      "locator": "Điều 35 khoản 1 điểm d",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_c5ab449ec633b723",
+      "resolved_ids": [
+        "prov_c5ab449ec633b723"
+      ],
+      "locator": "Điều 91 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_c6b64b7574aec2bb",
+      "resolved_ids": [
+        "prov_c6b64b7574aec2bb"
+      ],
+      "locator": "Điều 13 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_c75b6504b5c1069f",
+      "resolved_ids": [
+        "prov_c75b6504b5c1069f"
+      ],
+      "locator": "Điều 35 khoản 1 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_cb96c82086af65db",
+      "resolved_ids": [
+        "prov_cb96c82086af65db"
+      ],
+      "locator": "Điều 48 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d37019e9304791b8",
+      "resolved_ids": [
+        "prov_d37019e9304791b8"
+      ],
+      "locator": "Điều 36 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d3c76fc9dfd1296a",
+      "resolved_ids": [
+        "prov_d3c76fc9dfd1296a"
+      ],
+      "locator": "Điều 25 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d3f7985f37c5ba69",
+      "resolved_ids": [
+        "prov_d3f7985f37c5ba69"
+      ],
+      "locator": "Điều 113 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d4fa00662ab1421d",
+      "resolved_ids": [
+        "prov_d4fa00662ab1421d"
+      ],
+      "locator": "Điều 36 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d800881aee215246",
+      "resolved_ids": [
+        "prov_d800881aee215246"
+      ],
+      "locator": "Điều 108 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d924b8b840530aaa",
+      "resolved_ids": [
+        "prov_d924b8b840530aaa"
+      ],
+      "locator": "Điều 151 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_d9651e6941d38a25",
+      "resolved_ids": [
+        "prov_d9651e6941d38a25"
+      ],
+      "locator": "Điều 25 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_dc40fd02a106b46f",
+      "resolved_ids": [
+        "prov_dc40fd02a106b46f"
+      ],
+      "locator": "Điều 94 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_dcdd17b553c4dcbf",
+      "resolved_ids": [
+        "prov_dcdd17b553c4dcbf"
+      ],
+      "locator": "Điều 91 khoản 4",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_dd36bc41a48bcd56",
+      "resolved_ids": [
+        "prov_dd36bc41a48bcd56"
+      ],
+      "locator": "Điều 35 khoản 2 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_de446dd18963916e",
+      "resolved_ids": [
+        "prov_de446dd18963916e"
+      ],
+      "locator": "Điều 36 khoản 1 điểm e",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_e091631d0168c360",
+      "resolved_ids": [
+        "prov_e091631d0168c360"
+      ],
+      "locator": "Điều 35 khoản 1 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_e2358e1908b63e10",
+      "resolved_ids": [
+        "prov_e2358e1908b63e10"
+      ],
+      "locator": "Điều 112 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_e401e65d2e15b2ac",
+      "resolved_ids": [
+        "prov_e401e65d2e15b2ac"
+      ],
+      "locator": "Điều 17 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_e7ca00e46eb3080c",
+      "resolved_ids": [
+        "prov_e7ca00e46eb3080c"
+      ],
+      "locator": "Điều 62 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_e984d1788a357c56",
+      "resolved_ids": [
+        "prov_e984d1788a357c56"
+      ],
+      "locator": "Điều 27 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_ea4944bd15922c19",
+      "resolved_ids": [
+        "prov_ea4944bd15922c19"
+      ],
+      "locator": "Điều 107 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_ecbe024a3498e5dc",
+      "resolved_ids": [
+        "prov_ecbe024a3498e5dc"
+      ],
+      "locator": "Điều 98 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_ecd7c26c6f8188e0",
+      "resolved_ids": [
+        "prov_ecd7c26c6f8188e0"
+      ],
+      "locator": "Điều 37 khoản 3",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_eec795036af16879",
+      "resolved_ids": [
+        "prov_eec795036af16879"
+      ],
+      "locator": "Điều 122 khoản 4 điểm a",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_ef06e74f0e045edb",
+      "resolved_ids": [
+        "prov_ef06e74f0e045edb"
+      ],
+      "locator": "Điều 40 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_f03fcba5b5ce70b8",
+      "resolved_ids": [
+        "prov_f03fcba5b5ce70b8"
+      ],
+      "locator": "Điều 97 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_f079c91b5e399a35",
+      "resolved_ids": [
+        "prov_f079c91b5e399a35"
+      ],
+      "locator": "Điều 22 khoản 2",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_f4434f3ddd490992",
+      "resolved_ids": [
+        "prov_f4434f3ddd490992"
+      ],
+      "locator": "Điều 146 khoản 1",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_f460659c466f8382",
+      "resolved_ids": [
+        "prov_f460659c466f8382"
+      ],
+      "locator": "Điều 110",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_f939772b4657f702",
+      "resolved_ids": [
+        "prov_f939772b4657f702"
+      ],
+      "locator": "Điều 36 khoản 2 điểm b",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    },
+    {
+      "evidence_id": "prov_fa87ded7ee941c38",
+      "resolved_ids": [
+        "prov_fa87ded7ee941c38"
+      ],
+      "locator": "Điều 115 khoản 1 điểm c",
+      "text_match": "WHITESPACE_NFC_ONLY",
+      "document_match": true,
+      "source_url_match": true,
+      "provision_temporal_verified": false
+    }
+  ],
+  "question_checks": [
+    {
+      "id": "HD001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "HD014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TV014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TL014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TG014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "NP014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "CD015",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD001",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD002",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD003",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD004",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD005",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD006",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD007",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD008",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD009",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD010",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD011",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD012",
+      "expected_status": "NEED_MORE_FACTS",
+      "retrieval_eligible": false,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "TD015",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR001",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR002",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR003",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR004",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR005",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR006",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR007",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR008",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR009",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR010",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR011",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR012",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR013",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR014",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR015",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR016",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR017",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR018",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR019",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    },
+    {
+      "id": "MR020",
+      "expected_status": "ANSWERABLE",
+      "retrieval_eligible": true,
+      "query_after_corpus_snapshot": false
+    }
+  ]
+}

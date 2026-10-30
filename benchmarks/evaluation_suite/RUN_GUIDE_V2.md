@@ -4,7 +4,7 @@
 
 Code đo nằm trong **một folder `benchmarks/evaluation_suite/`**. Notebook mới thay notebook `b-o-h-th-ng.ipynb` cũ; không cần sửa notebook cũ từng cell.
 
-1. Trên máy, kiểm `git status` và push toàn bộ folder `benchmarks/evaluation_suite` mới cùng Gold ZIP gốc nếu chưa có trên GitHub. Không commit `.env`, tokens, cache hoặc các file kết quả nặng. Nếu muốn đo các sửa ONLINE chưa push thì cần push chúng nữa; notebook chỉ lấy code đã có trên origin/main. Tôi chưa commit/push thay bạn.
+1. Trên máy, kiểm `git status` và push folder `benchmarks/evaluation_suite` cùng Gold mới `gold_dataset/PhapDienAI_Gold_100_Labor_v0_2.zip`. Giữ ZIP v0.1 để đối chiếu lịch sử. Không commit `.env`, tokens, cache hoặc các file kết quả nặng. Nếu muốn đo các sửa ONLINE chưa push thì cần push chúng nữa; notebook chỉ lấy code đã có trên origin/main. Chưa có commit/push thay bạn trong lượt rà soát Gold này.
 2. Trên Kaggle, tạo notebook đo riêng, bật Internet và **GPU T4 ×2**. Dừng notebook backend/OFFLINE khác để tránh tranh VRAM hoặc cùng quota Gemini.
 3. Import **`Kaggle_Evaluation.ipynb`** mới để smoke, hoặc **`Kaggle_Evaluation_Standard.ipynb`** để chạy standard sau khi đã kiểm tra. Cả hai tự lấy main mới, không đóng COMMIT cứng.
 4. Add Input **chỉ ZIP kết quả cuối `result_28-10/vn_labor_results.zip`** hoặc thư mục artifacts giải nén của nó. Không thêm technical checkpoint, recovery hay bản 14-10 cùng lúc.
@@ -24,7 +24,11 @@ STAGES = ['vlsp']                   # kiểm QA ngoài riêng
 
 Smoke: 8 câu Gold phân tầng, một lần lặp; Zalo 10 query nhưng **toàn corpus 61.425** vẫn được index; VLSP tối đa 5 câu. Nếu chỉ muốn smoke nhanh phần chính, chọn `['retrieval','ablation']`.
 
-Standard: 85 câu retrieval × 6 phương pháp × 3 lần = **1.530 lượt**; 100 câu QA × 5 biến thể × 1 lần = **500 lượt tạo câu trả lời**, chấm AI sau đó. Một câu Gold cần duyệt nhãn được giữ nhưng không chấm tự động. Zalo mặc định 100 query × 3 phương pháp × 3 lần; VLSP bộ lọc hiện cho 13 câu, không phải 50 câu chỉ vì limit=50. Số lượt API thực tế có thể nhiều hơn vì pipeline dùng nhiều model steps và sửa một lần; không bảo đảm đủ quota một phiên.
+Standard với Gold v0.2 mặc định: 88 câu retrieval × 6 phương pháp × 3 lần = **1.584 lượt**; 100 câu QA × 5 biến thể × 1 lần = **500 lượt tạo câu trả lời**, chấm AI sau đó. Còn 12 câu cần hỏi thêm, chỉ dùng đánh giá QA, không làm qrels dương tính cho retrieval. TD003 đã được sửa câu hỏi/đáp án nên ghi chú loại khỏi chấm của ZIP v0.1 không áp dụng cho v0.2. Tất cả vẫn là nhãn DRAFT. Zalo mặc định 100 query × 3 phương pháp × 3 lần; VLSP bộ lọc hiện cho 13 câu, không phải 50 câu chỉ vì limit=50. Số lượt API thực tế có thể nhiều hơn vì pipeline dùng nhiều model steps và sửa một lần; không bảo đảm đủ quota một phiên.
+
+Gold v0.2 ghim ngày hỏi **15/09/2026**, đúng snapshot result_28-10; không dùng bảng này để tuyên bố dữ liệu đã cập nhật tới ngày hiện tại. Mọi căn cứ đã được đối chiếu ID, nguyên văn, ngữ cảnh cha, URL và khả năng lọc theo ngày. Điều đó không bảo đảm LLM luôn trả lời đúng hoặc nguồn đã được chuyên gia duyệt. Xem [rà soát Gold](GOLD_V0_2_REVIEW.md).
+
+Muốn thêm 20 câu về kỷ luật, nhóm lao động đặc biệt, tranh chấp và nhiều yêu cầu, đổi cell đầu thành `LABOR_GOLD = 'gold_dataset/PhapDienAI_Gold_120_Labor_v0_2.zip'`. Bản này có 108 câu retrieval (**1.944 lượt**) và 120 câu QA (**600 lượt**). Không tự tăng cỡ đo mặc định; chọn theo ngân sách. Ba câu tương lai v0.1 giữ riêng trong ZIP, không nằm trong điểm chính của v0.2.
 
 Notebook kiểm metadata/schema của bộ ngoài trước khi vào phép đo dài. Nếu preflight lỗi mạng/schema, nó dừng sớm và có log; có thể chỉ chạy các STAGES chính trong khi xử lý bộ ngoài, không tạo điểm giả.
 

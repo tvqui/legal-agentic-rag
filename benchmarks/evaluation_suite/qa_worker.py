@@ -2,6 +2,25 @@
 from __future__ import annotations
 import gc,json,time
 from pathlib import Path
+
+def judging_evidence(store,groups,limit=12000):
+    """Exact corpus excerpts plus their deontic parent, for scoring ONLY.
+
+    A child such as 'Phạt tiền, cắt lương' is not a permission: its parent says
+    these acts are prohibited. Omitting that parent can reverse the judge's
+    reading. Nothing in this helper is sent to pipe.ask or written to indexes.
+    """
+    records=[];seen=set()
+    for group in groups:
+        for uid in group:
+            if uid in seen or uid not in store.units_by_id:continue
+            seen.add(uid);unit=store.units_by_id[uid]
+            text=unit.get('source_text') or unit['text']
+            ancestor=unit.get('ancestor_context') or ''
+            records.append({'id':uid,'text':text[:limit],
+                'ancestor_context':ancestor[:limit],
+                'truncated':len(text)>limit or len(ancestor)>limit})
+    return records
 from common import jsonl,save,answer_summary,redact
 from gold import status_comparison
 from protocol import VERSION,capacity_error,safe_failure,paired_delta
@@ -121,8 +140,9 @@ def evaluate(qa,run_dir,settings,vlsp=False):
                                 record['judge_reference']={'reference':row.get('reference_answer'),
                                   'expected_status':row.get('expected_status'),'missing_facts':row.get('missing_facts',[]),
                                   'query_date':row.get('query_date'),'corpus_snapshot_as_of':row.get('corpus_snapshot_as_of'),
-                                  'gold_source_texts':[(pipe.store.units_by_id[g[0]].get('source_text') or pipe.store.units_by_id[g[0]]['text']) for g in groups],
-                                  'cited_source_texts':[{'id':uid,'text':(pipe.store.units_by_id[uid].get('source_text') or pipe.store.units_by_id[uid]['text'])[:12000]} for uid in sorted(cited) if uid in pipe.store.units_by_id],
+                                  'gold_source_texts':judging_evidence(pipe.store,row.get('required_groups',[])),
+                                  'cited_source_texts':judging_evidence(pipe.store,[[uid] for uid in sorted(cited)]),
+                                  'scoring_note':row.get('scoring_note'),
                                   'qualification':'Reference may be DRAFT; assess qualifications and missing evidence independently.'}
                                 record['judge']={'status':'PENDING' if record['qa_judge_eligible'] else 'NOT_EVALUATED_REFERENCE_REVIEW'}
                             except Exception as exc:
