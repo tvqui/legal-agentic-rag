@@ -235,6 +235,8 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
         base_rule=_find(pack,'113','1',point); service_years=int(pack.facts.get('service_years') or 0); bonus=service_years//5
         seniority=_find(pack,'114') if bonus else None
         if not base_rule or bonus and not seniority: return None
+        if not re.search(rf'\b0?{base}\s+ngay\s+lam\s+viec\b',_fold(base_rule.text)):
+            return None
         used=[base_rule]+([seniority] if seniority else []); evidence_ids=[item.evidence_id for item in used]
         for other_point in annual_leave_points(pack.facts):
             if other_point==point: continue
@@ -252,7 +254,13 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
             rendered=str(result.numerator) if result.denominator==1 else f'{result.numerator}/{result.denominator} ngày (xấp xỉ {float(result):.2f} ngày)'
             conclusion=f'Mức nền là {base} ngày, cộng {bonus} ngày thâm niên; làm {worked_months} tháng nên phép tính là ({base} + {bonus}) / 12 × {worked_months} = {rendered}. Không tự áp dụng quy tắc làm tròn nếu evidence hiện có không quy định.'
         else:
-            result=base+bonus; conclusion=f'Mức nền phù hợp là {base} ngày; thâm niên {service_years} năm làm tăng {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày.'
+            result=base+bonus
+            category_text={'NORMAL':'điều kiện bình thường','HEAVY':'nghề, công việc nặng nhọc, độc hại, nguy hiểm',
+                           'SPECIAL_HEAVY':'nghề, công việc đặc biệt nặng nhọc, độc hại, nguy hiểm'}[category]
+            conclusion=(f'Làm việc đủ 12 tháng cho một người sử dụng lao động, người lao động thuộc {category_text} '
+                        f'được nghỉ hằng năm hưởng nguyên lương theo hợp đồng lao động; mức nghỉ cơ sở là {base} ngày làm việc.')
+            if seniority:
+                conclusion+=f' Với {service_years} năm làm việc cho cùng người sử dụng lao động, tăng thêm {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày làm việc.'
         if pack.facts.get('minor') or pack.facts.get('disabled') or category in {'HEAVY','SPECIAL_HEAVY'}:
             conclusion='Mức nghỉ cơ sở được xác định theo nhóm áp dụng tại khoản 1 Điều 113; không cộng chồng các mức nghỉ vì tuổi, khuyết tật và điều kiện công việc. '+conclusion
         if point=='a' and any(pack.facts.get(field) is not False for field in ('minor','disabled')):
@@ -361,7 +369,7 @@ def _contract_rule_answer(pack,partial,assumptions):
     elif key=='CONTRACT.RELATIONSHIP_QUALIFICATION':
         rule=_find(pack,'13','1')
         if not rule or not all(term in _fold(rule.text) for term in ('tien luong','quan ly')): return None
-        add(rule,'Khoản 1 Điều 13: dù thỏa thuận mang tên gọi khác, nếu nội dung thể hiện việc làm có trả công, tiền lương và sự quản lý, điều hành, giám sát của một bên thì được coi là hợp đồng lao động. Tên gọi “thực tập sinh” hoặc “hợp đồng dịch vụ” tự nó chưa đủ để kết luận; cần đối chiếu đủ các dấu hiệu này với thực tế.')
+        add(rule,'Khoản 1 Điều 13: dù thỏa thuận mang tên gọi khác, nếu nội dung thể hiện việc làm có trả công, tiền lương và sự quản lý, điều hành, giám sát của một bên thì được coi là hợp đồng lao động. Tên gọi của thỏa thuận tự nó chưa đủ để kết luận; cần đối chiếu các dấu hiệu này với thực tế.')
     elif key=='CONTRACT.PROBATION_PAY':
         rule=_find(pack,'26')
         if not rule or '85%' not in rule.text: return None
@@ -571,6 +579,10 @@ class LegalAdjudicator:
           'Preserve both lower and upper age boundaries for child-worker rules. '
           'Answer only the requested issues, without repeating equivalent claims or volunteering fine amounts for a request asking only which instrument applies. '
           'Use supplied document_type, never guess it from a number. Avoid repeating claims.')
+        system+=(' Emit one claim per distinct operative proposition, and a direct application to confirmed facts when needed. '
+          'Do not fill the claims array up to its maximum length. Do not restate the same conclusion in several ways, '
+          'or add standalone headings and definitions that do not answer the question. Preserve independent duties, '
+          'exceptions and consequences even when they share a source.')
         payload={'query':pack.query,'query_date':pack.query_date,'confirmed_facts':pack.facts,
           'requested_outcome':pack.requested_outcome,'evidence':[{'evidence_id':item.evidence_id,
           'instrument':item.instrument_number,'article':item.article,'clause':item.clause,'point':item.point,

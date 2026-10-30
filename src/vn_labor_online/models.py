@@ -106,7 +106,8 @@ class QueryAnalysis(BaseModel):
     event_dates:list[str]; query_date:str|None; query_date_end:str|None=None
     requested_outcome:Literal["LOOKUP","EXPLAIN","ASSESS_LEGALITY","COMPARE","FIND_CASE","OTHER"]
     temporal_intent:Literal["CURRENT","HISTORICAL","EXPLICIT_DATE","NONE"]; missing_facts:list[str]
-    route:Route; route_reason:str; query_date_precision:Literal["DAY","MONTH","YEAR","NONE"]="NONE"
+    route:Route; route_reason:str; query_date_precision:Literal["DAY","MONTH","YEAR","RANGE","NONE"]="NONE"
+    temporal_resolution:Literal['UNSPECIFIED','RESOLVED','AMBIGUOUS']='UNSPECIFIED'
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
     fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)

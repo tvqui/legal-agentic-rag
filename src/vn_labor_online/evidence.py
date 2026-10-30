@@ -159,10 +159,14 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
         ranked.sort(key=lambda row:(not row[0],_source_penalty(row[2]),-row[1],row[2].unit_id))
         if ranked and ranked[0][2].unit_id not in selected_ids and len(selected)<limit:
             selected.append(ranked[0][2]); selected_ids.add(ranked[0][2].unit_id)
-    # Profiles define the complete mandatory legal chain; don't pad that chain
-    # with unrelated high-ranked passages. Generic and exact-article searches
-    # retain their existing selection budget.
-    for item in ([] if plan.slot_requirements else ordered):
+    # Source-driven dependency locators do not define the governing rule.
+    # A plan can acquire only an exception/reference requirement during graph
+    # expansion; preserving that dependency must not discard the direct answer.
+    # Complete substantive profiles retain their existing no-padding behavior.
+    dependency_slots={'exceptions','mandatory_reference','implementing_regulation',
+                      'amendment_history','transitional_rule'}
+    substantive_requirements=set(plan.slot_requirements)-dependency_slots
+    for item in ([] if substantive_requirements else ordered):
         if len(selected)>=limit: break
         if item.unit_id not in selected_ids:
             selected.append(item); selected_ids.add(item.unit_id)

@@ -154,7 +154,7 @@ def resolve_context(request):
         if active and current_topic and re.match(r'^(?:còn|vậy|thế|thì)\b',request.question.strip(),re.I):
             result.clarification=f'Bạn đang hỏi tiếp về cùng trường hợp {topic}, hay chuyển sang một tình huống khác?'
             result.clarification_reason='AMBIGUOUS_FOLLOWUP'
-        if continuation and not current_topic:
+        if continuation and not current_topic and set(current.legal_issues)<={'GENERAL'}:
             result.clarification = 'Bạn đang hỏi tiếp về vấn đề nào? Vui lòng nêu chủ đề hoặc hoàn cảnh cần tra cứu.'
             result.clarification_reason='AMBIGUOUS_FOLLOWUP'
         return result

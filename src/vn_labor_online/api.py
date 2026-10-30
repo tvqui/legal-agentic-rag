@@ -263,6 +263,7 @@ def create_app(config_path:str|Path|None=None):
           'online_config_fingerprint':config_fingerprint(pipeline.cfg),
           'online_features':{'conversation_context':'user-turns-v2-short-history','history_storage':'browser',
             'material_fact_confirmation':'confirmed-fields-v1','numeric_task_contract':'task-scoped-money-v1',
+            'default_query_date':'vietnam-current-date-v1','relative_query_dates':'bounded-vietnam-calendar-v1',
             'request_retrieval_cache':'bounded-request-only-v1',
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'literal_source_lookup':'verified-excerpt-v1',
@@ -305,7 +306,8 @@ def create_app(config_path:str|Path|None=None):
         key=request_key(http_request,request.message_id) if request.message_id else None
         entry=None
         if key:
-            identity={'request':request.model_dump(mode='json'),'day':date.today().isoformat() if not request.query_date else None,
+            from .query_clock import today_vietnam
+            identity={'request':request.model_dump(mode='json'),'day':today_vietnam().isoformat() if not request.query_date else None,
               'taxonomy':TAXONOMY_VERSION}
             fingerprint=hashlib.sha256(json.dumps(identity,sort_keys=True,ensure_ascii=False).encode()).hexdigest()
             status,entry=requests.begin(key,fingerprint,seconds)

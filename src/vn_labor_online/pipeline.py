@@ -112,10 +112,11 @@ class OnlinePipeline:
         analysis=observed('analysis',analyze,env,request.query_date,request.facts,summary=lambda a:{'van_de':a.legal_issues,'van_de_con':a.legal_subissues,'truong_du_kien':sorted(a.facts),'so_y_can_tra_loi':len(a.answer_tasks),'thieu_du_kien':len(a.missing_facts),'tuyen':a.route.value})
         snapshot=self.cfg.corpus_snapshot_as_of
         defaulted_query_date=False
-        if analysis.query_date is None and snapshot:
-            default_date=min(snapshot,date.today().isoformat())
-            analysis=analysis.model_copy(update={'query_date':default_date,'query_date_end':default_date,
-              'query_date_precision':'DAY','temporal_intent':'CURRENT'})
+        from .query_clock import today_vietnam
+        current_day=today_vietnam().isoformat()
+        if analysis.query_date is None and analysis.temporal_resolution!='AMBIGUOUS':
+            analysis=analyze(env,current_day,request.facts)
+            analysis=analysis.model_copy(update={'temporal_intent':'CURRENT','temporal_resolution':'RESOLVED'})
             defaulted_query_date=True
         analysis_ms=round((time.perf_counter()-stage)*1000,2)
         checkpoint('understanding')
@@ -143,16 +144,19 @@ class OnlinePipeline:
         trace.timings_ms['researcher']=round((time.perf_counter()-researcher_started)*1000,2)
         if container_notes: trace.events.append({'event':'article_content_plan','resolved':container_notes})
         warnings=list(research_warnings); assumptions=[]
+        if analysis.facts.get('query_intent') in {'STIPULATED_EMPLOYEE_LIABILITY','STIPULATED_EMPLOYER_LIABILITY'}:
+            assumptions.append('Chỉ xét hậu quả theo giả định đã có việc đơn phương chấm dứt trái pháp luật như câu hỏi nêu; không tự xác nhận tính trái pháp luật của một vụ việc thực tế.')
         if self.cfg.provisional_mode: warnings+=['Dữ liệu chưa hoàn tất human legal review.']+self.store.report.provisional_reasons
         if defaulted_query_date:
-            warnings.append('QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT')
-            assumptions.append(f'Không có ngày tra cứu; hệ thống dùng ngày chốt corpus {analysis.query_date}.')
-        current_stale=analysis.temporal_intent=='CURRENT' and (not snapshot or snapshot<date.today().isoformat())
+            warnings.append('QUERY_DATE_DEFAULTED_TO_CURRENT_DATE')
+            assumptions.append(f'Không có ngày tra cứu; hệ thống dùng ngày hiện tại theo giờ Việt Nam: {analysis.query_date}.')
+        current_stale=analysis.temporal_intent=='CURRENT' and (not snapshot or snapshot<current_day)
         requested_beyond_snapshot=bool(analysis.query_date and (not snapshot or analysis.query_date>snapshot))
         freshness_relevant=current_stale or requested_beyond_snapshot
         if freshness_relevant: warnings.append('CORPUS_MAY_BE_STALE')
-        if analysis.query_date_precision in {'MONTH','YEAR'}:
-            assumptions.append(f'Mốc thời gian chỉ chính xác theo {"tháng" if analysis.query_date_precision=="MONTH" else "năm"}; kiểm tra các phiên bản giao với khoảng {analysis.query_date} đến {analysis.query_date_end}.')
+        if analysis.query_date_precision in {'MONTH','YEAR','RANGE'}:
+            unit={'MONTH':'tháng','YEAR':'năm','RANGE':'khoảng ngày'}[analysis.query_date_precision]
+            assumptions.append(f'Mốc thời gian chỉ chính xác theo {unit}; kiểm tra các phiên bản giao với khoảng {analysis.query_date} đến {analysis.query_date_end}.')
         trace.events.append({'event':'query_intake','raw_preserved':env.raw_query==request.question,'conversation_turns':len(env.conversation_context),'evidence_treated_as_data':True})
         trace.events.append({'event':'analysis','issues':analysis.legal_issues,'subissues':analysis.legal_subissues,'routing_topics':analysis.routing_topics,
           'answer_task_count':len(analysis.answer_tasks),'taxonomy_version':TAXONOMY_VERSION,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
@@ -173,11 +177,25 @@ class OnlinePipeline:
               applicable_date=analysis.query_date,query_date=analysis.query_date,assumptions=assumptions,
               limitations=['out_of_scope'],warnings=warnings+['OUT_OF_LABOR_LAW_SCOPE'],facts=analysis.facts,
               build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
-        # Explain general rules while clarifying, but do not decide a concrete
-        # case when the analyzer says a material prerequisite is unknown.
+        # Do not use current rules as evidence of a hypothetical future amendment.
+        from .query_clock import unpublished_change_prediction
+        if (not analysis.explicit_references and unpublished_change_prediction(analysis.query_text,analysis.query_date)):
+            Step('scope_gate').finish({'ket_qua':'INSUFFICIENT_EVIDENCE','ly_do':'Thay đổi pháp luật tương lai chưa được ban hành'},'WARNING')
+            skip_after_gate('Không thể dự đoán một sửa đổi pháp luật giả định bằng quy định hiện có')
+            trace.stop_reason=Stop.INSUFFICIENT_EVIDENCE;trace.reference_audit='NOT_RUN'
+            trace.events.append({'event':'future_prediction_gate','model_forecast_used':False})
+            trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2);persist(trace,self.cfg.trace_dir)
+            return AnswerResponse(query_id=env.query_id,status=Stop.INSUFFICIENT_EVIDENCE,
+                answer='Chưa có căn cứ để xác định nội dung một thay đổi pháp luật giả định trong tương lai. Cần văn bản đã được ban hành và có hiệu lực tại thời điểm bạn hỏi; quy định đang có không chứng minh Chính phủ sẽ thay đổi theo hướng nào.',
+                evidence_status='INSUFFICIENT',applicable_date=analysis.query_date,query_date=analysis.query_date,
+                assumptions=assumptions,limitations=['unpublished_future_change'],warnings=warnings,
+                facts=analysis.facts,build_id=trace.build_id,trace_id=trace.trace_id,trace=trace)
+        # Explain general rules while clarifying; a concrete case must wait
+        # when a decisive factual prerequisite is unknown.
         # Warnings appended after an unconditional verdict cannot repair it.
         clarify_during_answer=bool(analysis.missing_facts and self.cfg.answer_while_clarifying
-          and analysis.route!=Route.DIRECT and analysis.requested_outcome!='ASSESS_LEGALITY')
+          and analysis.route!=Route.DIRECT and analysis.requested_outcome!='ASSESS_LEGALITY'
+          and analysis.temporal_resolution!='AMBIGUOUS')
         if clarify_during_answer:
             warnings.append('CONDITIONAL_EXPLANATION_PENDING_FACTS')
             assumptions.append('Chỉ giải thích có điều kiện đối với phần còn thiếu dữ kiện; không xác nhận điều kiện đó đã xảy ra.')
@@ -195,16 +213,22 @@ class OnlinePipeline:
         stage=time.perf_counter(); lists=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         lookup_scope_complete=False
-        if analysis.explicit_references and self.cfg.retrieval.exact_lookup:
-            exact=observed('exact',self.retriever.exact,analysis.explicit_references,summary=lambda v:evidence_summary(v,self.store))
+        # In a reasoning question, "Article N" without an instrument is not a
+        # request for Article N from every statute in the corpus. Scoped legal
+        # profiles and ordinary retrieval can resolve the intended instrument;
+        # direct lookups retain their existing document-clarification gate.
+        scoped_references=(analysis.explicit_references if analysis.route==Route.DIRECT else
+                           [ref for ref in analysis.explicit_references if ref.instrument_number])
+        if scoped_references and self.cfg.retrieval.exact_lookup:
+            exact=observed('exact',self.retriever.exact,scoped_references,summary=lambda v:evidence_summary(v,self.store))
             descendant_limit=max(0,self.cfg.max_verified_units-len(exact))
             descendants=self.retriever.hierarchy_descendants(exact,descendant_limit)
             lookup_scope_complete=bool(descendant_limit and len(descendants)<descendant_limit)
             lists.append(exact+descendants)
         exact_only=bool(analysis.route==Route.DIRECT and lists and lists[0])
         profile_only=False
-        if not analysis.explicit_references or not self.cfg.retrieval.exact_lookup:
-            skip_step('exact','Không có định vị Điều/Khoản/Điểm hoặc exact lookup đã tắt')
+        if not scoped_references or not self.cfg.retrieval.exact_lookup:
+            skip_step('exact','Chưa có định vị gắn với văn bản hoặc exact lookup đã tắt')
         policy=[]
         if not exact_only and self.cfg.retrieval.profile_fast_path and plan.slot_requirements:
             profile_step=Step('profile')
@@ -553,7 +577,8 @@ class OnlinePipeline:
           'authority_removed':len(set(authority_removed)),'temporal_fallback':len(temporal_fallback_ids)},
           {'event':'applicability_audit','mode':self.cfg.applicability.mode,'passed':sum(x.audit_status=='PASS' for x in decisions),'total':len(decisions),
            'decisions':[{'evidence_id':x.evidence_id,'audit_status':x.audit_status,'relevant':x.relevant,
-             'supports_claim':x.supports_claim,'reasons':x.reasons} for x in decisions]},
+             'supports_claim':x.supports_claim,'conditions_status':x.conditions_status,
+             'exception_status':x.exception_status,'reasons':x.reasons} for x in decisions]},
           {'event':'selection','selected':len(selected),'deduplicated':max(0,len(verified)-len(selected)),
             'evidence_ids':[item.unit_id for item in selected]},
           {'event':'evidence_state','coverage':state.coverage,'gaps':state.gaps},
@@ -571,8 +596,8 @@ class OnlinePipeline:
         trace.timings_ms['total']=round((time.perf_counter()-start)*1000,2); persist(trace,self.cfg.trace_dir)
         evidence_status='CONFLICTING' if status==Stop.CONFLICTING_EVIDENCE else 'NEED_MORE_FACTS' if status==Stop.NEED_MORE_FACTS else 'SUFFICIENT' if status==Stop.SUFFICIENT else 'PARTIAL' if status==Stop.PARTIAL_ALLOWED else 'INSUFFICIENT'
         if status in {Stop.SUFFICIENT,Stop.PARTIAL_ALLOWED} and 'CONTRACT.PROBATION_DURATION' in analysis.legal_subissues:
-            import re
-            if not analysis.facts.get('probation_work_group') and re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',env.normalized_query.lower()):
+            from .durations import probation_duration
+            if not analysis.facts.get('probation_work_group') and probation_duration(env.normalized_query):
                 followup_questions.append('Công việc thuộc nhóm quản lý doanh nghiệp, cần trình độ từ cao đẳng, trung cấp/công nhân kỹ thuật/nhân viên nghiệp vụ, hay công việc khác?')
         return AnswerResponse(query_id=env.query_id,status=status,answer=answer,citations=refs,evidence_status=evidence_status,
           applicable_date=analysis.query_date,query_date=analysis.query_date,applicable_law_versions=draft.applicable_law_versions,

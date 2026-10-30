@@ -217,5 +217,10 @@ def render_claims(draft: AdjudicationDraft, partial: bool) -> AdjudicationDraft:
         markers = ' '.join(f'[{evidence_id}]' for evidence_id in claim.evidence_ids)
         lines.append(f'- {claim.text} {markers}')
     if partial:
-        lines.append('Kết quả còn giới hạn vì một số bằng chứng bắt buộc chưa đầy đủ.')
+        metadata_slots={'official_source','applicable_version'}
+        if (draft.limitations and set(draft.limitations)<=metadata_slots
+                and draft.semantic_review.get('status')=='PASS'):
+            lines.append('Kết quả còn giới hạn vì nguồn hoặc hiệu lực chưa được duyệt đầy đủ.')
+        else:
+            lines.append('Kết quả còn giới hạn vì một số bằng chứng bắt buộc chưa đầy đủ.')
     return draft.model_copy(update={'answer_summary': '\n'.join(lines)})

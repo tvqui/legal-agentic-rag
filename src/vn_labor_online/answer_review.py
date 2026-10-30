@@ -62,7 +62,9 @@ Do not invent facts, sources or legal principles absent from evidence. A rule
 explanation may explain an unknown condition; it must not assert it is met.
 For SUPPORTED claims, quote the actual cited supporting text (including necessary
 context); each quote must be an exact substring of that evidence's full_text or
-text. Quotation presence alone is not support. Faithful paraphrases, exact
+text. Every cited evidence ID must have a grounding quotation that contributes
+to the reasoning; do not attach decorative or unrelated citations. Quotation
+presence alone is not support. Faithful paraphrases, exact
 arithmetic and logically warranted conditional applications may be supported
 even when the final conclusion is not stated verbatim in the law. Quote every
 necessary normative premise and use only confirmed facts; do not demand an extra
@@ -73,8 +75,12 @@ independent cumulative duties or additions using the supplied text and its
 structure, and disclose genuine ambiguity. Check whether EVERY requested
 part of the original question is answered substantively, not just cited. Check
 complete lists, both sides of comparisons, counterconditions, consequences,
-calculation steps and requested references. Repeated claims count once. Set
-question_fully_addressed false for any missing part even if provided tasks omit
+calculation steps and requested references. Repeated claims count once. Use
+IRRELEVANT for a restatement that adds no operative content needed for this
+question, or a standalone heading/definition unrelated to the requested answer.
+Keep distinct rule and case-application claims, conditions, exceptions, quantities
+and independent consequences; a shared citation alone does not make them duplicates.
+Set question_fully_addressed false for any missing part even if provided tasks omit
 it. A technically valid citation or provisional warning cannot excuse a false
 claim. Return only schema-valid JSON. Do not approve your previous draft by
 default; reconstruct the entailment from source text independently. Write reasons,
@@ -204,6 +210,8 @@ def validate_review(review, draft, pack, tasks):
         if decision.verdict == 'SUPPORTED':
             if not decision.grounding or hard_issues(claim, attached,context_query=getattr(pack,'query','')):
                 raise StructuredOutputError('unsupported semantic PASS')
+            if {g.evidence_id for g in decision.grounding}!=set(claim.evidence_ids):
+                raise StructuredOutputError('supported claim has an ungrounded citation')
             supported.add(claim.claim_id)
     for coverage in review.coverage:
         if not set(coverage.claim_ids) <= supported:
@@ -396,6 +404,7 @@ def review_error_code(exc):
           'semantic review task accounting mismatch':'TASK_ACCOUNTING_MISMATCH',
           'semantic grounding is not an exact cited-source quotation':'GROUNDING_QUOTE_MISMATCH',
           'unsupported semantic PASS':'UNSUPPORTED_SEMANTIC_PASS',
+          'supported claim has an ungrounded citation':'SUPPORTED_CITATION_GROUNDING_INCOMPLETE',
           'false completion verdict':'FALSE_COMPLETION_VERDICT',
           'invalid answered task':'INVALID_TASK_COMPLETION',
           'coverage depends on an unproved claim':'COVERAGE_USES_UNSUPPORTED_CLAIM',
@@ -448,6 +457,19 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 if t.status != 'ANSWERED']))
             if not rejected and review.question_fully_addressed:
                 return candidate.model_copy(update={'semantic_review':{'status':'PASS','iterations':reports}}), []
+            # The reviewed subset already answers every task independently.
+            # Removing only IRRELEVANT claims cannot revive an unsupported
+            # assertion or supply a missing premise; no new draft is needed.
+            # A contradicted/unsupported claim or incomplete coverage still
+            # follows the repair and fail-closed paths below.
+            irrelevant={c.claim_id for c in review.claims if c.verdict=='IRRELEVANT'}
+            if (supported and rejected and set(rejected)<=irrelevant
+                    and review.question_fully_addressed and not missing):
+                return candidate.model_copy(update={
+                    'claims':[c for c in candidate.claims if c.claim_id in supported],
+                    'semantic_review':{'status':'PASS','iterations':reports,
+                        'rejected_claim_ids':rejected,'retained_review_index':len(reports)-1,
+                        'removed_irrelevant_claims':True}}), []
             # Bind a supported subset to this exact draft, before a repair can
             # replace its claims or reuse their IDs with different meanings.
             kept = [c for c in candidate.claims if c.claim_id in supported]

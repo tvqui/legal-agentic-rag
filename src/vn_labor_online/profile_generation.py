@@ -4,6 +4,7 @@ These profiles explain rules, not disputed facts. Current-law templates cannot
 run on historical evidence. Every listed branch has its own source/locator.
 """
 from __future__ import annotations
+from .durations import probation_duration
 import re
 from .analysis import analyze,intake,plan_evidence
 from .claim_validation import fold
@@ -112,13 +113,13 @@ def render_profile(pack,partial,assumptions):
     # that disappears when semantic review re-renders the answer.
     historical=bool(pack.query_date and pack.query_date<'2021-01-01')
     scoped=probation_duration_clauses(analysis,historical)
-    duration=re.search(r'thu viec[^.]{0,50}\b(\d+)\s*(ngay lam viec|ngay|thang)\b',query)
+    duration=probation_duration(pack.query)
     if 'CONTRACT.PROBATION_DURATION' in keys and len(scoped)==1 and duration:
         for i,claim in enumerate(claims):
             if not claim.proposition or claim.proposition.locator.clause!=str(scoped[0]): continue
             source_unit='ngay lam viec' if claim.proposition.unit=='ngày làm việc' else 'ngay'
-            if duration.group(2)!=source_unit: continue
-            count=int(duration.group(1)); limit=claim.proposition.value; unit=claim.proposition.unit
+            if duration[1]!=source_unit: continue
+            count=duration[0]; limit=claim.proposition.value; unit=claim.proposition.unit
             comparison=(f'vượt mức tối đa {limit} {unit}' if count>limit else f'không vượt mức tối đa {limit} {unit}')
             claims[i]=claim.model_copy(update={'text':f'Về thời gian: với nhóm công việc bạn nêu, thử việc {count} {unit} {comparison}. '+claim.text})
     if 'CONTRACT.PROBATION_PAY' in keys:
@@ -134,21 +135,21 @@ def render_profile(pack,partial,assumptions):
         expected={values[index] for index in scoped}
         if {claim.proposition.value for claim in claims}!=expected: return None
         intro='Thời gian thử việc tối đa theo từng nhóm công việc được quy định như sau. Chỉ mức 06 ngày được tính theo ngày làm việc; các mức còn lại là ngày:'
-        duration=re.search(r'thu viec[^.]{0,50}\b(\d+)\s*(ngay|thang)\b',query)
+        duration=probation_duration(pack.query)
         if duration:
-            intro=('Chưa thể kết luận chỉ từ thời gian '+duration.group(1)+' '+('tháng' if duration.group(2)=='thang' else 'ngày')+'. '
+            display_unit={'ngay':'ngày','ngay lam viec':'ngày làm việc','thang':'tháng','tuan':'tuần','nam':'năm'}[duration[1]]
+            intro=('Chưa thể kết luận chỉ từ thời gian '+str(duration[0])+' '+display_unit+'. '
               'Cần biết nhóm công việc và công việc đó yêu cầu trình độ nào; bằng cấp của cá nhân không tự xác định nhóm công việc. '
-              'Ví dụ 60 ngày không vượt mức 60 ngày của nhóm từ cao đẳng trở lên hoặc mức 180 ngày của quản lý doanh nghiệp, '
-              'nhưng vượt mức 30 ngày và 06 ngày làm việc của các nhóm còn lại. '+intro) if not historical else (
+              +intro) if not historical else (
               'Cần xác định nhóm công việc theo pháp luật có hiệu lực tại ngày hỏi; không dùng mức 180 ngày của luật bắt đầu áp dụng năm 2021. '+intro)
         group=pack.facts.get('probation_work_group')
         limit={'MANAGER':180,'COLLEGE':60,'INTERMEDIATE':30,'OTHER':6}.get(group)
         if historical and group=='MANAGER': limit=None
-        if duration and duration.group(2)=='ngay' and limit is not None:
-            working=bool(re.search(r'thu viec[^.]{0,50}\b\d+\s*ngay lam viec\b',query))
+        if duration and duration[1] in {'ngay','ngay lam viec'} and limit is not None:
+            working=duration[1]=='ngay lam viec'
             comparable=(group=='OTHER' and working or group!='OTHER' and not working)
             if comparable:
-                count=int(duration.group(1)); unit='ngày làm việc' if group=='OTHER' else 'ngày'
+                count=duration[0]; unit='ngày làm việc' if group=='OTHER' else 'ngày'
                 intro=(f'Về thời gian: với nhóm công việc bạn nêu, {count} {unit} '+
                   (f'vượt mức tối đa {limit} {unit}.' if count>limit else f'không vượt mức tối đa {limit} {unit}.')+
                   ' Kết luận này chỉ xét giới hạn thời gian, không xác nhận các điều kiện thử việc khác. Các căn cứ là:')

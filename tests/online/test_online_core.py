@@ -82,6 +82,17 @@ class OnlineTests(unittest.TestCase):
     def test_offline_compatibility(self):
         self.assertTrue(self.store.report.compatible); self.assertEqual(self.store.report.build_id,self.build)
         self.assertIn('GOLD_NOT_APPROVED',self.store.report.provisional_reasons)
+    def test_reasoning_query_does_not_expand_a_bare_article_across_all_instruments(self):
+        from unittest.mock import Mock
+        cfg=self.cfg.model_copy(deep=True)
+        cfg.retrieval.bm25_enabled=False;cfg.retrieval.dense_enabled=False
+        cfg.graph.enabled=False
+        pipeline=OnlinePipeline(cfg)
+        pipeline.retriever.exact=Mock(wraps=pipeline.retriever.exact)
+        pipeline.ask(QueryRequest(question='Giải thích về tiền lương theo Điều 1 khi làm việc.',query_date='2026-01-01'))
+        pipeline.retriever.exact.assert_not_called()
+        pipeline.ask(QueryRequest(question='Giải thích về tiền lương theo Điều 1 Nghị định 145/2020/ND-CP.',query_date='2026-01-01'))
+        self.assertTrue(pipeline.retriever.exact.called)
     def test_offline_mismatch_fails_fast(self):
         with self.assertRaises(OfflineArtifactMismatch): ArtifactStore(self.cfg.model_copy(update={'expected_build_id':'bad'}))
     def test_offline_zip_rejects_path_traversal(self):
@@ -395,11 +406,13 @@ class OnlineTests(unittest.TestCase):
         self.assertIn('Không đúng quy định',draft.answer_summary)
         self.assertIn('còn thiếu 25 ngày',draft.answer_summary)
         self.assertIn('Xác nhận không thuộc ngành, nghề đặc thù',draft.answer_summary)
-    def test_pipeline_defaults_undated_query_to_corpus_snapshot(self):
+    def test_pipeline_defaults_undated_query_to_vietnam_today_and_keeps_snapshot_warning(self):
         cfg=self.cfg.model_copy(update={'corpus_snapshot_as_of':'2025-01-01'})
-        out=OnlinePipeline(cfg).ask(QueryRequest(question='Điều 1 của 145/2020/ND-CP quy định gì?'))
-        self.assertEqual(out.applicable_date,'2025-01-01')
-        self.assertIn('QUERY_DATE_DEFAULTED_TO_CORPUS_SNAPSHOT',out.warnings)
+        with patch('vn_labor_online.query_clock.today_vietnam',return_value=date(2026,10,30)):
+            out=OnlinePipeline(cfg).ask(QueryRequest(question='Điều 1 của 145/2020/ND-CP quy định gì?'))
+        self.assertEqual(out.applicable_date,'2026-10-30')
+        self.assertIn('QUERY_DATE_DEFAULTED_TO_CURRENT_DATE',out.warnings)
+        self.assertIn('CORPUS_MAY_BE_STALE',out.warnings)
     def test_evidence_state_gap(self):
         item=Retriever(self.store,self.cfg).exact([analyze(intake('Điều 1 của 145/2020/ND-CP quy định gì?',[])).explicit_references[0]])
         item=deterministic_audit(self.store,item,None); state=state_for(item,['governing_rule','applicable_version'],'2024-01-01'); self.assertIn('applicable_version',state.gaps)
@@ -498,8 +511,20 @@ class OnlineTests(unittest.TestCase):
             QueryRequest(question='Công ty chấm dứt hợp đồng có đúng luật không?',facts={'conditions_satisfied':True})
     def test_pipeline_direct_and_no_fabricated_citation(self):
         out=OnlinePipeline(self.cfg).ask(QueryRequest(question='Điều 1 của 145/2020/ND-CP quy định gì?'))
-        self.assertEqual(out.status,Stop.SUFFICIENT); self.assertEqual(out.citations[0].evidence_id,'prov_1'); self.assertIn('[prov_1]',out.answer); self.assertEqual(out.trace.edges_visited,0)
+        self.assertEqual(out.status,Stop.PARTIAL_ALLOWED); self.assertEqual(out.citations[0].evidence_id,'prov_1'); self.assertIn('[prov_1]',out.answer); self.assertEqual(out.trace.edges_visited,0)
+        self.assertIn('QUERY_DATE_DEFAULTED_TO_CURRENT_DATE',out.warnings)
+        self.assertIn('CORPUS_MAY_BE_STALE',out.warnings)
         self.assertTrue(out.claims); self.assertEqual(out.trace_id,out.trace.trace_id); self.assertEqual(out.trace.reference_audit,'PASS')
+
+    def test_hypothetical_future_amendment_stops_before_retrieval(self):
+        pipeline=OnlinePipeline(self.cfg)
+        with patch.object(pipeline.retriever,'bm25',side_effect=AssertionError('must not retrieve a forecast')) as search:
+            out=pipeline.ask(QueryRequest(question='Năm 2150 Chính phủ sẽ nâng giới hạn làm thêm bao nhiêu nếu có thay đổi luật?'))
+        self.assertEqual(out.status,Stop.INSUFFICIENT_EVIDENCE)
+        self.assertIn('unpublished_future_change',out.limitations)
+        self.assertEqual(out.query_date,'2150-01-01')
+        self.assertTrue(any(event.get('event')=='future_prediction_gate' for event in out.trace.events))
+        search.assert_not_called()
     def test_pipeline_direct_article_includes_clause_children(self):
         pipeline=OnlinePipeline(self.cfg)
         child={**pipeline.store.units_by_id['prov_1'],'unit_id':'clause_1','provision_identity_id':'pid_clause_1',
@@ -593,7 +618,8 @@ class OnlineTests(unittest.TestCase):
             schema=client.get('/openapi.json').json()['paths']['/v1/answer']['post']['responses']['200']['content']['application/json']['schema']
             self.assertEqual(schema['$ref'],'#/components/schemas/AnswerResponse')
             response=client.post('/v1/answer',json={'question':'Điều 1 của 145/2020/ND-CP quy định gì?'})
-            self.assertEqual(response.status_code,200); self.assertEqual(response.json()['status'],'SUFFICIENT')
+            self.assertEqual(response.status_code,200); self.assertEqual(response.json()['status'],'PARTIAL_ALLOWED')
+            self.assertIn('QUERY_DATE_DEFAULTED_TO_CURRENT_DATE',response.json()['warnings'])
             invalid=client.post('/v1/answer',json={'question':'Kiểm tra hiệu lực','query_date':'not-a-date'})
             self.assertEqual(invalid.status_code,422)
             unknown=client.post('/v1/answer',json={'question':'Kiểm tra hiệu lực','factz':{}})
