@@ -453,7 +453,7 @@ class LegalAdjudicator:
     """Generate only from a VerifiedEvidencePack, with deterministic fallback."""
     def __init__(self,cfg:AdjudicationConfig):
         self.cfg=cfg; self.provider=None
-        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,cfg.context_tokens)
+        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,cfg.context_tokens,tokenizer_path=cfg.tokenizer_path,tokenizer_model=cfg.tokenizer_model)
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP adjudication mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
@@ -538,20 +538,38 @@ class LegalAdjudicator:
             return fallback,warnings+['ANSWER_LANGUAGE_SAFE_FALLBACK']
         return fallback,warnings+['ANSWER_QUALITY_BLOCKED']
 
-    def _generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
+    def _generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None,*,_task_batch=False)->tuple[AdjudicationDraft,list[str]]:
+        if len(pack.answer_tasks)>8 and not _task_batch and self.provider:
+            from .runtime import checkpoint
+            claims=[];warnings=[];seen=set();versions=[]
+            for offset in range(0,len(pack.answer_tasks),8):
+                checkpoint('adjudication_task_batch')
+                batch=pack.model_copy(update={'answer_tasks':pack.answer_tasks[offset:offset+8]})
+                draft,notices=self._generate(batch,partial,assumptions,_task_batch=True)
+                warnings+=notices;versions+=draft.applicable_law_versions
+                for claim in draft.claims:
+                    key=(claim.text,tuple(sorted(claim.evidence_ids)))
+                    if key not in seen:
+                        seen.add(key);claims.append(claim.model_copy(update={'claim_id':f'claim_{len(claims)+1:03d}'}))
+            merged=AdjudicationDraft(answer_summary='',claims=claims,applicable_law_versions=versions,
+                assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
+            return render_claims(merged,partial),list(dict.fromkeys(warnings))
+        shortcut_allowed=not any(t.origin=='RESEARCHER' for t in pack.answer_tasks) and (len(pack.answer_tasks)<=1 or all(t.legal_subissues for t in pack.answer_tasks))
         safe_fallback=lambda:adjudicate(pack,partial,assumptions)
         historical_notice=_find(pack,'37','3',instrument='10/2012/QH13')
-        if historical_notice and all(item.instrument_number=='10/2012/QH13' and item.article in {'37','156'} for item in pack.evidence):
+        if shortcut_allowed and historical_notice and all(item.instrument_number=='10/2012/QH13' and item.article in {'37','156'} for item in pack.evidence):
             return safe_fallback(),[]
-        from .profile_generation import render_profile
-        profile_answer=render_profile(pack,partial,assumptions)
+        profile_answer=None
+        if shortcut_allowed:
+            from .profile_generation import render_profile
+            profile_answer=render_profile(pack,partial,assumptions)
         profile_keys=set(classify_subissues(pack.query,pack.facts,[]))
         supported_composition=bool(profile_keys) and all(key.startswith('CONTRACT.PROBATION_') for key in profile_keys)
-        if profile_answer and (len(profile_keys)<=1 or supported_composition):
+        if shortcut_allowed and profile_answer and (len(profile_keys)<=1 or supported_composition):
             boundary_warning=['SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW'] if 'đoạn nguồn đang gộp khoản' in profile_answer.answer_summary else []
             return profile_answer,boundary_warning
-        contract_answer=_contract_rule_answer(pack,partial,assumptions)
-        if contract_answer: return contract_answer,[]
+        contract_answer=_contract_rule_answer(pack,partial,assumptions) if shortcut_allowed else None
+        if shortcut_allowed and contract_answer: return contract_answer,[]
         deterministic_intents={'WITHDRAW_TERMINATION','UNLAWFUL_DEFINITION_CONSEQUENCES','MUTUAL_TERMINATION',
           'TRAVEL_TIME','ANNUAL_LEAVE_CALC','ANNUAL_LEAVE_OVERVIEW'}
         deterministic_bases={'LATE_WAGE','EMPLOYER_MISINFORMATION','SEXUAL_HARASSMENT'}
@@ -560,7 +578,7 @@ class LegalAdjudicator:
           and pack.facts.get('special_occupation') is not None)
         mixed_training_exit=any(item.article=='62' for item in pack.evidence) and any(
           item.article=='35' for item in pack.evidence)
-        if not mixed_training_exit and len(set(classify_subissues(pack.query,pack.facts,[])))<=2 and (pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit):
+        if shortcut_allowed and not mixed_training_exit and len(set(classify_subissues(pack.query,pack.facts,[])))<=2 and (pack.facts.get('query_intent') in deterministic_intents or pack.facts.get('termination_basis') in deterministic_bases or deterministic_employee_exit):
             deterministic=safe_fallback()
             if deterministic.claims:
                 return deterministic,[]
@@ -584,22 +602,30 @@ class LegalAdjudicator:
           'or add standalone headings and definitions that do not answer the question. Preserve independent duties, '
           'exceptions and consequences even when they share a source.')
         payload={'query':pack.query,'query_date':pack.query_date,'confirmed_facts':pack.facts,
+          'corpus_snapshot_as_of':pack.corpus_snapshot_as_of,'freshness_status':pack.freshness_status,
+          'answer_tasks':[task.model_dump(mode='json') for task in pack.answer_tasks],
           'requested_outcome':pack.requested_outcome,'evidence':[{'evidence_id':item.evidence_id,
           'instrument':item.instrument_number,'article':item.article,'clause':item.clause,'point':item.point,
           'document_type':item.document_type,'document_title':item.document_title,'issuer':item.issuer,
           'norm_role':item.norm_role,'text':item.text} for item in pack.evidence]}
         schema=ProviderClaims.model_json_schema()
         from .analysis import analyze,intake,plan_evidence
-        analysis=analyze(intake(pack.query,[],pack.query_date,pack.facts),pack.query_date,pack.facts)
-        analysis=analysis.model_copy(update={'resolved_rule_requirements':pack.resolved_rule_requirements})
-        plan=plan_evidence(analysis)
+        analysis=None;plan=pack.evidence_plan
+        if plan is None:
+            analysis=analyze(intake(pack.query,[],pack.query_date,pack.facts),pack.query_date,pack.facts)
+            analysis=analysis.model_copy(update={'resolved_rule_requirements':pack.resolved_rule_requirements,'answer_tasks':pack.answer_tasks or analysis.answer_tasks})
+            plan=plan_evidence(analysis)
         required_groups=sum(len(groups) for groups in plan.slot_requirements.values())
-        simple=profile_covers_issues(analysis) and len(analysis.legal_subissues)==1 and required_groups<=2
+        simple=(bool(analysis and profile_covers_issues(analysis) and len(analysis.legal_subissues)==1)
+            or bool(pack.evidence_plan and len(pack.answer_tasks)==1 and pack.answer_tasks[0].origin=='DETERMINISTIC'
+                and len(pack.answer_tasks[0].legal_subissues)==1 and plan.slot_requirements)) and required_groups<=2 and len(pack.answer_tasks)<=1
         if simple:
             schema['properties']['claims']['maxItems']=4
             schema['$defs']['ProviderClaim']['properties']['text']['maxLength']=1000
         payload['required_evidence_groups']={slot:[[{ 'instrument':loc.documents,'article':loc.article,'clause':loc.clause,'point':loc.point} for loc in group] for group in groups] for slot,groups in plan.slot_requirements.items()}
         system+=' Distinguish a general rule from its application to the stated facts. State the supported direct answer first. Do not substitute an employer termination rule for an employee rule. Every required evidence group must be addressed; unrelated evidence is not a substitute.'
+        system+=' The supplied answer_tasks are the confirmed request plan, including Researcher additions. Address each supplied task; do not replace this plan with your own decomposition. In a task batch, focus claims on these tasks while preserving conditions and dependencies. Never claim missing evidence has been found.'
+        system+=' If freshness_status is UNVERIFIED_AFTER_SNAPSHOT, conclusions are conditional on the supplied dated corpus; never assert these are exhaustively the current laws or that no later amendment exists.'
         schema['$defs']['ProviderClaim']['properties']['evidence_ids']['items']={'type':'string','enum':sorted(allowed_ids)}
         try:
             raw=self.provider.structured(system,json.dumps(payload,ensure_ascii=False),schema)

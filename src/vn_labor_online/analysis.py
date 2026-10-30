@@ -80,7 +80,7 @@ TRAVEL_DAYS=re.compile(r'(?:tổng\s+)?thời\s+gian\s+đi\s+và\s+về\s+(?:là
 NOTICE_DATE_DMY=re.compile(r'ngày\s*(0?[1-9]|[12]\d|3[01])[/\-](0?[1-9]|1[0-2])[/\-](20\d{2})[^.]{0,80}(?:gửi|nộp)\s+(?:thông báo|đơn)',re.I)
 TERMINATION_DATE_DMY=re.compile(r'(?:nghỉ|chấm dứt)(?:\s+việc|\s+chính thức|\s+hợp đồng)*\s*(?:vào|từ|là)?\s*(?:ngày\s*)?(0?[1-9]|[12]\d|3[01])[/\-](0?[1-9]|1[0-2])[/\-](20\d{2})',re.I)
 CONTRACT_START_YEAR=re.compile(r'(?:ký|giao kết|bắt đầu)\s+(?:hợp đồng[^.]{0,50}?|làm việc[^.]{0,30}?)(?:từ\s+)?năm\s*(20\d{2})',re.I)
-OUT_OF_SCOPE_TERMS=('hình sự','tội phạm','giết người','ma túy','đất đai','bất động sản','ly hôn','hôn nhân gia đình','thuế doanh nghiệp')
+OUT_OF_SCOPE_TERMS=('hình sự','tội phạm','giết người','ma túy','đất đai','bất động sản','ly hôn','hôn nhân gia đình','thuế doanh nghiệp','thừa kế','bộ luật dân sự')
 CRIMINAL_QUESTION_TERMS=('báo công an','khởi tố','truy cứu','phạm tội','tội gì','mức án','phạt tù','cấu thành tội','cố ý gây thương tích','trộm cắp')
 LAND_QUESTION_TERMS=('quyền sử dụng đất','giấy chứng nhận quyền sử dụng đất','cấp giấy chứng nhận','tranh chấp đất','thửa đất')
 LABOR_SCOPE_TERMS=('lao động','người lao động','người sử dụng lao động','hợp đồng','tiền lương','lương','nghỉ việc','nghỉ làm','thử việc','tăng ca','làm thêm','bảo hiểm xã hội','công đoàn','thai sản')
@@ -152,6 +152,19 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     # termination date rather than the earlier notification date.
     if not explicit_date and facts.get('termination_date'):
         query_date=facts['termination_date']; query_date_end=query_date; precision='DAY'
+    from .event_time import resolve_event_dates
+    dated_events,event_date,event_ambiguous=resolve_event_dates(q,explicit_date)
+    if not explicit_date and event_ambiguous:
+        query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
+    elif not explicit_date and event_date:
+        query_date=query_date_end=event_date;precision='DAY'
+    elif not explicit_date and dated_events and all(e['role']=='CONTRACT_SIGNED_AT' for e in dated_events):
+        if re.search(r'muốn nghỉ|dự định nghỉ|sắp nghỉ|bây giờ|hiện nay',lower):
+            query_date=query_date_end=None;precision='NONE'
+        elif re.search(r'sa thải|đơn phương chấm dứt|đã nghỉ việc',lower):
+            query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
+    elif not explicit_date and dated_events and all(e['role'] in {'BIRTH_DATE','SOURCE_PROMULGATED_AT'} for e in dated_events):
+        query_date=query_date_end=None;precision='NONE'
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
     if 'nghỉ' in lower and re.search(r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',lower):
         issues=[key for key in issues if key!='GENERAL']+(['LEAVE'] if 'LEAVE' not in issues else [])
@@ -218,17 +231,21 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
       temporal_resolution='AMBIGUOUS' if temporal_ambiguous else 'RESOLVED' if query_date else 'UNSPECIFIED')
     from .taxonomy import SUBISSUES
     result.routing_topics=[topic.key for topic in topics]
+    result.temporal_events=dated_events
+    result.query_received_at=env.received_at.isoformat()
     result.answer_tasks=deterministic_tasks(q,subissues,topics,SUBISSUES,route,outcome)
     return result
 
 def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference])->bool:
-    if refs: return False
     # The requested legal conclusion controls scope.  Incidental words such as
     # "công ty", "đồng nghiệp" or "giờ làm việc" must not turn a criminal or
     # land-law question into a labour-law question.
     if any(term in query for term in LAND_QUESTION_TERMS): return True
-    criminal_conclusion=bool(re.search(r'mức án|cấu thành tội|phạt tù\s+(?:bao nhiêu|mấy)|(?:có(?:\s+(?:thể|bị|được|phải)){0,2}|thủ tục)\s+(?:khởi tố|truy cứu)',query))
+    criminal_conclusion=bool(re.search(r'mức án|cấu thành tội|phạt\s+(?:(?:bao nhiêu|mấy)\s+năm\s+)?tù|(?:có(?:\s+(?:thể|bị|được|phải)){0,2}|thủ tục)\s+(?:khởi tố|truy cứu)',query))
     labour_conclusion=any(term in query for term in ('kỷ luật lao động','cuộc họp kỷ luật','xử lý kỷ luật','quyền của người lao động','sa thải'))
+    foreign_instrument=any(term in query for term in ('bộ luật hình sự','bộ luật dân sự','luật đất đai','luật hôn nhân và gia đình','91/2015/qh13','100/2015/qh13','31/2024/qh15'))
+    specific_labour=labour_conclusion or any(term in query for term in LABOR_SCOPE_TERMS if term!='hợp đồng')
+    if foreign_instrument and not specific_labour:return True
     if any(term in query for term in CRIMINAL_QUESTION_TERMS) and (criminal_conclusion or not labour_conclusion): return True
     # Vietnamese "do" is a causal connective, not the English auxiliary.
     # Require an English question signal rather than one ambiguous token.
@@ -236,7 +253,10 @@ def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference
         or bool(re.match(r'^\s*(?:do|can|could|is|are)\s+(?:i|you|we|he|she|they|the|a|an|it)\b',query,re.I)))
     if english_question and not any(
       term in query for term in ENGLISH_LABOR_TERMS+LABOR_SCOPE_TERMS): return True
-    return any(term in query for term in OUT_OF_SCOPE_TERMS) and not any(term in query for term in LABOR_SCOPE_TERMS)
+    if any(term in query for term in OUT_OF_SCOPE_TERMS) and not labour_conclusion and not any(term in query for term in LABOR_SCOPE_TERMS):return True
+    # An unqualified labour-code lookup can still pass; the presence of a
+    # locator never overrides a clearly identified non-labour legal conclusion.
+    return False
 
 def _fact_candidate(field,value,query,match):
     start,end=match.span()
@@ -598,7 +618,8 @@ def evidence_slots(analysis:QueryAnalysis)->list[str]:
 def plan_evidence(analysis:QueryAnalysis)->EvidencePlan:
     plan=plan_with_profiles(analysis,_legacy_plan_evidence(analysis))
     resolved=getattr(analysis,'resolved_rule_requirements',{})
-    return plan.model_copy(update={'slot_requirements':{slot:resolved.get(slot,groups)
+    queries={task.task_id:task.retrieval_query for task in analysis.answer_tasks if not task.legal_subissues} if len(analysis.answer_tasks)>1 else {}
+    return plan.model_copy(update={'task_queries':queries,'slot_requirements':{slot:resolved.get(slot,groups)
         for slot,groups in plan.slot_requirements.items()}})
 
 def _legacy_plan_evidence(analysis:QueryAnalysis)->EvidencePlan:

@@ -19,14 +19,14 @@ class LegalApplicabilityAuditor:
         self.cfg=cfg; self.store=store; self.provider=None
         provider_mode=cfg.provider if cfg.mode=='hybrid' else cfg.mode
         if provider_mode=='ollama':
-            self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:8b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens)
+            self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:8b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,tokenizer_path=cfg.tokenizer_path,tokenizer_model=cfg.tokenizer_model)
         elif provider_mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP applicability mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
 
-    def audit(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str='EXPLAIN'):
+    def audit(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str='EXPLAIN',plan=None):
         if self.cfg.mode=='hybrid':
-            return self._hybrid(items,query,issues,facts,requested_outcome)
+            return self._hybrid(items,query,issues,facts,requested_outcome,plan)
         if not self.provider: return self._deterministic(items,query,issues,facts,requested_outcome)
         return self._provider_per_item(items,query,issues,facts,requested_outcome)
 
@@ -44,7 +44,7 @@ class LegalApplicabilityAuditor:
             if self._passes(decision): accepted.append(item)
         return accepted,decisions,warnings
 
-    def _hybrid(self,items,query,issues,facts,requested_outcome):
+    def _hybrid(self,items,query,issues,facts,requested_outcome,plan=None):
         base_accepted,base_decisions,base_warnings=self._deterministic(items,query,issues,facts,requested_outcome)
         if not self.provider:
             return base_accepted,base_decisions,base_warnings
@@ -63,6 +63,9 @@ class LegalApplicabilityAuditor:
         locked={d.evidence_id:d for d in base_decisions if proven_reasons.intersection(d.reasons)}
         candidates=[item for item in items if item.unit_id not in hard and item.unit_id not in locked]
         candidates.sort(key=lambda item:('policy' not in item.component_scores and item.retrieval_method!='policy',-item.score,item.unit_id))
+        if plan is not None:
+            from .evidence_budget import prioritize_candidates
+            candidates=prioritize_candidates(candidates,plan,[by_item[uid] for uid in locked if self._passes(locked[uid])])
         eligible=candidates[:self.cfg.max_items*self.cfg.max_batches]
         overflow=candidates[self.cfg.max_items*self.cfg.max_batches:]
         if not eligible:
@@ -83,13 +86,11 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             # Match the provider's conservative context guard. Reduce the
             # number of complete candidates, never truncate statutory text or
             # discard the entire batch because one long source exceeds budget.
-            context=getattr(self.provider,'context_tokens',None)
-            output=getattr(self.provider,'max_output_tokens',0)
             while True:
                 batch_payload={**payload,'candidates':[self._payload(item,query,issues,facts,requested_outcome) for item in batch]}
                 serialized=json.dumps(batch_payload,ensure_ascii=False)
-                bounded=type(context) is int and type(output) is int
-                too_large=bounded and len((system+serialized).encode('utf-8'))+256+output>context
+                from .context_budget import fits_context
+                too_large=not fits_context(self.provider,system,serialized)
                 if not too_large or len(batch)==1: break
                 batch=batch[:max(1,len(batch)//2)]
             del pending[:len(batch)]

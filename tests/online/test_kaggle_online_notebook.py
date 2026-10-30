@@ -11,6 +11,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+import zipfile
 from unittest.mock import Mock, patch
 
 
@@ -47,6 +48,20 @@ class KaggleOnlineNotebookTests(unittest.TestCase):
     def release(self):
         return ({'compatible':True,'build_id':'build','retrieval_unit_fingerprint':'units','dense_fingerprint':'dense'},
                 {'expected_build_id':'build','expected_retrieval_unit_fingerprint':'units','expected_dense_fingerprint':'dense'})
+
+    def archive(self, name='renamed-result.zip', complete=True):
+        source = self.artifact('zip_source')
+        target = self.root/name
+        with zipfile.ZipFile(target, 'w') as archive:
+            for path in source.rglob('*'):
+                if path.is_file():
+                    payload = path.read_bytes()
+                    if not complete and path.name=='final_outputs_validation.json':
+                        payload = json.dumps({'stages':{'registry':True}}).encode()
+                    archive.writestr('artifacts/'+path.relative_to(source).as_posix(),payload)
+        import shutil
+        shutil.rmtree(source.parent)
+        return target.resolve()
 
     def test_notebook_roundtrip_syntax_and_clean_outputs(self):
         target = self.root/'notebook.ipynb'
@@ -86,9 +101,53 @@ class KaggleOnlineNotebookTests(unittest.TestCase):
         self.assertEqual(self.scope['select_artifact'](self.root), expected)
 
     def test_does_not_prefer_old_zip_over_new_directory(self):
+        self.archive('vn_labor_results.zip')
         self.artifact()
-        (self.root/'vn_labor_results.zip').write_bytes(b'fixture')
         with self.assertRaisesRegex(RuntimeError, '2'):
+            self.scope['select_artifact'](self.root)
+
+    def test_arbitrary_dataset_and_zip_names_are_selected_by_content(self):
+        expected = self.archive('final_labor_2030.ZIP')
+        self.assertEqual(self.scope['select_artifact'](self.root), expected)
+        self.assertEqual(self.scope['select_artifact'](self.root, str(expected)), expected)
+
+    def test_source_bundle_and_checkpoint_do_not_compete_with_final_data(self):
+        self.archive('technical_checkpoint.zip', complete=False)
+        with zipfile.ZipFile(self.root/'source_bundle.zip', 'w') as archive:
+            archive.writestr('README.md', 'code only')
+        expected = self.artifact('completely-different-dataset-name')
+        self.assertEqual(self.scope['select_artifact'](self.root), expected)
+
+    def test_invalid_zip_is_not_accepted_only_because_of_its_name(self):
+        target = self.root/'vn_labor_results.zip'
+        target.write_bytes(b'not a ZIP')
+        with self.assertRaisesRegex(RuntimeError, '0'):
+            self.scope['select_artifact'](self.root)
+        with self.assertRaisesRegex(RuntimeError, 'OFFLINE'):
+            self.scope['select_artifact'](self.root, str(target))
+
+    def test_incomplete_explicit_directory_and_failed_report_are_rejected(self):
+        target = self.artifact()
+        (target/'reports/final_outputs_validation.json').write_text(
+            json.dumps({'stages':{'registry':True,'structure':True,'graph':False,'indexes':True}}))
+        with self.assertRaises(RuntimeError):
+            self.scope['select_artifact'](self.root, str(target))
+
+    def test_explicit_dataset_parent_is_supported(self):
+        target = self.artifact()
+        self.assertEqual(self.scope['select_artifact'](self.root, str(target.parent)),target.parent)
+
+    def test_multiple_valid_archives_require_explicit_choice(self):
+        self.archive('first.zip')
+        expected = self.archive('second.zip')
+        with self.assertRaisesRegex(RuntimeError, '2'):
+            self.scope['select_artifact'](self.root)
+        self.assertEqual(self.scope['select_artifact'](self.root, str(expected)), expected)
+
+    def test_malformed_validation_is_not_a_final_artifact(self):
+        target = self.artifact()
+        (target/'reports/final_outputs_validation.json').write_text('[]')
+        with self.assertRaisesRegex(RuntimeError, '0'):
             self.scope['select_artifact'](self.root)
 
     def test_partial_directory_is_not_a_final_artifact(self):
@@ -114,6 +173,38 @@ class KaggleOnlineNotebookTests(unittest.TestCase):
                 self.scope['assert_release']({**pin,field:'wrong'}, effective)
         with self.assertRaises(RuntimeError):
             self.scope['assert_release'](pin, {'expected_build_id':'build'})
+
+    def test_archive_digest_must_match_and_directory_needs_no_fake_zip_hash(self):
+        pin, effective = self.release()
+        self.scope['assert_release'](pin, effective)
+        with self.assertRaisesRegex(RuntimeError, 'SHA-256'):
+            self.scope['assert_release']({**pin,'archive_sha256':'new-zip'},
+                                        {**effective,'expected_archive_sha256':'old-zip'})
+        self.scope['assert_release']({**pin,'archive_sha256':'new-zip'},
+                                    {**effective,'expected_archive_sha256':'new-zip'})
+
+    def test_new_build_uses_selected_pin_without_comparing_old_base_release(self):
+        pin, selected = self.release()
+        artifact = self.root/'new-dataset'/'artifacts'
+        profile = dict(researcher='gemini',reviewer='gemini',semantic_review=True,
+                       applicability='hybrid',adjudication='ollama',dense=True,bm25=True,
+                       reranker=True,graph=True,researcher_model='chosen',reviewer_model='chosen')
+        effective = {'selected':selected,'artifact_source':str(artifact),'profile':profile,
+                     'base':{'expected_build_id':'old-build'}}
+        def pin_output(args,*a,on_line=None,**kwargs):
+            on_line(json.dumps(pin))
+        self.scope.update(ROOT=self.root,PYTHON=Path('/python'),CONFIG=Path('/config'),
+                          ARTIFACT_PATH=artifact,run_step=pin_output,GEMINI_MODEL='chosen',
+                          NOTEBOOK_VALIDATED=True)
+        with patch('subprocess.check_output',return_value=json.dumps(effective)), \
+             contextlib.redirect_stdout(io.StringIO()):
+            exec(self.code['pin_config'],self.scope)
+        self.assertFalse(self.scope['NOTEBOOK_VALIDATED'])
+        # A stale environment override must not redirect this session to another dataset.
+        effective['artifact_source']=str(self.root/'old-dataset')
+        with patch('subprocess.check_output',return_value=json.dumps(effective)), \
+             self.assertRaisesRegex(RuntimeError,'Input khác'):
+            exec(self.code['pin_config'],self.scope)
 
     def test_tail_is_bounded_and_redacts_secret(self):
         target = self.root/'log'

@@ -53,6 +53,7 @@ class ResearcherConfig(StrictModel):
     timeout_seconds:float=120; max_queries:int=Field(2,ge=0,le=4)
 
 class ApplicabilityConfig(StrictModel):
+    tokenizer_path:str|None=None; tokenizer_model:str|None=None
     max_output_tokens:int=Field(1536,ge=256,le=8192)
     mode:Literal['deterministic','ollama','http','hybrid']='deterministic'; fail_closed:bool=True
     provider:Literal['ollama','http']='ollama'
@@ -61,6 +62,7 @@ class ApplicabilityConfig(StrictModel):
     max_batches:int=Field(4,ge=1,le=12)
 
 class AdjudicationConfig(StrictModel):
+    tokenizer_path:str|None=None; tokenizer_model:str|None=None
     review_provider:Literal['same','gemini']='same'
     review_model:str|None=None
     review_timeout_seconds:float=Field(45,ge=1,le=180)

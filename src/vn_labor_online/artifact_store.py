@@ -133,5 +133,13 @@ class ArtifactStore:
     def load_faiss(self):
         try:
             import faiss,numpy as np
-            return faiss.deserialize_index(np.frombuffer(self.path('06_indexes/dense/faiss.index').read_bytes(),dtype='uint8').copy())
+            path=self.path('06_indexes/dense/faiss.index')
+            # Native FAISS file I/O may reject Windows Unicode paths. Keep the
+            # proven byte loader for that case, not an extra read on every load.
+            if hasattr(faiss,'read_index') and not (os.name=='nt' and not str(path).isascii()):
+                result=faiss.read_index(str(path))
+            else:
+                result=faiss.deserialize_index(np.frombuffer(path.read_bytes(),dtype='uint8').copy())
+            if getattr(result,'ntotal',len(self.units))!=len(self.units):raise ValueError('FAISS unit count mismatch')
+            return result
         except Exception as exc: raise IndexUnavailable(f'Dense unavailable: {exc}') from exc

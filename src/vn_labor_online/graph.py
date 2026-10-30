@@ -45,6 +45,7 @@ class GraphExplorer:
             self.adj[edge['target']].append((edge,edge['source'],'IN'))
             self.degree[edge['source']]+=1; self.degree[edge['target']]+=1
         self.max_degree=max(self.degree.values(),default=1)
+        self._node_features={}
     def expand_round(self,frontier_ids:list[str],gaps:list[str],query:str,visited:set[str],paths:dict[str,list[str]],
                      remaining_nodes:int,remaining_edges:int,relation_paths:dict[str,list[str]]|None=None,
                      direction_paths:dict[str,list[str]]|None=None,wall_clock_ms:float|None=None):
@@ -56,12 +57,13 @@ class GraphExplorer:
         preferred={}
         for gap in gaps:
             for relation,directions in GAP_RELATIONS.get(gap,{}).items(): preferred.setdefault(relation,set()).update(directions)
+        query_terms=_terms(query)
         for source in frontier_ids:
             for edge,target,direction in self.adj.get(source,[]):
                 if edge['type'] not in self.cfg.allowed_relations: continue
                 if target in visited: continue
                 if not fixed and (not preferred or direction not in preferred.get(edge['type'],set())): continue
-                score,parts=self._score(edge,target,gaps,query,source,direction)
+                score,parts=self._score(edge,target,gaps,query,source,direction,_query_terms=query_terms,_preferred=preferred)
                 heapq.heappush(queue,(-score,serial,target,source,edge,direction,parts)); serial+=1
         added=[]; new_frontier=[]; edge_count=0; followed=[]; stop_reason=None
         while queue and len(new_frontier)<remaining_nodes and edge_count<remaining_edges:
@@ -100,20 +102,26 @@ class GraphExplorer:
             if not frontier or stats['stop_reason'] in {'TIME_BUDGET','NODE_BUDGET','EDGE_BUDGET'}: break
         return all_added,{'nodes_visited':len(visited),'edges_visited':edge_count,'rounds':rounds,
           'critical_edges_followed':list(dict.fromkeys(followed)),'elapsed_ms':round((time.monotonic()-started)*1000,2)}
-    def _score(self,edge,target,gaps,query,parent,direction):
-        typ=edge['type']; legal=self.cfg.edge_weights.get(typ,0); target_unit=self.store.units_by_id.get(target)
-        props=(self.store.nodes_by_id.get(target) or {}).get('properties') or {}
-        text=(target_unit or {}).get('text') or ' '.join(str(v) for v in props.values() if isinstance(v,(str,int)))
-        parent_unit=self.store.units_by_id.get(parent)
-        parent_props=(self.store.nodes_by_id.get(parent) or {}).get('properties') or {}
-        parent_text=(parent_unit or {}).get('text') or ' '.join(str(v) for v in parent_props.values() if isinstance(v,(str,int)))
-        query_terms=_terms(query); target_terms=_terms(text)
-        parent_terms=_terms(parent_text)
-        relevance=len(query_terms&target_terms)/max(1,len(query_terms)); authority=authority_score(as_evidence(target_unit,0,'graph',0)) if target_unit else 0
-        temporal=float(bool(target_unit and (target_unit.get('provision_temporal_verified') or target_unit.get('temporal_verified'))))
-        preferred={}
-        for item in gaps:
-            for relation,directions in GAP_RELATIONS.get(item,{}).items(): preferred.setdefault(relation,set()).update(directions)
+    def _features(self,node_id):
+        if node_id not in self._node_features:
+            unit=self.store.units_by_id.get(node_id)
+            props=(self.store.nodes_by_id.get(node_id) or {}).get('properties') or {}
+            text=(unit or {}).get('text') or ' '.join(str(v) for v in props.values() if isinstance(v,(str,int)))
+            self._node_features[node_id]=(_terms(text),authority_score(as_evidence(unit,0,'graph',0)) if unit else 0,
+                float(bool(unit and (unit.get('provision_temporal_verified') or unit.get('temporal_verified')))))
+        return self._node_features[node_id]
+
+    def _score(self,edge,target,gaps,query,parent,direction,*,_query_terms=None,_preferred=None):
+        typ=edge['type']; legal=self.cfg.edge_weights.get(typ,0)
+        query_terms=_query_terms if _query_terms is not None else _terms(query)
+        target_terms,authority,temporal=self._features(target)
+        parent_terms,_,_=self._features(parent)
+        relevance=len(query_terms&target_terms)/max(1,len(query_terms))
+        preferred=_preferred
+        if preferred is None:
+            preferred={}
+            for item in gaps:
+                for relation,directions in GAP_RELATIONS.get(item,{}).items(): preferred.setdefault(relation,set()).update(directions)
         gap=float(direction in preferred.get(typ,set()))
         union=target_terms|parent_terms
         redundancy=len(target_terms&parent_terms)/max(1,len(union))

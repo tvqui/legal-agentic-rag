@@ -79,10 +79,6 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         for task in tasks:
             task.depends_on=list(dict.fromkeys(by_issue[key] for subissue in task.legal_subissues
               for key in dependencies.get(subissue,[]) if key in by_issue))
-    if len(tasks)>12:
-        # Preserve the full question as one accounting task rather than silently
-        # dropping the 13th requested issue from the schema's bounded list.
-        return [AnswerTask(task_id='question',request_quote=query,description=query,retrieval_query=query,origin='DETERMINISTIC')]
     return tasks
 
 def merge_tasks(deterministic,proposed):
@@ -94,7 +90,6 @@ def merge_tasks(deterministic,proposed):
             continue
         else: by_id[task.task_id]=task.model_copy(update={'legal_subissues':[],
           'legal_issues':[],'topic_ids':[],'origin':'RESEARCHER'})
-    if len(by_id)>12: return deterministic
     return list(by_id.values())
 
 def task_analysis(analysis,task):

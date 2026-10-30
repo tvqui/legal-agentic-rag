@@ -6,6 +6,15 @@ tax-law project. Independent implementation; neither helper certifies a claim.
 from __future__ import annotations
 import re
 
+def unique_retrieval_queries(queries):
+    import unicodedata
+    seen=set();result=[]
+    for query in queries:
+        value=' '.join(unicodedata.normalize('NFC',query).split())
+        key=value.casefold()
+        if value and key not in seen:seen.add(key);result.append(value)
+    return result
+
 
 def restore_source_quote(quote, sources):
     """Return original source bytes-as-text, allowing only whitespace layout.

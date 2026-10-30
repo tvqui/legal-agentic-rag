@@ -263,7 +263,7 @@ def create_app(config_path:str|Path|None=None):
           'online_config_fingerprint':config_fingerprint(pipeline.cfg),
           'online_features':{'conversation_context':'user-turns-v2-short-history','history_storage':'browser',
             'material_fact_confirmation':'confirmed-fields-v1','numeric_task_contract':'task-scoped-money-v1',
-            'default_query_date':'vietnam-current-date-v1','relative_query_dates':'bounded-vietnam-calendar-v1',
+            'event_date_roles':'grounded-events-v1','confirmed_task_plan':'batched-preserved-tasks-v2','document_freshness':'dated-public-qualification-v1','dense_query_batching':'deduplicated-batch-v1','default_query_date':'vietnam-current-date-v1','relative_query_dates':'bounded-vietnam-calendar-v1',
             'request_retrieval_cache':'bounded-request-only-v1',
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'literal_source_lookup':'verified-excerpt-v1',

@@ -123,18 +123,43 @@ class HttpJsonProvider(BaseProvider):
 
 class OllamaProvider(BaseProvider):
     def __init__(self, url: str = "http://127.0.0.1:11434/api/chat", model: str = "qwen3:4b",
-                 timeout: float = 120, health_url: str | None = None, max_output_tokens: int = 2048, context_tokens: int = 16384):
+                 timeout: float = 120, health_url: str | None = None, max_output_tokens: int = 2048, context_tokens: int = 16384,
+                 tokenizer_path: str | None = None, tokenizer_model: str | None = None):
         self.url = url
         self.model = model
         self.timeout = timeout
         self.health_url = health_url or urllib.parse.urljoin(url, "/api/tags")
         self.max_output_tokens=max_output_tokens
         self.context_tokens=context_tokens
+        self.tokenizer_path=tokenizer_path;self.tokenizer_model=tokenizer_model
+        self._tokenizer=None;self._tokenizer_attempted=False
+        self.token_accounting='UTF8_UPPER_BOUND'
+        if tokenizer_path and tokenizer_model!=model:
+            raise ValueError('Tokenizer requires an explicit matching Ollama model identifier')
+
+    def count_prompt_tokens(self,system,user):
+        if not self.tokenizer_path:return None
+        if not self._tokenizer_attempted:
+            self._tokenizer_attempted=True
+            try:
+                from pathlib import Path
+                from transformers import AutoTokenizer
+                if not Path(self.tokenizer_path).is_dir():return None
+                self._tokenizer=AutoTokenizer.from_pretrained(self.tokenizer_path,local_files_only=True,trust_remote_code=False)
+            except Exception:
+                self._tokenizer=None
+        if self._tokenizer is None:return None
+        try:
+            ids=self._tokenizer.apply_chat_template([{'role':'system','content':system},{'role':'user','content':user}],
+                tokenize=True,add_generation_prompt=True,enable_thinking=False)
+            self.token_accounting='CONFIGURED_MODEL_TOKENIZER'
+            return len(ids)
+        except Exception:return None
 
     @observe_model
     def structured(self, system: str, user: str, schema: dict) -> dict:
-        input_bound=len((system+user).encode("utf-8"))+256
-        if input_bound+self.max_output_tokens>self.context_tokens:
+        from .context_budget import fits_context
+        if not fits_context(self,system,user):
             raise StructuredOutputError("PROMPT_CONTEXT_BUDGET_EXCEEDED")
         payload = {
             "model": self.model,

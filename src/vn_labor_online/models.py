@@ -108,13 +108,15 @@ class QueryAnalysis(BaseModel):
     temporal_intent:Literal["CURRENT","HISTORICAL","EXPLICIT_DATE","NONE"]; missing_facts:list[str]
     route:Route; route_reason:str; query_date_precision:Literal["DAY","MONTH","YEAR","RANGE","NONE"]="NONE"
     temporal_resolution:Literal['UNSPECIFIED','RESOLVED','AMBIGUOUS']='UNSPECIFIED'
+    temporal_events:list[dict[str,Any]]=Field(default_factory=list)
+    query_received_at:str|None=None
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
     fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)
     legal_subissues:list[str]=Field(default_factory=list)
     in_scope:bool=True
     query_text:str=''
-    answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
+    answer_tasks:list[AnswerTask]=Field(default_factory=list)
     routing_topics:list[str]=Field(default_factory=list,max_length=50)
     resolved_rule_requirements:dict[str,list[list['LegalLocator']]]=Field(default_factory=dict)
 
@@ -140,6 +142,7 @@ class LegalLocator(BaseModel):
 class EvidencePlan(BaseModel):
     mandatory_slots:list[str]; conditional_slots:list[str]=Field(default_factory=list)
     slot_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
+    task_queries:dict[str,str]=Field(default_factory=dict)
 class Evidence(BaseModel):
     unit_id:str; score:float=0; retrieval_method:str; rank:int=0; component_scores:dict[str,float]=Field(default_factory=dict)
     document_id:str|None=None; instrument_id:str|None=None; provision_identity_id:str|None=None
@@ -203,7 +206,10 @@ class VerifiedEvidencePack(BaseModel):
     query:str; query_date:str|None=None; facts:dict[str,Any]=Field(default_factory=dict)
     requested_outcome:Literal["LOOKUP","EXPLAIN","ASSESS_LEGALITY","COMPARE","FIND_CASE","OTHER"]="OTHER"
     coverage_state:EvidenceState; evidence:list[VerifiedEvidenceItem]
-    answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
+    answer_tasks:list[AnswerTask]=Field(default_factory=list)
+    evidence_plan:EvidencePlan|None=None
+    corpus_snapshot_as_of:str|None=None
+    freshness_status:str='NOT_CHECKED'
     resolved_rule_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
     # Set only by the pipeline after an exact, complete scoped retrieval.
     lookup_reference:ExplicitReference|None=None
@@ -245,7 +251,7 @@ class AnswerResponse(BaseModel):
     claims:list[Claim]=Field(default_factory=list); assumptions:list[str]=Field(default_factory=list)
     limitations:list[str]=Field(default_factory=list); questions:list[str]=Field(default_factory=list); warnings:list[str]=Field(default_factory=list)
     facts:dict[str,Any]=Field(default_factory=dict)
-    parts:list[AnswerPart]=Field(default_factory=list,max_length=12)
+    parts:list[AnswerPart]=Field(default_factory=list)
     legal_status:Literal['PROVISIONAL','REVIEWED']='PROVISIONAL'
     build_id:str; trace_id:str; trace:Trace
 class CompatibilityReport(BaseModel):

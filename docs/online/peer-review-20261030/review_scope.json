@@ -1,0 +1,16 @@
+{
+  "attachment_id": "a6da09cd-261b-4150-a0d1-00ff11010156",
+  "initial_reproduction": {
+    "tests": 5,
+    "failures": 4,
+    "passes": 1
+  },
+  "artifact_build_id": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+  "gold_version": "PhapDienAI_Gold_120_Labor_v0_2",
+  "snapshot_as_of": "2026-09-15",
+  "legal_status": "PROVISIONAL",
+  "human_legal_approval": false,
+  "llm_benchmark": "NOT_RUN",
+  "dense_encoder_quality": "NOT_MEASURED_WITH_REAL_BGE",
+  "production_deployment": false
+}

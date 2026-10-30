@@ -84,6 +84,8 @@ class OnlinePipeline:
               'conversation_context':[turn.content for turn in request.conversation_turns] if request.conversation_turns else request.conversation_context,
               'query_date':request.query_date or resolved.query_date})
             response=self._ask(effective)
+            from .freshness import qualify_freshness
+            response=qualify_freshness(response,self.store,self.cfg.corpus_snapshot_as_of,self.cfg.allow_partial)
             checkpoint('completed')
             from .runtime import measured_timings,retrieval_cache_summary
             if response.trace:
@@ -92,7 +94,7 @@ class OnlinePipeline:
                     'enabled':self.cfg.retrieval.request_cache_enabled,**retrieval_cache_summary()})
                 snapshot=execution_snapshot(); response.trace.execution_steps=snapshot['steps']; response.trace.execution_steps_dropped=snapshot['dropped']
                 persist(response.trace,self.cfg.trace_dir)
-            response.legal_status=getattr(self.store.report,'legal_status','PROVISIONAL')
+            response.legal_status='PROVISIONAL' if 'FRESHNESS_UNVERIFIED' in response.limitations else getattr(self.store.report,'legal_status','PROVISIONAL')
             if response.legal_status=='PROVISIONAL':
                 response.warnings=list(dict.fromkeys(response.warnings+['CORPUS_LEGAL_REVIEW_INCOMPLETE']))
             if resolved.used_turns:
@@ -161,7 +163,7 @@ class OnlinePipeline:
         trace.events.append({'event':'analysis','issues':analysis.legal_issues,'subissues':analysis.legal_subissues,'routing_topics':analysis.routing_topics,
           'answer_task_count':len(analysis.answer_tasks),'taxonomy_version':TAXONOMY_VERSION,'fact_fields':sorted(analysis.facts),'temporal_intent':analysis.temporal_intent,
           'query_date_precision':analysis.query_date_precision,'query_date':analysis.query_date,'query_date_end':analysis.query_date_end,
-          'fact_candidates':[candidate.model_dump(mode='json') for candidate in analysis.fact_candidates]})
+          'fact_candidates':[candidate.model_dump(mode='json') for candidate in analysis.fact_candidates], 'temporal_events':analysis.temporal_events,'query_received_at':analysis.query_received_at})
         trace.events.append({'event':'researcher','mode':self.cfg.researcher.mode,'execution':researcher_path,'issues':analysis.legal_issues,
           'retrieval_queries':analysis.retrieval_queries,'ontology':analysis.ontology_features.model_dump(mode='json'),
           'verified_fact_candidates':sum(candidate.verified for candidate in analysis.fact_candidates),'fallback':bool(research_warnings)})
@@ -210,7 +212,7 @@ class OnlinePipeline:
         Step('scope_gate').finish({'ket_qua':'Tiếp tục tra cứu','giai_thich_co_dieu_kien':clarify_during_answer},'WARNING' if clarify_during_answer else 'DONE')
         checkpoint('retrieval')
         audit_outcome='EXPLAIN' if clarify_during_answer else analysis.requested_outcome
-        stage=time.perf_counter(); lists=[]
+        stage=time.perf_counter(); lists=[];task_report={};retrieval_queries=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         lookup_scope_complete=False
         # In a reasoning question, "Article N" without an instrument is not a
@@ -249,7 +251,7 @@ class OnlinePipeline:
               'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN'}
             proved_ids={item.unit_id for item in proved}
             known=bool(proved) and all(recognized.intersection(d.reasons) for d in probe_decisions if d.evidence_id in proved_ids)
-            profile_only=known and not _actionable_gaps(probe_state.gaps,proved,self.cfg.provisional_mode)
+            profile_only=known and not any(task.origin=='RESEARCHER' or not task.legal_subissues for task in analysis.answer_tasks) and not _actionable_gaps(probe_state.gaps,proved,self.cfg.provisional_mode)
             trace.timings_ms['profile_probe']=round((time.perf_counter()-probe_started)*1000,2)
             trace.events.append({'event':'profile_fast_path','used':profile_only,'missing':probe_state.gaps,
               'proved_ids':sorted(proved_ids),'reason':'KNOWN_RULE_CHAIN_COMPLETE' if profile_only else 'FULL_RETRIEVAL_REQUIRED'})
@@ -262,7 +264,8 @@ class OnlinePipeline:
             policy=policy or observed('policy',self.retriever.policy_anchor,analysis.legal_issues,analysis.facts,plan,summary=lambda v:evidence_summary(v,self.store))
         if not exact_only and not profile_only:
             if policy: lists.append(policy)
-            retrieval_queries=[env.normalized_query]+analysis.retrieval_queries
+            from .query_support import unique_retrieval_queries
+            retrieval_queries=unique_retrieval_queries([env.normalized_query]+analysis.retrieval_queries)
             if self.cfg.retrieval.bm25_enabled:
                 channel_started=time.perf_counter()
                 for retrieval_query in retrieval_queries: lists.append(observed('bm25',self.retriever.bm25,retrieval_query,summary=lambda v:evidence_summary(v,self.store)))
@@ -273,14 +276,17 @@ class OnlinePipeline:
                 trace.timings_ms['bm25']=round((time.perf_counter()-channel_started)*1000,2)
             if self.cfg.retrieval.dense_enabled:
                 channel_started=time.perf_counter()
-                for retrieval_query in retrieval_queries:
-                    try:
-                        lists.append(observed('dense',self.retriever.dense,retrieval_query,technology=self.cfg.embedding_model+' · FAISS',summary=lambda v:evidence_summary(v,self.store)))
-                    except IndexUnavailable as exc:
-                        warnings.append('DENSE_RETRIEVAL_UNAVAILABLE')
-                        trace.events.append({'event':'dense_retrieval','status':'DEGRADED',
-                          'error':type(exc.__cause__ or exc).__name__})
-                        break
+                try:
+                    if len(retrieval_queries)==1:
+                        lists.append(observed('dense',self.retriever.dense,retrieval_queries[0],summary=lambda v:evidence_summary(v,self.store)))
+                    else:
+                        dense_lists=observed('dense',self.retriever.dense_batch,retrieval_queries,
+                            technology=self.cfg.embedding_model+' / FAISS batch',
+                            summary=lambda rows:evidence_summary([item for row in rows for item in row],self.store))
+                        lists.extend(dense_lists)
+                except IndexUnavailable as exc:
+                    warnings.append('DENSE_RETRIEVAL_UNAVAILABLE')
+                    trace.events.append({'event':'dense_retrieval','status':'DEGRADED','error':type(exc.__cause__ or exc).__name__})
                 trace.timings_ms['dense']=round((time.perf_counter()-channel_started)*1000,2)
             if self.cfg.retrieval.issue_anchor_enabled: lists.append(observed('issue',self.retriever.issue_anchor,analysis.legal_issues,summary=lambda v:evidence_summary(v,self.store)))
             case_query=analysis.requested_outcome=='FIND_CASE' or 'DISPUTE' in analysis.legal_issues
@@ -336,7 +342,7 @@ class OnlinePipeline:
         trace.timings_ms['deterministic_audit']=round((time.perf_counter()-audit_started)*1000,2)
         applicability_started=time.perf_counter()
         checkpoint('applicability')
-        verified,decisions,app_warnings=observed('auditor',self.applicability.audit,[x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,technology='Python · '+self.cfg.applicability.mode+'; xem lượt model nếu có',summary=audit_summary,status=lambda r:'WARNING' if r[2] or any(d.audit_status=='UNRESOLVED' for d in r[1]) else 'DONE')
+        verified,decisions,app_warnings=observed('auditor',self.applicability.audit,[x for x in audited if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,plan=plan,technology='Python · '+self.cfg.applicability.mode+'; xem lượt model nếu có',summary=audit_summary,status=lambda r:'WARNING' if r[2] or any(d.audit_status=='UNRESOLVED' for d in r[1]) else 'DONE')
         checkpoint()
         trace.timings_ms['applicability_audit']=round((time.perf_counter()-applicability_started)*1000,2)
         warnings+=app_warnings
@@ -347,6 +353,40 @@ class OnlinePipeline:
             analysis=analysis.model_copy(update={'resolved_rule_requirements':plan.slot_requirements})
             trace.events.append({'event':'evidence_plan_extended','mandatory_slots':plan.mandatory_slots})
         state=observed('coverage',state_for,verified,plan,analysis.query_date,allow_fallback,summary=lambda v:{'coverage':v.coverage,'o_con_thieu':v.gaps},status=lambda v:'WARNING' if v.gaps else 'DONE')
+        deferred_ids=task_report.get('deferred_task_ids',[])
+        pending_tasks=[task for task in analysis.answer_tasks if task.task_id in deferred_ids]
+        prior_queries=retrieval_queries+[value['query'] for value in task_report.get('searched_tasks',[])]
+        deferred_seen={' '.join(value.split()).casefold() for value in prior_queries}
+        from .tasks import task_analysis
+        deferred_started=time.perf_counter()
+        while pending_tasks:
+            checkpoint('deferred_task_retrieval')
+            unresolved=[]
+            for task in pending_tasks:
+                task_plan=plan_evidence(task_analysis(analysis,task))
+                task_state=state_for(verified,task_plan,analysis.query_date,allow_fallback)
+                if not task_plan.slot_requirements or _actionable_gaps(task_state.gaps,verified,self.cfg.provisional_mode):unresolved.append(task)
+            if not unresolved:break
+            batch=unresolved[:4]
+            pending_tasks=[task for task in unresolved if task.task_id not in {value.task_id for value in batch}]
+            channels=[]
+            for task in batch:
+                query_key=' '.join(task.retrieval_query.split()).casefold()
+                if query_key in deferred_seen:continue
+                deferred_seen.add(query_key)
+                channels.extend(observed('bm25',self.retriever.bm25,task.retrieval_query,summary=lambda v:evidence_summary(v,self.store)))
+            existing={item.unit_id for item in items}
+            new=list({item.unit_id:item for item in channels if item.unit_id not in existing}.values())
+            new,_=temporal_filter(new,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
+            new,_=authority_filter(new,strict=not self.cfg.provisional_mode)
+            checked=deterministic_audit(self.store,new,analysis.query_date,allow_fallback,analysis.query_date_end)
+            accepted,extra_decisions,extra_warnings=observed('auditor',self.applicability.audit,[item for item in checked if item.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,plan=plan,summary=audit_summary)
+            items+=new;verified+=accepted;decisions+=extra_decisions;warnings+=extra_warnings
+            state=state_for(verified,plan,analysis.query_date,allow_fallback)
+            trace.events.append({'event':'deferred_task_retrieval','task_ids':[task.task_id for task in batch],
+                'new_candidate_ids':[item.unit_id for item in new],'accepted_ids':[item.unit_id for item in accepted],
+                'remaining_task_ids':[task.task_id for task in pending_tasks]})
+        if deferred_ids:trace.timings_ms['deferred_task_retrieval_and_audit']=round((time.perf_counter()-deferred_started)*1000,2)
         trace.timings_ms['seed_retrieval_and_audit']=round((time.perf_counter()-stage)*1000,2)
         trace.retrieval_candidates=[{'unit_id':x.unit_id,'method':x.retrieval_method,'score':round(x.score,8),
           'authority_verified':x.authority_verified} for x in items[:50]]
@@ -382,7 +422,7 @@ class OnlinePipeline:
                     expanded,removed_more=temporal_filter(expanded,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end); removed+=removed_more
                     expanded,authority_removed_more=authority_filter(expanded,strict=not self.cfg.provisional_mode); authority_removed+=authority_removed_more
                     expanded=observed('source_audit',deterministic_audit,self.store,expanded,analysis.query_date,allow_fallback,analysis.query_date_end,summary=lambda v:{'nguon_graph_vuot_kiem_tra':sum(x.verified for x in v),'co_loi_cung':sum(not x.verified for x in v)})
-                    expanded,round_decisions,round_warnings=observed('auditor',self.applicability.audit,[x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,summary=audit_summary)
+                    expanded,round_decisions,round_warnings=observed('auditor',self.applicability.audit,[x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,plan=plan,summary=audit_summary)
                     decisions+=round_decisions; warnings+=round_warnings
                     verified=rerank(list({x.unit_id:x for x in verified+expanded}.values()),self.cfg)
                     next_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
@@ -407,6 +447,13 @@ class OnlinePipeline:
             route_limit=self.cfg.max_verified_units
         selection_started=time.perf_counter()
         selected,state=observed('selection',select_for_plan,verified,plan,analysis.query_date,allow_fallback,route_limit,summary=lambda r:{**evidence_summary(r[0],self.store),'coverage':r[1].coverage,'o_con_thieu':r[1].gaps})
+        if len(selected)>=route_limit and plan.slot_requirements:
+            available_state=state_for(verified,plan,analysis.query_date,allow_fallback)
+            clipped=[slot for slot in plan.slot_requirements if slot in state.gaps and slot not in available_state.gaps]
+            if clipped:
+                warnings.append('REQUEST_SCOPE_EXCEEDS_EVIDENCE_BUDGET')
+                trace.events.append({'event':'evidence_budget','clipped_slots':clipped,'selection_limit':route_limit,
+                    'policy':'KEEP_ALL_REQUIREMENTS_REPORT_MISSING_NOT_CERTIFY_COMPLETE'})
         conflicts=detect_authoritative_conflicts(verified,analysis.query_date,analysis.query_date_end)
         required_missing=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
         if required_missing:
@@ -440,7 +487,7 @@ class OnlinePipeline:
                 warnings.append('INDEPENDENT_TASK_RULES_ONLY')
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=observed('pack',build_verified_pack,env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome,summary=lambda v:{'so_nguon':len(v.evidence),'so_ky_tu':sum(len(x.text) for x in v.evidence),'trang_thai_du_kien':status.value})
-        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements})
+        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
         if (exact_only and lookup_scope_complete and len(analysis.explicit_references)==1
           and not conflicts and not analysis.facts and not analysis.legal_subissues
           and len(pack.evidence)==len(items)==len(selected)):
@@ -538,7 +585,7 @@ class OnlinePipeline:
                 state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+preserved_gaps))})
                 pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
                   [x for x in decisions if x.evidence_id in {item.unit_id for item in selected}],analysis.requested_outcome)
-                pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements})
+                pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
                 sufficient=bool(selected) and not state.gaps
                 actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
                 partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial

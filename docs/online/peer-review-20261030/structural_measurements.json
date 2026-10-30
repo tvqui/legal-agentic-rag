@@ -1,0 +1,73 @@
+{
+  "scope": "REAL_CORPUS_CPU_MICROBENCHMARK_NOT_END_TO_END_OR_LEGAL_ACCURACY",
+  "build_id": "3e43d1d43b966e8100ba187e69a21fcd8f885b2586a1584b58c428c31851877e",
+  "graph": {
+    "before": {
+      "samples_ms": [
+        13.400000054389238,
+        8.956000208854675,
+        9.237600024789572,
+        9.908499894663692,
+        10.237900074571371
+      ],
+      "median_ms": 9.908499894663692,
+      "visited_edges": 43,
+      "nodes_added": 25
+    },
+    "after": {
+      "samples_ms": [
+        7.455100072547793,
+        6.375099997967482,
+        11.304300045594573,
+        6.302100140601397,
+        7.0195000153034925
+      ],
+      "median_ms": 7.0195000153034925,
+      "visited_edges": 43,
+      "nodes_added": 25
+    }
+  },
+  "graph_scores_and_paths_identical": true,
+  "faiss": {
+    "serialized": {
+      "samples_ms": [
+        199.92240006104112,
+        141.27849997021258,
+        168.17079996690154,
+        158.4258999209851,
+        142.90549978613853
+      ],
+      "median_ms": 158.4258999209851,
+      "vectors": 19144,
+      "dimension": 1024
+    },
+    "native": {
+      "samples_ms": [
+        51.308499881997705,
+        46.102300053462386,
+        49.71650009974837,
+        40.5974998138845,
+        41.06130008585751
+      ],
+      "median_ms": 46.102300053462386,
+      "vectors": 19144,
+      "dimension": 1024
+    }
+  },
+  "faiss_top20_identical_for_10_reconstructed_vectors": true,
+  "dense_encoder_batch_quality": "NOT_MEASURED_WITH_BGE_MODEL",
+  "llm_inference": "NOT_RUN",
+  "peak_ram": "NOT_MEASURED",
+  "network": "NOT_MEASURED",
+  "notes": [
+    "Five measurements, warm OS cache; graph initialization excluded.",
+    "Graph measures one fixed-mode expansion, not every query or adaptive traversal.",
+    "Native FAISS needs an ASCII-compatible path on Windows; production keeps the Unicode-path fallback.",
+    "No source verification flags were changed."
+  ],
+  "source_hashes": {
+    "graph_before": "f34583bdf030a34e5228eab2da6b57ba814fb60c829ce72c80bbe3a1dc14caa4",
+    "graph_after": "baecaa52581a9fe9ef8d0ddf3653adc2cb1f70bf43d644127f93be817c1e3102",
+    "faiss_loader_after": "a8fb16dc1992d7b0bb0b779fd0c56087969d7bd3e52e45d9d58c2f785a308d0c"
+  }
+}

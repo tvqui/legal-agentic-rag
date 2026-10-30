@@ -24,8 +24,9 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
 
     Trước khi Run All, kiểm tra trong Kaggle:
     - **Internet ON**, **GPU T4 x2**. Notebook không tự cấp GPU hay thêm Input/Secrets.
-    - **Add Input** một dataset kết quả cuối `result_14-10` (`vn-labor-results-14-10`),
-      dạng `vn_labor_results.zip` hoặc thư mục `artifacts/` đã giải nén.
+    - **Add Input** một dataset kết quả OFFLINE cuối đã kiểm tra kỹ thuật đạt.
+      Tên dataset và tên ZIP có thể thay đổi; nhận diện bằng cấu trúc bên trong,
+      dạng ZIP hoặc thư mục `artifacts/` đã giải nén. Không cần sửa tên trong code.
       Không cần package OFFLINE, technical checkpoint hoặc PDF thô.
     - Bật quyền dùng Secrets **GEMINI_API_KEY**, **VN_LABOR_API_KEY**, **NGROK_AUTHTOKEN**;
       **HF_TOKEN** là tùy chọn. Không dán key vào code.
@@ -42,7 +43,8 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
     REPO_URL = 'https://github.com/tvqui/legal-agentic-rag.git'
     BRANCH = 'main'
     INPUT_ROOT = Path('/kaggle/input')
-    # Để trống nếu chỉ gắn một kết quả cuối; nếu có nhiều Input, điền đúng path.
+    # Tự nhận diện, không phụ thuộc tên dataset/ZIP. Nếu có nhiều kết quả cuối,
+    # đặt ARTIFACT thành đường dẫn ZIP hoặc thư mục dữ liệu muốn dùng trong /kaggle/input.
     ARTIFACT = ''
     GEMINI_MODEL = 'gemini-3.5-flash-lite'  # model bạn đang sử dụng
     OLLAMA_MODEL = 'qwen3:8b'
@@ -68,6 +70,7 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
     import threading
     import time
     import urllib.request
+    import zipfile
 
     def redact(value):
         text = str(value)
@@ -145,27 +148,53 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
 
     def select_artifact(input_root,explicit=''):
         root=Path(input_root).resolve()
+        required=('05_graph/nodes.jsonl','05_graph/edges.jsonl','06_indexes/retrieval_units.jsonl',
+                  'reports/dense_validation.json','reports/neo4j_validation.json')
+        marker_name='reports/final_outputs_validation.json'
+        def complete(report):
+            return (isinstance(report,dict) and isinstance(report.get('stages'),dict)
+                    and all(report['stages'].get(k) is True
+                            for k in ('registry','structure','graph','indexes')))
+        def final_directory(target):
+            parent=target/'artifacts' if (target/'artifacts').is_dir() else target
+            try:
+                marker=parent/marker_name
+                if marker.stat().st_size>1024*1024: return False
+                report=json.loads(marker.read_text(encoding='utf-8-sig'))
+                return complete(report) and all((parent/name).is_file() for name in required)
+            except (OSError,ValueError): return False
+        def final_archive(target):
+            # Inspect only a small report here. Pinning later verifies CRC, paths,
+            # graph, index alignment and fingerprints before any inference runs.
+            try:
+                with zipfile.ZipFile(target) as archive:
+                    names=archive.namelist()
+                    if len(names)!=len(set(names)): return False
+                    roots=[prefix for prefix in ('','artifacts/') if prefix+marker_name in names]
+                    if len(roots)!=1: return False
+                    prefix=roots[0]; marker=archive.getinfo(prefix+marker_name)
+                    if marker.file_size>1024*1024: return False
+                    report=json.loads(archive.read(marker).decode('utf-8-sig'))
+                    return (complete(report) and all(prefix+name in names for name in required))
+            except (OSError,ValueError,RuntimeError,zipfile.BadZipFile): return False
         if explicit:
             target=Path(explicit).expanduser().resolve()
             if not target.exists() or not target.is_relative_to(root):
                 raise RuntimeError('ARTIFACT phải là path tồn tại trong Kaggle Input.')
+            if not (final_directory(target) if target.is_dir() else final_archive(target)):
+                raise RuntimeError('ARTIFACT không phải kết quả OFFLINE cuối đầy đủ; kiểm tra cấu trúc và validation.')
             return target
-        archives={p.resolve() for name in ('vn_labor_results.zip','vn_labor_results_20261014.zip',
-            'vn_labor_results_v8.1(aura).zip','vn_labor_results_v8_1_aura.zip') for p in root.rglob(name)}
+        archives={p.resolve() for p in root.rglob('*')
+                  if p.is_file() and p.suffix.lower()=='.zip' and final_archive(p)}
         directories=set()
-        required=('05_graph/nodes.jsonl','05_graph/edges.jsonl','06_indexes/retrieval_units.jsonl',
-                  'reports/dense_validation.json','reports/neo4j_validation.json')
         for marker in root.rglob('reports/final_outputs_validation.json'):
             parent=marker.parent.parent
-            try: report=json.loads(marker.read_text(encoding='utf-8-sig'))
-            except (OSError,ValueError): continue
-            if (all(report.get('stages',{}).get(k) is True for k in ('registry','structure','graph','indexes'))
-                    and all((parent/name).is_file() for name in required)):
+            if final_directory(parent):
                 directories.add(parent.resolve())
         candidates=sorted(archives|directories)
         if len(candidates)!=1:
             raise RuntimeError('Cần đúng một kết quả cuối; tìm thấy '+str(len(candidates))+
-                '. Chỉ giữ Input result_14-10 hoặc đặt ARTIFACT rõ ràng: '+str(candidates))
+                '. Chỉ gắn một kết quả OFFLINE cuối hoặc đặt ARTIFACT rõ ràng: '+str(candidates))
         return candidates[0]
 
     def assert_release(pin,effective):
@@ -175,8 +204,10 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
             if not effective.get(expected):
                 raise RuntimeError('Config release thiếu fingerprint bắt buộc: '+expected)
             if pin.get(found)!=effective[expected]:
-                raise RuntimeError('Input không khớp release trong config/online_kaggle.yaml: '+found+
-                    '. Kiểm tra đã gắn đúng result_14-10; không bỏ kiểm fingerprint.')
+                raise RuntimeError('Dữ liệu không khớp cấu hình vừa pin: '+found+
+                    '. Chạy lại cell pin với Input đã chọn; không bỏ kiểm fingerprint.')
+        if pin.get('archive_sha256')!=effective.get('expected_archive_sha256'):
+            raise RuntimeError('SHA-256 của ZIP không khớp cấu hình vừa pin.')
         if pin.get('compatible') is not True: raise RuntimeError('Artifact không tương thích kỹ thuật.')
 
     def backend_line(line):
@@ -303,10 +334,12 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
     run_step([PYTHON,'-c',check],'dependency_check',timeout=120,cwd=ROOT)
     ''')
     add('markdown','pin_description',r'''
-    ## 3. Pin và kiểm đúng release dữ liệu
-    Tiến trình pin chạy riêng để trả RAM sau khi kiểm. Build, retrieval fingerprint và dense
-    fingerprint phải khớp release trong config; không chỉ dựa vào tên ZIP. Các mục human review
-    chưa duyệt vẫn là PROVISIONAL, không bị đổi thành đã duyệt.
+    ## 3. Kiểm dữ liệu đã chọn và tạo cấu hình cố định cho phiên chạy
+    Cấu hình gốc cung cấp tham số ONLINE. Script pin kiểm tính tương thích của Input rồi
+    ghi đường dẫn, build, retrieval/dense fingerprint và SHA-256 ZIP vào cấu hình mới.
+    Các mã phải khớp cấu hình vừa tạo, không so với mã của bộ dữ liệu cũ trong cấu hình gốc.
+    Đổi tên dataset không cần sửa code. Đổi nội dung thì phải pin lại bằng Run All.
+    Đây là kiểm tra kỹ thuật; human review chưa duyệt vẫn là PROVISIONAL.
     ''')
     add('code','pin_config',r'''
     NOTEBOOK_VALIDATED=False
@@ -319,13 +352,12 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
     import json,sys
     from pathlib import Path
     from vn_labor_online.config import load_config
-    base=load_config(Path('config/online_kaggle.yaml')); selected=load_config(Path(sys.argv[1]))
-    print(json.dumps({'base':{'expected_build_id':base.expected_build_id,
-      'expected_retrieval_unit_fingerprint':base.expected_retrieval_unit_fingerprint,
-      'expected_dense_fingerprint':base.expected_dense_fingerprint},
+    selected=load_config(Path(sys.argv[1]))
+    print(json.dumps({'artifact_source':selected.artifact_source,
       'selected':{'expected_build_id':selected.expected_build_id,
       'expected_retrieval_unit_fingerprint':selected.expected_retrieval_unit_fingerprint,
-      'expected_dense_fingerprint':selected.expected_dense_fingerprint},
+      'expected_dense_fingerprint':selected.expected_dense_fingerprint,
+      'expected_archive_sha256':selected.expected_archive_sha256},
       'profile':{'researcher':selected.researcher.mode,'reviewer':selected.adjudication.review_provider,
       'semantic_review':selected.adjudication.semantic_review,'applicability':selected.applicability.mode,
       'adjudication':selected.adjudication.mode,'dense':selected.retrieval.dense_enabled,
@@ -335,8 +367,9 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
     from textwrap import dedent
     raw=subprocess.check_output([str(PYTHON),'-c',dedent(inspect),str(CONFIG)],cwd=ROOT,text=True,timeout=30)
     effective=json.loads(raw)
-    assert_release(pin_report,effective['base'])
     assert_release(pin_report,effective['selected'])
+    if Path(effective['artifact_source']).resolve()!=Path(ARTIFACT_PATH).resolve():
+        raise RuntimeError('Cấu hình thực tế đang trỏ sang Input khác. Kiểm tra VN_LABOR_ARTIFACT_SOURCE.')
     profile=effective['profile']
     if not (profile['researcher']=='gemini' and profile['reviewer']=='gemini' and profile['semantic_review']
             and profile['applicability']=='hybrid' and profile['adjudication']=='ollama'
@@ -383,7 +416,8 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
     ''')
     notebook={'cells':cells,'metadata':{'kernelspec':{'display_name':'Python 3','language':'python','name':'python3'},
         'language_info':{'name':'python'},'vn_labor':{'workflow':'ONLINE_KAGGLE_GEMINI_PACED_V1',
-        'required_settings':{'internet':True,'recommended_gpu':'T4 x2','dataset':'vn-labor-results-14-10'}}},
+        'required_settings':{'internet':True,'recommended_gpu':'T4 x2','dataset':'one-compatible-offline-result'},
+        'artifact_selection':'content-structure-v2','artifact_pinning':'selected-build-v2'}},
         'nbformat':4,'nbformat_minor':5}
     for cell in cells:
         if cell['cell_type']=='code': compile(''.join(cell['source']),cell['metadata']['name'],'exec')

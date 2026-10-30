@@ -119,13 +119,14 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
     # Allocate scarce room to explicit legal requirements first. These items
     # often satisfy the generic source/version slots too, avoiding a redundant
     # high-scoring item that crowds out the last required clause or point.
-    slot_order=([slot for slot in plan.mandatory_slots if slot in plan.slot_requirements]
-      +[slot for slot in plan.mandatory_slots if slot not in plan.slot_requirements])
-    for slot in slot_order:
+    from .evidence_budget import required_groups
+    slot_order=([(slot,[group]) for slot,group in required_groups(plan)]
+      +[(slot,None) for slot in plan.mandatory_slots if slot not in plan.slot_requirements])
+    for slot,scoped_groups in slot_order:
         if slot in plan.slot_requirements:
             # Preserve each required group before filling remaining room by
             # score. A one-item probe cannot satisfy a multi-clause requirement.
-            for alternatives in plan.slot_requirements[slot]:
+            for alternatives in scoped_groups:
                 if any(any(locator_matches(item,locator) for locator in alternatives) for item in selected):
                     continue
                 matches=[item for item in ordered if item.verified and not heading_only(item) and any(locator_matches(item,locator) for locator in alternatives)]
@@ -166,6 +167,19 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
     dependency_slots={'exceptions','mandatory_reference','implementing_regulation',
                       'amendment_history','transitional_rule'}
     substantive_requirements=set(plan.slot_requirements)-dependency_slots
+    # Additional independently requested tasks can need relevant support outside
+    # the known locator profile. Reserve only already audited sources; lexical
+    # ranking is NOT proof of task completion, which still needs semantic review.
+    if plan.task_queries:
+        from .retrieval import _terms
+        for task_query in plan.task_queries.values():
+            wanted=_terms(task_query)
+            support=[item for item in ordered if item.verified and item.unit_id not in selected_ids and not heading_only(item)
+                and wanted&_terms(item.source_text or item.text)]
+            support.sort(key=lambda item:(-len(wanted&_terms(item.source_text or item.text)),_source_penalty(item),-item.score,item.unit_id))
+            for item in support[:2]:
+                if len(selected)>=limit:break
+                selected.append(item);selected_ids.add(item.unit_id)
     for item in ([] if substantive_requirements else ordered):
         if len(selected)>=limit: break
         if item.unit_id not in selected_ids:

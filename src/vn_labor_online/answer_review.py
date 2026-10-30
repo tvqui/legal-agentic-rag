@@ -344,14 +344,13 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
     check question coverage using the already checked claims and their exact
     supporting quotes. Coverage has no power to reverse a failed claim check.
     """
-    budget=getattr(provider,'context_tokens',None)
-    output=getattr(provider,'max_output_tokens',0)
     payload={**payload,'required_claim_ids':[c.claim_id for c in draft.claims],
         'required_task_ids':[t.task_id for t in tasks]}
     encoded=json.dumps(payload,ensure_ascii=False)
-    context_overflow=isinstance(budget,int) and len((SYSTEM+KEYED_ACCOUNTING_INSTRUCTION+encoded).encode())+output+256>budget
+    from .context_budget import fits_context
+    context_overflow=not fits_context(provider,SYSTEM+KEYED_ACCOUNTING_INSTRUCTION,encoded)
     accounting_retry=payload.get('previous_validation_error')=='CLAIM_ACCOUNTING_MISMATCH' and len(draft.claims)>4
-    if not context_overflow and len(draft.claims)<=8 and not accounting_retry:
+    if not context_overflow and len(draft.claims)<=8 and len(tasks)<=8 and not accounting_retry:
         return Review.model_validate(reviewer_call(provider,SYSTEM,payload,accounting_schema(
             Review,payload['required_claim_ids'],payload['required_task_ids'])))
     checks=[]
@@ -359,7 +358,7 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
     # Limit accounting complexity even for providers with a large context
     # window. Small batches still retain complete sources and exact IDs.
     size=1 if context_overflow else 4
-    if (len(draft.claims)+size-1)//size>8:
+    if (len(draft.claims)+size-1)//size>max(8,min(32,len(tasks)*2)):
         raise StructuredOutputError('REVIEW_CLAIM_BATCH_LIMIT')
     for offset in range(0,len(draft.claims),size):
         batch=draft.claims[offset:offset+size]
@@ -381,10 +380,23 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
     compact={k:v for k,v in payload.items() if k not in {'claims','evidence','required_claim_ids'}}
     compact['checked_claims']=[c.model_dump() for c in draft.claims if c.claim_id in supported]
     compact['grounding']=[c.model_dump() for c in checks if c.claim_id in supported]
-    coverage=QuestionCoverage.model_validate(reviewer_call(provider,
-        SYSTEM+' Entailment was independently checked with full sources. Assess only whether the checked claims answer the entire question and every task. Do not add any new legal claim or evidence.',
-        compact,accounting_schema(QuestionCoverage,task_ids=payload['required_task_ids'])))
-    return Review(claims=checks,**coverage.model_dump())
+    coverages=[];missing=[];complete=True
+    for offset in range(0,max(1,len(tasks)),8):
+        task_batch=tasks[offset:offset+8]
+        ids=[task.task_id for task in task_batch]
+        scoped={**compact,'tasks':[task.model_dump() for task in task_batch],
+            'required_task_ids':ids,'other_task_ids':[task.task_id for task in tasks if task.task_id not in ids]}
+        coverage=QuestionCoverage.model_validate(reviewer_call(provider,
+            SYSTEM+' Entailment was independently checked with full sources. Assess coverage for this supplied task batch and any unmodeled requirement of the original question; other_task_ids are checked separately. Do not omit a task or add a claim.',
+            scoped,accounting_schema(QuestionCoverage,task_ids=ids)))
+        if len(coverage.coverage)!=len(ids) or {v.task_id for v in coverage.coverage}!=set(ids):
+            raise StructuredOutputError('TASK_ACCOUNTING_MISMATCH')
+        coverages+=coverage.coverage;missing+=coverage.missing_requirements
+        complete=complete and coverage.question_fully_addressed
+    missing=list(dict.fromkeys(missing))
+    if len(missing)>20:missing=missing[:19]+['Còn yêu cầu thiếu; xem đầy đủ trong coverage của từng task.']
+    return Review(claims=checks,coverage=coverages,question_fully_addressed=complete and not missing,
+        missing_requirements=missing)
 
 def review_error_code(exc):
     # Publish only fixed diagnostic labels, never provider URLs, keys or input.

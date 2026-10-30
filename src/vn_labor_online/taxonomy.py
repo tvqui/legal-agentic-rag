@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v11'
+TAXONOMY_VERSION = 'labor-subissues-v12'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 

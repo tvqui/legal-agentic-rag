@@ -211,6 +211,10 @@ class Retriever:
         return out
     @request_cached_retrieval
     def dense(self,query:str,k:int|None=None)->list[Evidence]:
+        return self.dense_batch([query],k)[0]
+
+    def dense_batch(self,queries:list[str],k:int|None=None)->list[list[Evidence]]:
+        if not queries:return []
         try:
             with measured('dense.dependencies_import'):
                 import numpy as np,faiss
@@ -228,10 +232,10 @@ class Retriever:
                             if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
                             self._model=BGEM3FlagModel(model,use_fp16=self.cfg.embedding_use_fp16 and device!='cpu',devices=device)
             with measured('dense.encode'):
-                vector=np.asarray(self._model.encode([query],batch_size=1,max_length=1024,return_dense=True,return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
+                vector=np.asarray(self._model.encode(queries,batch_size=min(8,len(queries)),max_length=1024,return_dense=True,return_sparse=False,return_colbert_vecs=False)['dense_vecs'],dtype='float32')
             with measured('dense.search'):
                 faiss.normalize_L2(vector); scores,positions=self._faiss.search(vector,min(k or self.cfg.retrieval.dense_top_k,len(self.store.units)))
-            return [as_evidence(self.store.units[int(pos)],float(score),'dense',i,{'dense':float(score)}) for i,(pos,score) in enumerate(zip(positions[0],scores[0]),1) if pos>=0]
+            return [[as_evidence(self.store.units[int(pos)],float(score),'dense',i,{'dense':float(score)}) for i,(pos,score) in enumerate(zip(row_positions,row_scores),1) if pos>=0] for row_positions,row_scores in zip(positions,scores)]
         except IndexUnavailable:
             raise
         except Exception as exc:
@@ -422,7 +426,8 @@ def retain_required_anchors(items,anchors,plan,limit):
     Anchors must pass the same date/authority filters as semantic candidates
     before this function. A protected source is still unverified until audited.
     """
-    groups=[group for slot,values in plan.slot_requirements.items() if slot in plan.mandatory_slots for group in values]
+    from .evidence_budget import required_groups
+    groups=[group for _,group in required_groups(plan)]
     existing={item.unit_id:item for item in items}; chosen={}
     for group in groups:
         if any(any(locator_matches(item,loc) for loc in group) for item in chosen.values()): continue

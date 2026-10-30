@@ -1,0 +1,26 @@
+{
+  "online_tests": {
+    "tests": 740,
+    "failures": 0,
+    "errors": 0,
+    "passed": true,
+    "python_syntax": "PASS",
+    "scope": "ONLINE unit/regression with fixtures; no inference benchmark"
+  },
+  "evaluation_suite_tests": {
+    "tests": 55,
+    "failures": 0,
+    "errors": 0,
+    "passed": true
+  },
+  "published_source_hashes_match": true,
+  "diff_check": "PASS",
+  "preexisting_staged_changes_unchanged": true,
+  "preexisting_staged_path_count": 49,
+  "taxonomy_version": "labor-subissues-v12",
+  "offline_rebuilt": false,
+  "gold_modified": false,
+  "llm_inference_benchmark": "NOT_RUN",
+  "production_deployed": false,
+  "commit_or_push": false
+}
