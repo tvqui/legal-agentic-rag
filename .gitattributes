@@ -1,0 +1,4 @@
+# Preserve notebook bytes used by SHA-256 verification across platforms.
+kaggle/ONLINE_Backend.ipynb text eol=lf
+benchmarks/evaluation_suite/Kaggle_Evaluation.ipynb text eol=lf
+benchmarks/evaluation_suite/Kaggle_Evaluation_Standard.ipynb text eol=lf

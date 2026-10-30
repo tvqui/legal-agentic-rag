@@ -172,7 +172,7 @@ for file in [OUTPUT/'comparison_tables.md',OUTPUT/'comparison_tables.csv',OUTPUT
 
 if __name__=='__main__':
     path=Path(__file__).with_name('Kaggle_Evaluation.ipynb')
-    path.write_text(json.dumps(notebook(),ensure_ascii=False,indent=1),encoding='utf-8')
+    path.write_text(json.dumps(notebook(),ensure_ascii=False,indent=1),encoding='utf-8',newline='\n')
     import copy,hashlib
     standard=copy.deepcopy(notebook())
     standard['cells'][0]['source'].insert(0,'# STANDARD — chạy sau khi smoke đã đạt\n\n')
@@ -181,9 +181,9 @@ if __name__=='__main__':
             code=''.join(cell['source']).replace("PROFILE = 'smoke'","PROFILE = 'standard'")
             compile(code,'standard-notebook','exec');cell['source']=code.splitlines(True)
     standard_path=path.with_name('Kaggle_Evaluation_Standard.ipynb')
-    standard_path.write_text(json.dumps(standard,ensure_ascii=False,indent=1),encoding='utf-8')
+    standard_path.write_text(json.dumps(standard,ensure_ascii=False,indent=1),encoding='utf-8',newline='\n')
     for candidate in (path,standard_path):
         for cell in json.loads(candidate.read_text(encoding='utf-8'))['cells']:
             if cell['cell_type']=='code':compile(''.join(cell['source']),'evaluation-cell','exec')
-        Path(str(candidate)+'.sha256').write_text(hashlib.sha256(candidate.read_bytes()).hexdigest()+'  '+candidate.name+'\n',encoding='ascii')
+        Path(str(candidate)+'.sha256').write_text(hashlib.sha256(candidate.read_bytes()).hexdigest()+'  '+candidate.name+'\n',encoding='ascii',newline='\n')
     print(path);print(standard_path)
