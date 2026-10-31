@@ -1,0 +1,22 @@
+[
+  "config/online_kaggle.yaml",
+  "docs/online/gold120-fixes-v13-20261031.md",
+  "docs/online/gold120-fixes-v13-20261031/files.json",
+  "docs/online/gold120-fixes-v13-20261031/verification.json",
+  "src/vn_labor_online/analysis.py",
+  "src/vn_labor_online/answer_review.py",
+  "src/vn_labor_online/api.py",
+  "src/vn_labor_online/applicability.py",
+  "src/vn_labor_online/audit.py",
+  "src/vn_labor_online/claim_validation.py",
+  "src/vn_labor_online/config.py",
+  "src/vn_labor_online/fact_polarity.py",
+  "src/vn_labor_online/generation.py",
+  "src/vn_labor_online/grounding_spans.py",
+  "src/vn_labor_online/pipeline.py",
+  "src/vn_labor_online/taxonomy.py",
+  "tests/online/fixtures/gold120_source_excerpts.json",
+  "tests/online/test_gold120_mechanisms.py",
+  "tests/online/test_review_claim_batches.py",
+  "tests/online/test_review_decoder_contract.py"
+]

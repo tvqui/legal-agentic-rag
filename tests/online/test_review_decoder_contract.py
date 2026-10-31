@@ -12,6 +12,8 @@ class KeyedReviewerContractTests(unittest.TestCase):
             value=deepcopy(legacy)
             value['claims']={c['claim_id']:{k:v for k,v in c.items() if k!='claim_id'} for c in value['claims']}
             value['coverage']={c['task_id']:{k:v for k,v in c.items() if k!='task_id'} for c in value['coverage']}
+            for claim in value['claims'].values():
+                claim['grounding']={g['evidence_id']:'span_000' for g in claim['grounding']}
             wire.update(schema=schema,response=deepcopy(value),payload=json.loads(user))
             if mutate:mutate(value)
             return value
@@ -29,10 +31,10 @@ class KeyedReviewerContractTests(unittest.TestCase):
         self.assertFalse(schema.is_valid({**raw,'claims':{}}))
         foreign=deepcopy(raw);foreign['claims']['invented']=foreign['claims'].pop('claim')
         self.assertFalse(schema.is_valid(foreign))
-        foreign=deepcopy(raw);foreign['claims']['claim']['grounding'][0]['evidence_id']='foreign'
+        foreign=deepcopy(raw);foreign['claims']['claim']['grounding']={'foreign':'span_000'}
         self.assertFalse(schema.is_valid(foreign))
     def test_source_quote_is_still_checked_after_decoder_accounting(self):
-        p,d,provider,_=self.provider(lambda v:v['claims']['claim']['grounding'][0].update(quote='Được nghỉ 99 ngày làm việc.'))
+        p,d,provider,_=self.provider(lambda v:v['claims']['claim']['grounding'].update(source='span_999'))
         result,warnings=review_answer(provider,d,p,0)
         self.assertFalse(result.claims);self.assertIn('ANSWER_QUALITY_BLOCKED',warnings)
         self.assertEqual(result.semantic_review['error_code'],'GROUNDING_QUOTE_MISMATCH')

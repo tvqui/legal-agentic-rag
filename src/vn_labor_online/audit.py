@@ -96,15 +96,24 @@ def citations(items:list[Evidence])->list[Citation]:
       document_type=document_type(x.document_number,x.document_title,x.document_type),issuer=x.issuer) for x in items]
 def _norm_reference(value:str)->str:
     return re.sub(r'[^0-9A-ZĐ]','',value.upper())
+def _relevance_text(text):
+    # Canonical actor/product synonyms affect relevance only, never legal
+    # entailment, numbers, polarity or the semantic safety checks below.
+    value=text.lower()
+    for phrase,replacement in (('doanh nghiệp','người sử dụng lao động'),('công ty','người sử dụng lao động'),
+        ('nhân viên','người lao động'),('sản phẩm','hàng hóa')):
+        value=re.sub(r'\b'+re.escape(phrase)+r'\b',replacement,value)
+    return value
+
 def _claim_supported(text:str,evidence:Evidence)->bool:
     stop={'theo','được','của','và','hoặc','một','những','các','trong','tại','điều','khoản','điểm'}
-    claim={x for x in re.findall(r'\w+',text.lower()) if len(x)>2 and x not in stop}
+    claim={x for x in re.findall(r'\w+',_relevance_text(text)) if len(x)>2 and x not in stop}
     # This is only a relevance screen. Instrument identity can be supported by
     # actual metadata even when a clause body does not repeat its own title or
     # number. Semantic entailment and claim-specific locator checks still run.
-    source={x for x in re.findall(r'\w+',' '.join(y for y in (
+    source={x for x in re.findall(r'\w+',_relevance_text(' '.join(y for y in (
         evidence.source_text,evidence.text,evidence.breadcrumb,evidence.document_number,
-        evidence.document_title,evidence.document_type) if y).lower()) if len(x)>2 and x not in stop}
+        evidence.document_title,evidence.document_type) if y))) if len(x)>2 and x not in stop}
     return bool(claim) and len(claim&source)/len(claim)>=.35
 
 def _claim_reference_supported(text:str,claim_items:list[Evidence])->list[str]:

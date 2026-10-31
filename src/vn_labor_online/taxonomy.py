@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v12'
+TAXONOMY_VERSION = 'labor-subissues-v13'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -130,7 +130,7 @@ def affirmative_phrase(query,terms):
         for match in re.finditer(re.escape(term),q):
             prefix=re.split(r'[.;!?]|\b(?:nhưng|tuy nhiên)\b',q[max(0,match.start()-70):match.start()])[-1]
             # Only a directly preceding negation belongs to this predicate.
-            if re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên|đã|đạt|bị)){0,6}\s*$',prefix):
+            if re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên|đã|đạt|bị|là|người|thuộc|nhóm|đối|tượng)){0,6}\s*$',prefix):
                 continue
             return True
     return False
@@ -281,7 +281,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
             add('WAGE.PAYMENT_DISPOSAL')
         if has('ngừng việc') and not has('đình công'):
             add('WAGE.DOWNTIME')
-    overtime=has('làm thêm','làm ngoài giờ','tăng ca')
+    overtime=affirmative_phrase(q,('làm thêm','làm ngoài giờ','tăng ca'))
     night=has('ban đêm','làm đêm')
     protective_purpose=bool(re.search(r'bảo vệ(?:\s+ngay)?\s+(?:tính mạng|tài sản)|cứu người|cứu nạn',q))
     emergency=overtime and (protective_purpose or has('quốc phòng','an ninh'))
@@ -306,7 +306,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('WORKING_TIME.NORMAL_HOURS')
     if overtime and (has('tiền','lương','miễn trả','không nhận','trả','%','phần trăm') or night):
         add('WAGE.OVERTIME_PAY')
-    if night and (has('tiền','lương') or overtime):
+    if night and (has('tiền','lương','trả thêm','mức trả','phụ cấp','phần trăm','%') or overtime):
         add('WAGE.NIGHT_PAY')
     quantity = bool(re.search(r'bao nhiêu ngày|số ngày|tính ngày|\b\d+\s+ngày\b',q))
     special_mechanism = False
@@ -380,7 +380,9 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         if intent == 'TRAVEL_TIME' or annual and has('đi đường', 'đi và về'):
             add('LEAVE.TRAVEL_DAYS')
         holiday_entitlement=has('nghỉ lễ','nghỉ tết','ngày tết','những ngày lễ','các ngày lễ','ngày lễ nào','được nghỉ')
-        if holiday and (not overtime and not night or holiday_entitlement): add('LEAVE.PUBLIC_HOLIDAY')
+        overlap_only=('WORKING_TIME.WEEKLY_REST' in found and has('trùng','nghỉ bù')
+            and not has('liệt kê','những ngày lễ','các ngày lễ','ngày lễ nào','bao nhiêu ngày lễ'))
+        if holiday and not overlap_only and (not overtime and not night or holiday_entitlement): add('LEAVE.PUBLIC_HOLIDAY')
         if personal: add('LEAVE.PERSONAL_LEAVE')
         if unpaid: add('LEAVE.UNPAID_LEAVE')
         if payment:
@@ -672,9 +674,18 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key == 'LEAVE.TRAVEL_DAYS':
             require('travel_time_rule', [loc('111' if historical else '113', '4' if historical else '6')])
         elif key == 'LEAVE.PUBLIC_HOLIDAY':
-            # General holiday questions require the whole set, not just one day.
-            require('public_holiday_rule', *[[loc('115' if historical else '112', '1', point)]
-              for point in ('a','b','c','d','đ','e')])
+            # Scope named holidays, retaining every branch for a real overview.
+            q=analysis.query_text.lower()
+            named={'a':('tết dương lịch','ngày 1 tháng 1'), 'b':('tết âm lịch','tết nguyên đán'),
+                'c':('chiến thắng','30/4','30 tháng 4'), 'd':('quốc tế lao động','1/5','01/05'),
+                'đ':('quốc khánh',),'e':('giỗ tổ',)}
+            points=[point for point,terms in named.items() if any(term in q for term in terms)]
+            overview=any(term in q for term in ('liệt kê','những ngày lễ','các ngày lễ','tất cả'))
+            if not points or overview: points=list(named)
+            require('public_holiday_rule', *[[loc('115' if historical else '112','1',point)] for point in points])
+            if not historical and (any(term in q for term in ('ai quyết định','ai chọn','quyết định ngày','người quyết định')) or
+                    'cơ quan nào' in q and any(term in q for term in ('quyết định','chọn','ngày cụ thể','liền kề'))):
+                require('holiday_date_authority',[loc('112','3')])
         elif key == 'LEAVE.PERSONAL_LEAVE':
             q=analysis.query_text.lower()
             overview=any(term in q for term in ('những trường hợp','các trường hợp','liệt kê','so sánh'))

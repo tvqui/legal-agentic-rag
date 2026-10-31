@@ -623,6 +623,9 @@ class LegalAdjudicator:
             schema['properties']['claims']['maxItems']=4
             schema['$defs']['ProviderClaim']['properties']['text']['maxLength']=1000
         payload['required_evidence_groups']={slot:[[{ 'instrument':loc.documents,'article':loc.article,'clause':loc.clause,'point':loc.point} for loc in group] for group in groups] for slot,groups in plan.slot_requirements.items()}
+        system+=(' Give one direct conclusion per requested part, followed only by distinct necessary conditions, exceptions or consequences. '
+            'Do not repeat a conclusion using different words or add sanctions/remedies unless requested or necessary to answer the task. '
+            'A formal or procedural violation does not by itself prove invalidity, loss of rights or a separate penalty; such consequences need their own supporting source. ')
         system+=' Distinguish a general rule from its application to the stated facts. State the supported direct answer first. Do not substitute an employer termination rule for an employee rule. Every required evidence group must be addressed; unrelated evidence is not a substitute.'
         system+=' The supplied answer_tasks are the confirmed request plan, including Researcher additions. Address each supplied task; do not replace this plan with your own decomposition. In a task batch, focus claims on these tasks while preserving conditions and dependencies. Never claim missing evidence has been found.'
         system+=' If freshness_status is UNVERIFIED_AFTER_SNAPSHOT, conclusions are conditional on the supplied dated corpus; never assert these are exhaustively the current laws or that no later amendment exists.'

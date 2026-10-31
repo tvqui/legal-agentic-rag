@@ -53,6 +53,10 @@ class ResearcherConfig(StrictModel):
     timeout_seconds:float=120; max_queries:int=Field(2,ge=0,le=4)
 
 class ApplicabilityConfig(StrictModel):
+    unresolved_provider:Literal['none','gemini']='none'
+    unresolved_model:str|None=None
+    unresolved_max_items:int=Field(4,ge=1,le=8)
+    unresolved_timeout_seconds:float=Field(20,ge=1,le=60)
     tokenizer_path:str|None=None; tokenizer_model:str|None=None
     max_output_tokens:int=Field(1536,ge=256,le=8192)
     mode:Literal['deterministic','ollama','http','hybrid']='deterministic'; fail_closed:bool=True

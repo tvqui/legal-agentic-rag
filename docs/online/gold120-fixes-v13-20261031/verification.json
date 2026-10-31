@@ -1,0 +1,63 @@
+{
+  "online": {
+    "tests": 769,
+    "failures": 0,
+    "errors": 0,
+    "passed": true,
+    "failed_names": [],
+    "exit_code": 0
+  },
+  "evaluation": {
+    "tests": 57,
+    "passed": true,
+    "exit_code": 0
+  },
+  "python_syntax": "PASS",
+  "staged_offline_diff_preserved": true,
+  "staged_diff_sha256": "ae34172d53cd5a1d2d7878a9c2351fe970ed95605112b3003bd80a086abed486",
+  "git_diff_check": "PASS",
+  "live_v13_evaluation": "NOT_RUN_REQUIRES_KAGGLE_UPDATE",
+  "legal_quality": "NOT_CERTIFIED",
+  "files": [
+    "config/online_kaggle.yaml",
+    "docs/online/gold120-fixes-v13-20261031.md",
+    "docs/online/gold120-fixes-v13-20261031/files.json",
+    "docs/online/gold120-fixes-v13-20261031/verification.json",
+    "src/vn_labor_online/analysis.py",
+    "src/vn_labor_online/answer_review.py",
+    "src/vn_labor_online/api.py",
+    "src/vn_labor_online/applicability.py",
+    "src/vn_labor_online/audit.py",
+    "src/vn_labor_online/claim_validation.py",
+    "src/vn_labor_online/config.py",
+    "src/vn_labor_online/fact_polarity.py",
+    "src/vn_labor_online/generation.py",
+    "src/vn_labor_online/grounding_spans.py",
+    "src/vn_labor_online/pipeline.py",
+    "src/vn_labor_online/taxonomy.py",
+    "tests/online/fixtures/gold120_source_excerpts.json",
+    "tests/online/test_gold120_mechanisms.py",
+    "tests/online/test_review_claim_batches.py",
+    "tests/online/test_review_decoder_contract.py"
+  ],
+  "local_online_source_fingerprint": "c5313e729836bfff55199dd1a08b8a08e2c760aa0017f73dc7fd30165ae3dac9",
+  "modified_file_sha256": {
+    "config/online_kaggle.yaml": "657189f7a63deaaa9270bfbed82335b5ce044993173b36b6bdc3a63b6b5031ec",
+    "src/vn_labor_online/analysis.py": "81b7767cbc29e67da734257173c1da213fa81a439ffbcb7b5eaa051878f6cf88",
+    "src/vn_labor_online/answer_review.py": "3083a70bba838beeaed434d1d8f336e6206314170ac0fb074440df032b440476",
+    "src/vn_labor_online/api.py": "c7eca0c7e44a9d8b213175198a17a65f2d78fdc97bdef0c57a3fc09be8aef0c7",
+    "src/vn_labor_online/applicability.py": "d73a71326c67d059b92ea8523348d2d9ab200b3dde11cf5bde7c192272f223b5",
+    "src/vn_labor_online/audit.py": "a0c4068b56a910a091068dce2e1a2e5e4ea5d5305fec930a31a4115920a573d3",
+    "src/vn_labor_online/claim_validation.py": "95a988f4b09e6ba0e7c50e49cc0add7102d24474fe4185ab96677ee40fa48547",
+    "src/vn_labor_online/config.py": "ed1adb5662229ba189aa24a21a0768983ffae9792f3ef26525948f42dde77c2f",
+    "src/vn_labor_online/fact_polarity.py": "a42ebb2aa9a8072a2cd76c771c9bfa3cc7c4c36e78fa82d688f17030757e6f24",
+    "src/vn_labor_online/generation.py": "59dc53e603a237f5a765cdebb2d2dcf23ab425026af1d4264f079c02305c2220",
+    "src/vn_labor_online/grounding_spans.py": "564b4d26fecade4920dc4540b3a038a106f1e92893cce7230ec17279800049ec",
+    "src/vn_labor_online/pipeline.py": "c7891e8907768ca61e79b8edd67be47b2eefc34fe51fe2f5a5ed14af6e541f42",
+    "src/vn_labor_online/taxonomy.py": "e401c01b1dc758db15c2d5cf197631361542486fa1c72fd9542614f56bbb30e4",
+    "tests/online/fixtures/gold120_source_excerpts.json": "238c2bb30a7ed447a919b614f6377a6ff22c8ea1eaf5271976bd727ebe6c1ae7",
+    "tests/online/test_gold120_mechanisms.py": "e700265917994374a8223f75519c5af85a1fdbc9432466efc2b0282daa4b454d",
+    "tests/online/test_review_claim_batches.py": "f1fcacbad3be66136e5bfe2f9f304291e63e90af1e9c8decf6d03d100c8c269c",
+    "tests/online/test_review_decoder_contract.py": "ae7a65ee50af0250f1070a6507241655061237070d52ffb29431c50637f2851c"
+  }
+}

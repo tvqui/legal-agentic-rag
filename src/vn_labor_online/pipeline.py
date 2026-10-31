@@ -42,6 +42,10 @@ class OnlinePipeline:
     def __init__(self,cfg:OnlineConfig):
         self.cfg=cfg; self.store=ArtifactStore(cfg); self.retriever=Retriever(self.store,cfg)
         self.graph=GraphExplorer(self.store,cfg.graph); self.researcher=LegalResearcher(cfg.researcher)
+        if cfg.applicability.unresolved_provider=='gemini' and not cfg.applicability.unresolved_model:
+            selected=(cfg.adjudication.review_model if cfg.adjudication.review_provider=='gemini' else None) or (
+                cfg.researcher.model if cfg.researcher.mode=='gemini' else None)
+            if selected:cfg.applicability.unresolved_model=selected
         self.applicability=LegalApplicabilityAuditor(cfg.applicability,self.store)
         self.adjudicator=LegalAdjudicator(cfg.adjudication)
     def close(self):

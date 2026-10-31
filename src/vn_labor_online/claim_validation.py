@@ -32,6 +32,12 @@ def invalid_clause_locator(text):
 def semantic_issues(text, items, *, context_query=''):
     q=fold(text); problems=[]
     if invalid_clause_locator(text): problems.append('CLAIM_CLAUSE_POINT_CONFUSION')
+    invalidity=re.search(r'khong co gia tri phap ly|\bvo hieu\b|khong phat sinh quyen',q)
+    form_source=' '.join(fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text) for item in items)
+    if invalidity and 'bang van ban' in form_source:
+        qualified=re.search(r'khong (?:dong nghia|co nghia|the coi|duoc coi)[^.;]{0,50}$',q[:invalidity.start()])
+        explicit=any(term in form_source for term in ('vo hieu','khong co gia tri phap ly','khong phat sinh quyen'))
+        if not qualified and not explicit:problems.append('CLAIM_FORM_VIOLATION_AS_INVALIDITY')
     absence=re.search(r'\bkhong (?:phai(?: duoc quy dinh)?|duoc quy dinh|co quy dinh|nam) (?:trong|tai) (?:bo luat|luat|nghi dinh|thong tu)\b',q)
     if absence and not any(q in fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text) for item in items):
         # A positive finding in one statute cannot prove absence from another.

@@ -335,6 +335,10 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
             if extracted is not value: match=None
         elif field=='contract_type' and value=='FIXED_TERM' and 'xác định thời hạn' not in query.lower():
             match=CONTRACT_TERM.search(query)
+        elif field=='disabled' and value is False:
+            match=re.search(r'\b(?:không|chẳng)(?:\s+(?:hề|phải|là|người|bị|thuộc|nhóm|đối|tượng|có)){0,8}\s+(?:người\s+)?khuyết tật',query,re.I)
+        elif field=='protected_status' and value=='NONE':
+            match=re.search(r'không thuộc\s+(?:các\s+)?(?:trường hợp|nhóm|diện)(?:\s+được)?\s+bảo vệ[^.;?!]{0,30}điều\s+37',query,re.I)
         elif field=='mutual_termination_agreement' and value is False:
             match=re.search(r'\b(?:chưa|không|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên)){0,4}\s+(?:đồng ý|thỏa thuận|thoả thuận)[^.;?!]{0,45}',query,re.I)
         else:
@@ -464,6 +468,11 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
         if any(term in query for term in ('bao nhiêu tiền','tính tiền','mức bồi thường')) and facts.get('training_costs') is None:
             missing.append('Có chi phí đào tạo phải hoàn trả theo Điều 62 hay không; nếu có thì số tiền và thỏa thuận đào tạo là gì?')
     else:
+        # Asking the legal notice requirement does not require an already-given
+        # notice. Statutory no-notice grounds do not depend on contract length.
+        asks_notice_rule=bool(re.search(r'(?:báo trước|thời hạn báo)[^.;?!]{0,40}(?:bao lâu|bao nhiêu|không)|có phải báo trước',query))
+        employer_notice_rule=('TERMINATION.EMPLOYER_UNILATERAL' in subissues and asks_notice_rule)
+        no_notice_ground=bool(re.search(r'điểm\s+[deđ]\s+khoản\s+1\s+điều\s+36',query))
         topics={topic.key for topic in detect_topics(query)}
         material_only=('material_liability' in topics and not any(term in query for term in
             ('kỷ luật','sa thải','khiển trách','cách chức','nâng lương')))
@@ -479,6 +488,8 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             if issue=='DISCIPLINE' and material_only: continue
             if issue=='WAGE' and (relationship_only or incidental_wage): continue
             for field,prompt in FACTS.get(issue,{}).items():
+                if issue=='TERMINATION' and employer_notice_rule and (field=='notice_days' or field=='contract_type' and no_notice_ground):
+                    continue
                 if not _fact_present(field,query,query_date,facts): missing.append(prompt)
     return sorted(set(missing))
 
@@ -513,10 +524,13 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if 'đặc biệt nặng nhọc' in q: facts['work_category']='SPECIAL_HEAVY'
     elif any(term in q for term in ('nặng nhọc, độc hại, nguy hiểm','nghề nặng nhọc','công việc nặng nhọc')): facts['work_category']='HEAVY'
     elif any(term in q for term in ('điều kiện bình thường','công việc bình thường','nhân viên văn phòng','công việc văn phòng')): facts['work_category']='NORMAL'
-    if 'chưa thành niên' in q: facts['minor']=True
+    if 'chưa thành niên' in q and affirmative_phrase(q,('chưa thành niên',)):
+        facts['minor']=True
     if any(t in q for t in ('nhận lương cố định','làm việc có trả công','làm công việc có trả công')): facts['employment_paid_work']=True
     if any(t in q for t in ('chịu kpi','chịu sự quản lý','chịu sự điều hành','được quản lý như nhân viên')): facts['employment_management']=True
-    if 'khuyết tật' in q: facts['disabled']=True
+    from .fact_polarity import attribute_polarity
+    disabled=attribute_polarity(q,('người khuyết tật','khuyết tật'))
+    if disabled is not None: facts['disabled']=disabled
     if 'thử việc' in q and not relationship_comparison(q):
         # The required qualification of the job, not the applicant's diploma.
         for group,pattern in (
@@ -535,7 +549,11 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     elif 'xác định thời hạn' in q: facts['contract_type']='FIXED_TERM'
     elif contract_term and 'thử việc' not in q: facts['contract_type']='FIXED_TERM'
     elif 'thử việc' in q and not relationship_comparison(q): facts['contract_type']='PROBATION'
-    if any(x in q for x in ('mang thai','thai sản','nuôi con dưới 12 tháng')): facts['protected_status']='MATERNITY'
+    if any(attribute_polarity(q,(term,)) is True for term in ('mang thai','thai sản','nuôi con dưới 12 tháng')):
+        facts['protected_status']='MATERNITY'
+    if re.search(r'không thuộc\s+(?:các\s+)?(?:trường hợp|nhóm|diện)(?:\s+được)?\s+bảo vệ[^.;?!]{0,30}điều\s+37',q):
+        if facts.get('protected_status')=='MATERNITY':facts.pop('protected_status')
+        else:facts['protected_status']='NONE'
     notice_date=NOTICE_DATE_DMY.search(q)
     if notice_date: facts['notice_date']=f'{notice_date.group(3)}-{notice_date.group(2).zfill(2)}-{notice_date.group(1).zfill(2)}'
     termination_date=TERMINATION_DATE_DMY.search(q)
@@ -607,7 +625,7 @@ def _fact_present(field:str,q:str,query_date:str|None,facts:dict)->bool:
         return True
     if field.endswith('date'): return bool(query_date or DATE.search(q))
     if field=='contract_type': return any(w in q for w in ('xác định thời hạn','không xác định thời hạn','thử việc'))
-    if field=='termination_reason': return any(w in q for w in ('vì','do ','lý do'))
+    if field=='termination_reason': return any(w in q for w in ('vì','do ','lý do','thường xuyên không hoàn thành công việc','tự ý bỏ việc'))
     if field=='workplace_context': return any(w in q for w in ('nơi làm việc','công ty','cơ quan','trong công việc'))
     if field=='protected_status': return any(w in q for w in ('mang thai','thai sản','nuôi con'))
     if field=='discipline_form': return any(w in q for w in ('khiển trách','sa thải','kỷ luật','nâng lương','cách chức'))

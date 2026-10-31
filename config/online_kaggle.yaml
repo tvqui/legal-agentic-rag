@@ -60,6 +60,9 @@ online:
     max_queries: 4
     max_output_tokens: 4096
   applicability:
+    unresolved_provider: gemini
+    unresolved_max_items: 4
+    unresolved_timeout_seconds: 20
     mode: hybrid
     provider: ollama
     url: "http://127.0.0.1:11434/api/chat"

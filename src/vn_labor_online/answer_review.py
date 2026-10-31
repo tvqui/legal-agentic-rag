@@ -296,6 +296,20 @@ def reviewer_call(provider, system, payload, schema):
     """
     from copy import deepcopy
     wire=deepcopy(schema)
+    from .grounding_spans import source_spans
+    span_catalog={source['evidence_id']:source_spans(source.get('full_text') or source.get('text') or '')
+        for source in payload.get('evidence',[]) if isinstance(source,dict) and source.get('evidence_id')}
+    whole_sources={source['evidence_id']:(source.get('full_text') or source.get('text') or '').strip() for source in payload.get('evidence',[]) if isinstance(source,dict) and source.get('evidence_id')}
+    wire_payload=deepcopy(payload)
+    if 'claims' in wire.get('properties',{}):
+        for source in wire_payload.get('evidence',[]):
+            if source.get('evidence_id') in span_catalog:
+                source.pop('full_text',None);source.pop('text',None)
+                source['source_spans']=dict(span_catalog[source['evidence_id']])
+                whole=whole_sources[source['evidence_id']]
+                if 8<=len(whole)<=6000:
+                    source['whole_source_span_id']='span_full'
+                    span_catalog[source['evidence_id']]['span_full']=whole
     expected={}
     claim_sources={c['claim_id']:c.get('evidence_ids',[]) for c in payload.get('claims',[])}
     allowed_claims=list(claim_sources) or [c['claim_id'] for c in payload.get('checked_claims',[])]
@@ -313,13 +327,22 @@ def reviewer_call(provider, system, payload, schema):
             if field=='claims':
                 grounding=deepcopy(wire['$defs']['Grounding'])
                 if claim_sources.get(uid): grounding['properties']['evidence_id']['enum']=claim_sources[uid]
-                entry['properties']['grounding']['items']=grounding
+                entry['properties']['grounding']={'type':'object','additionalProperties':False,
+                    'required':claim_sources.get(uid,[]),
+                    'properties':{eid:{'type':'string','enum':list(span_catalog.get(eid,{}))+[''],
+                        'description':'One exact source span ID, whole_source_span_id if full context is needed, or empty if unsupported.'}
+                        for eid in claim_sources.get(uid,[])}}
             elif allowed_claims:
                 entry['properties']['claim_ids']['items']={'type':'string','enum':allowed_claims}
             properties[uid]=entry
         wire['properties'][field]={'type':'object','properties':properties,'required':ids,'additionalProperties':False}
-    instructions=system+KEYED_ACCOUNTING_INSTRUCTION
-    raw=provider.structured(instructions,json.dumps(payload,ensure_ascii=False),wire)
+    instructions=system+KEYED_ACCOUNTING_INSTRUCTION+(' Each claim grounding is an object keyed by EVERY attached evidence ID. '
+        'Its value is one source_spans ID from THAT source, its whole_source_span_id when multiple passages/context are needed, or an empty string if unsupported. Read all spans in order as the full source, including inherited context. '
+        'Select a span that proves the claim, keeping scope, conditions and exceptions; do not select a heading alone. '
+        'A SUPPORTED claim needs a supporting span per attached source; otherwise use UNSUPPORTED. '
+        'Do not write quotations or invent IDs: the server restores exact source text. '
+        'ANSWERED task coverage requires supported claims that APPLY the rule and give the requested conclusion; a list of rules alone is not a completed assessment.')
+    raw=provider.structured(instructions,json.dumps(wire_payload,ensure_ascii=False),wire)
     if not isinstance(raw,dict): raise StructuredOutputError('REVIEW_NON_OBJECT')
     result=deepcopy(raw)
     for field,(ids,identifier) in expected.items():
@@ -333,6 +356,23 @@ def reviewer_call(provider, system, payload, schema):
             value=values[uid]
             if not isinstance(value,dict) or identifier in value:
                 raise StructuredOutputError('REVIEW_KEYED_VALUE_INVALID')
+            if field=='claims' and isinstance(value.get('grounding'),dict):
+                grounding=value['grounding'];required=claim_sources.get(uid,[])
+                if set(grounding)!=set(required):
+                    raise StructuredOutputError('supported claim has an ungrounded citation')
+                restored=[]
+                for eid,selected in grounding.items():
+                    # Legacy quote strings remain subject to the exact-source
+                    # validator; the new decoder emits only span ID arrays.
+                    if isinstance(selected,str):
+                        if selected.strip():restored.append({'evidence_id':eid,'quote':span_catalog.get(eid,{}).get(selected,selected)})
+                        continue
+                    if not isinstance(selected,list) or any(not isinstance(uid,str) or uid not in span_catalog.get(eid,{}) for uid in selected):
+                        raise StructuredOutputError('semantic grounding is not an exact cited-source quotation')
+                    if len(selected)!=len(set(selected)):
+                        raise StructuredOutputError('semantic grounding is not an exact cited-source quotation')
+                    restored.extend({'evidence_id':eid,'quote':span_catalog[eid][uid]} for uid in selected)
+                value={**value,'grounding':restored}
             result[field].append({**value,identifier:uid})
     return result
 

@@ -20,7 +20,7 @@ class BatchProvider:
         claims=payload['claims']
         if self.omit: claims=claims[:-1]
         return {'claims':[{'claim_id':c['claim_id'],'verdict':'SUPPORTED',
-            'grounding':[{'evidence_id':'source','quote':('Fabricated quotation must be rejected.' if self.fake_quote else payload['evidence'][0]['full_text'])}],
+            'grounding':[{'evidence_id':'source','quote':('Fabricated quotation must be rejected.' if self.fake_quote else ' '.join(payload['evidence'][0]['source_spans'].values()))}],
             'reason':'Source and qualifications match.'} for c in claims]}
 
 
@@ -39,7 +39,7 @@ class ReviewClaimBatchTests(unittest.TestCase):
         self.assertEqual([len(c['claims']) for c in provider.calls[:-1]],[4,4,2])
         self.assertEqual(len(provider.calls[-1]['checked_claims']),10)
         self.assertNotIn('evidence',provider.calls[-1])
-        self.assertTrue(all(c['evidence'][0]['full_text']==p.evidence[0].full_text for c in provider.calls[:-1]))
+        self.assertTrue(all(' '.join(c['evidence'][0]['source_spans'].values())==p.evidence[0].full_text for c in provider.calls[:-1]))
 
     def test_missing_id_is_not_silently_accepted_or_sent_to_coverage(self):
         p,d,payload=self.fixture(10); provider=BatchProvider(omit=True)
