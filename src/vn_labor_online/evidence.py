@@ -52,7 +52,10 @@ def state_for(items:list[Evidence],plan:EvidencePlan|list[str],query_date:str|No
         ids=[]; fallback_ids=[]
         if isinstance(plan,EvidencePlan) and slot in plan.slot_requirements:
             ids=requirement_evidence(verified,plan.slot_requirements[slot])
-        elif slot=='governing_rule': ids=[x.unit_id for x in verified if x.provision_version_id and x.kind=='PROVISION' and not heading_only(x)]
+        elif slot=='governing_rule':
+            allowed=plan.governing_roles if isinstance(plan,EvidencePlan) else ['RULE','SANCTION']
+            ids=[x.unit_id for x in verified if x.provision_version_id and x.kind=='PROVISION' and not heading_only(x)
+                and norm_role(x.document_number,x.document_title,' '.join((x.ancestor_context,x.source_text or x.text))) in allowed]
         elif slot in {'authority','official_source'}:
             ids=[x.unit_id for x in verified if x.official_source and x.source_catalog_status=='VERIFIED']
             fallback_ids=[x.unit_id for x in verified if x.authority_rank>0 and x.source_url] if allow_document_temporal_fallback else []
@@ -137,11 +140,11 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
                     chosen=matches[0]
                     selected.append(chosen); selected_ids.add(chosen.unit_id)
             continue
-        existing=state_for(selected,EvidencePlan(mandatory_slots=[slot]),query_date,allow_document_temporal_fallback).slots[slot]
+        existing=state_for(selected,EvidencePlan(mandatory_slots=[slot],governing_roles=plan.governing_roles),query_date,allow_document_temporal_fallback).slots[slot]
         if existing.status==SlotStatus.FOUND_VERIFIED:
             continue
         if slot=='legal_consequences':
-            probe=state_for(ordered,EvidencePlan(mandatory_slots=[slot]),query_date,allow_document_temporal_fallback).slots[slot]
+            probe=state_for(ordered,EvidencePlan(mandatory_slots=[slot],governing_roles=plan.governing_roles),query_date,allow_document_temporal_fallback).slots[slot]
             if probe.status in {SlotStatus.FOUND_VERIFIED,SlotStatus.FOUND}:
                 by_id={item.unit_id:item for item in ordered}
                 for evidence_id in probe.evidence_ids:
@@ -150,7 +153,7 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
             continue
         ranked=[]
         for item in ordered:
-            probe=state_for([item],EvidencePlan(mandatory_slots=[slot]),query_date,allow_document_temporal_fallback).slots[slot]
+            probe=state_for([item],EvidencePlan(mandatory_slots=[slot],governing_roles=plan.governing_roles),query_date,allow_document_temporal_fallback).slots[slot]
             if probe.status in {SlotStatus.FOUND_VERIFIED,SlotStatus.FOUND}:
                 ranked.append((probe.status==SlotStatus.FOUND_VERIFIED,item.score,item))
         # A found slot needs another passage only if it upgrades verification.
@@ -191,7 +194,7 @@ def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceS
     by_decision={x.evidence_id:x for x in decisions or []}
     packed=[VerifiedEvidenceItem(evidence_id=x.unit_id,instrument_number=x.document_number,article=x.article_number,
       document_type=document_type(x.document_number,x.document_title,x.document_type),document_title=x.document_title,issuer=x.issuer,
-      norm_role=norm_role(x.document_number,x.document_title,x.source_text or x.text),
+      norm_role=norm_role(x.document_number,x.document_title,' '.join((x.ancestor_context,x.source_text or x.text))),
       clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),
       full_text=' '.join((x.ancestor_context+'\n'+(x.source_text or x.text)).split()),
       ancestor_context=x.ancestor_context,valid_from=x.valid_from,

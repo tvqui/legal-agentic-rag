@@ -45,6 +45,9 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         if REQUEST.search(span): request_spans.append(span)
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
+        if topic.key=='normal_hours' and 'WAGE.NIGHT_PAY' in subissues and outcome in {'EXPLAIN','LOOKUP'}:
+            time_request=bool(re.search(r'(?:bao nhiêu|mấy)\s*(?:giờ|tiếng)|giới hạn\s+(?:giờ|thời gian)|tối đa[^.;?!]{0,25}giờ|nghỉ giữa giờ|thời giờ nghỉ|lịch làm việc',query,re.I))
+            if not time_request:continue
         if (topic.key=='other_leave' and 'WORKING_TIME.WEEKLY_REST' in subissues
                 and 'LEAVE.PUBLIC_HOLIDAY' not in subissues
                 and any(term in query.lower() for term in ('trùng','nghỉ bù'))):

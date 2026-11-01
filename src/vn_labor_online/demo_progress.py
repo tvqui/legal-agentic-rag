@@ -44,6 +44,8 @@ STATUSES={'RUNNING','DONE','SKIPPED','WARNING','ERROR','CANCELLED'}
 LAYERS={'rule':'Rule Graph','fact':'Fact Graph','ontology':'Ontology Graph','document':'Document','derived':'Derived'}
 SAFE_ERROR_CODES={
     'COMPONENT_TIME_BUDGET_EXHAUSTED',
+    'OLLAMA_TIMEOUT','OLLAMA_CONNECTION_ERROR','OLLAMA_CLIENT_ERROR',
+    'HTTP_JSON_TIMEOUT','HTTP_JSON_CONNECTION_ERROR','HTTP_JSON_CLIENT_ERROR',
     'GEMINI_TIMEOUT','GEMINI_CLIENT_ERROR','PROMPT_CONTEXT_BUDGET_EXCEEDED',
     'OUTPUT_TOKEN_LIMIT','INVALID_JSON','NON_OBJECT_STRUCTURED_OUTPUT',
     'DUPLICATE_JSON_KEY','NON_TEXT_STRUCTURED_OUTPUT','GEMINI_EMPTY_RESPONSE',
@@ -70,13 +72,13 @@ def public_error(exc):
     code=getattr(exc,'safe_code',None)
     if isinstance(code,str) and (
         code in SAFE_ERROR_CODES
-        or re.fullmatch(r'GEMINI_HTTP_[45]\d\d',code)
+        or re.fullmatch(r'(?:GEMINI|OLLAMA|HTTP_JSON)_HTTP_[45]\d\d',code)
     ):
         data['ma_loi']=code
     code=getattr(getattr(exc,'response',None),'status_code',None)
     if type(code) is int and 100<=code<=599:data['http']=code
     message=str(exc)
-    if message in SAFE_ERROR_CODES or re.fullmatch(r'GEMINI_HTTP_[45]\d\d',message):
+    if message in SAFE_ERROR_CODES or re.fullmatch(r'(?:GEMINI|OLLAMA|HTTP_JSON)_HTTP_[45]\d\d',message):
         data['ma_loi']=message
     diagnostics=getattr(exc,'safe_diagnostics',None)
     if isinstance(diagnostics,dict):

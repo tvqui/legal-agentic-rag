@@ -6,6 +6,7 @@ from .config import AdjudicationConfig
 from .claim_validation import semantic_issues
 from .answer_quality import clean_draft,clean_source_excerpt,draft_issues,guarded_language_edit,language_issues,render_claims
 from .errors import StructuredOutputError
+from .runtime import RequestStopped
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
 from .taxonomy import classify_subissues,original_documents,profile_covers_issues,annual_leave_points,annual_leave_combination_only
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
@@ -531,6 +532,8 @@ class LegalAdjudicator:
                 if draft_issues(repaired,pack.query):
                     raise StructuredOutputError('language repair has invalid public rendering')
                 return repaired,warnings+['ANSWER_LANGUAGE_REPAIRED']
+            except RequestStopped:
+                raise
             except Exception as exc:
                 warnings.append('ANSWER_LANGUAGE_REPAIR_REJECTED:'+type(exc).__name__)
         fallback=clean_draft(adjudicate(display,partial,assumptions),pack.query)
@@ -666,6 +669,8 @@ class LegalAdjudicator:
             if partial: lines.append('Kết quả chỉ là một phần vì còn thiếu bằng chứng bắt buộc được nêu trong limitations.')
             canonical='\n'.join(lines) if draft.claims else 'Không đủ bằng chứng đã xác minh để kết luận.'
             return draft.model_copy(update={'answer_summary':canonical}),list(dict.fromkeys(locator_warnings))
+        except RequestStopped:
+            raise
         except Exception as exc:
             if not self.cfg.fail_closed: raise
             return safe_fallback(),['ADJUDICATION_PROVIDER_FALLBACK:'+type(exc).__name__]

@@ -3,6 +3,7 @@
 This catalogue covers mechanisms. Matching a topic never proves applicability
 or legal authority. Missing corpus entries remain missing, not invented rules.
 """
+import re
 from .models import LegalLocator
 from .claim_validation import fold
 
@@ -87,7 +88,9 @@ def extra_requirements(analysis):
         out['health_insurance_subjects']=[[loc(12,documents=['25/2008/QH12','46/2014/QH13'])]]
         if not analysis.query_date or analysis.query_date>='2025-07-01':
             out['health_insurance_current_amendment']=[[loc(1,documents=['51/2024/QH15'])]]
-    if has('du lieu','thong tin ca nhan','sinh trac','camera','giam sat') and has('nguoi lao dong','nld','nsdld','tuyen dung','nhan vien'):
+    personal_data=(has('du lieu ca nhan','thong tin ca nhan','sinh trac','camera') or bool(
+        re.search(r'du lieu[^.;?!]{0,55}(?:nguoi lao dong|nhan vien|ung vien)',q)))
+    if personal_data and has('nguoi lao dong','nld','nsdld','tuyen dung','nhan vien'):
         if not analysis.query_date or analysis.query_date>='2026-01-01':
             out['employee_data_processing']=[[loc(25,documents=['91/2025/QH15'])]]
             out['data_processing_lawful_basis']=[[loc(19,documents=['91/2025/QH15'])]]

@@ -268,6 +268,40 @@ def source_payload(item):
         'full_text':item.full_text or item.text,'norm_role':item.norm_role,
         'valid_from':item.valid_from,'valid_to':item.valid_to}
 
+
+def reject_invalid_support(review,draft,pack):
+    """Reject a false semantic PASS locally, preserving independent proof.
+
+    Accounting corruption, foreign IDs and fabricated quotations still raise.
+    A hard semantic contradiction or an ungrounded attached citation cannot
+    poison a separately validated claim, nor can it be silently approved.
+    """
+    expected={claim.claim_id for claim in draft.claims}
+    actual=[decision.claim_id for decision in review.claims]
+    if len(actual)!=len(set(actual)) or set(actual)!=expected:
+        raise StructuredOutputError('semantic review must judge each claim exactly once')
+    checked=review.model_copy(deep=True);by_claim={c.claim_id:c for c in draft.claims};rejected={}
+    for decision in checked.claims:
+        if decision.verdict!='SUPPORTED':continue
+        claim=by_claim[decision.claim_id]
+        probe=Review(claims=[decision.model_copy(deep=True)],coverage=[],question_fully_addressed=False,missing_requirements=[])
+        try:validate_review(probe,draft.model_copy(update={'claims':[claim]}),pack,[])
+        except StructuredOutputError as exc:
+            if str(exc) not in {'unsupported semantic PASS','supported claim has an ungrounded citation'}:raise
+            code=review_error_code(exc);rejected[decision.claim_id]=code
+            decision.verdict='UNSUPPORTED';decision.grounding=[]
+            decision.reason='Kiểm tra tại chỗ không xác nhận được mệnh đề hoặc toàn bộ nguồn đính kèm: '+code
+    if rejected:
+        checked.question_fully_addressed=False
+        for part in checked.coverage:
+            invalid=set(part.claim_ids)&set(rejected)
+            if not invalid:continue
+            part.claim_ids=[uid for uid in part.claim_ids if uid not in invalid]
+            part.status='PARTIAL' if part.claim_ids else 'MISSING'
+            part.missing=part.missing or 'Một hoặc nhiều mệnh đề chưa vượt kiểm tra nội dung và căn cứ đính kèm.'
+        checked.missing_requirements=list(dict.fromkeys(checked.missing_requirements+['Còn mệnh đề chưa được nguồn hỗ trợ đầy đủ.']))
+    return checked,rejected
+
 def accounting_schema(model, claim_ids=(), task_ids=()):
     """Constrain decoder IDs; local validation still checks uniqueness/support."""
     schema=model.model_json_schema()
@@ -408,14 +442,17 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
             'required_claim_ids':[claim.claim_id for claim in batch],
             'required_task_ids':[],
             'evidence':[source_payload(e) for uid,e in by_source.items() if uid in source_ids]}
-        raw=ClaimChecks.model_validate(reviewer_call(provider,SYSTEM+' Return only claim verdicts for this batch; question coverage is checked separately.',
+        prior_supported={check.claim_id for check in checks if check.verdict=='SUPPORTED'}
+        single['previously_supported_claims']=[claim.model_dump() for claim in draft.claims if claim.claim_id in prior_supported]
+        raw=ClaimChecks.model_validate(reviewer_call(provider,SYSTEM+' Return only claim verdicts for this batch; question coverage is checked separately. Previously_supported_claims were validated earlier in this request and are comparison context for redundancy only, never additional legal evidence. Do not judge their IDs again. Mark a current claim IRRELEVANT only if it strictly repeats an earlier proposition without adding an application, condition, exception, actor, date, amount or independent consequence. A shared citation alone is not duplication.',
             single,accounting_schema(ClaimChecks,single['required_claim_ids'])))
         if len(raw.claims)!=len(batch) or {claim.claim_id for claim in raw.claims}!=ids:
             raise StructuredOutputError('claim batch accounting mismatch')
         # Validate quotation and hard guards immediately, before coverage sees it.
         preliminary=Review(claims=raw.claims,coverage=[],question_fully_addressed=False,missing_requirements=[])
+        preliminary,_=reject_invalid_support(preliminary,draft.model_copy(update={'claims':batch}),pack)
         validate_review(preliminary,draft.model_copy(update={'claims':batch}),pack,[])
-        checks.extend(raw.claims)
+        checks.extend(preliminary.claims)
     supported={c.claim_id for c in checks if c.verdict=='SUPPORTED'}
     compact={k:v for k,v in payload.items() if k not in {'claims','evidence','required_claim_ids'}}
     compact['checked_claims']=[c.model_dump() for c in draft.claims if c.claim_id in supported]
@@ -441,7 +478,7 @@ def audit_in_batches(provider, payload, draft, pack, tasks):
 def review_error_code(exc):
     # Publish only fixed diagnostic labels, never provider URLs, keys or input.
     code=getattr(exc,'safe_code',None)
-    if isinstance(code,str) and re.fullmatch(r'GEMINI_(?:HTTP_[45]\d{2}|TIMEOUT|CLIENT_ERROR)',code): return code
+    if isinstance(code,str) and re.fullmatch(r'(?:GEMINI|OLLAMA|HTTP_JSON)_(?:HTTP_[45]\d{2}|TIMEOUT|CLIENT_ERROR|CONNECTION_ERROR)',code): return code
     message=str(exc)
     if isinstance(exc,StructuredOutputError):
         if message=='GEMINI_SCHEMA_VALIDATION_FAILED':
@@ -471,7 +508,7 @@ def review_error_code(exc):
 def review_service_unavailable(report):
     """Distinguish a failed verifier service from a substantive rejection."""
     code=report.get('error_code','')
-    return bool(re.fullmatch(r'GEMINI_HTTP_5\d{2}|GEMINI_TIMEOUT|TimeoutError|ConnectionError',code))
+    return bool(re.fullmatch(r'(?:GEMINI|OLLAMA|HTTP_JSON)_(?:HTTP_5\d{2}|TIMEOUT|CONNECTION_ERROR)|TimeoutError|ConnectionError',code))
 
 
 def review_answer(provider, draft, pack, repair_attempts=1):
@@ -502,8 +539,9 @@ def review_answer(provider, draft, pack, repair_attempts=1):
                 'claim and an empty missing string. Do not claim completion while any requirement is missing.')
         try:
             review = audit_in_batches(provider,payload,candidate,pack,tasks)
+            review,local_rejections=reject_invalid_support(review,candidate,pack)
             supported = validate_review(review,candidate,pack,tasks)
-            reports.append(review.model_dump())
+            reports.append({**review.model_dump(),**({'local_rejections':local_rejections} if local_rejections else {})})
             rejected = [c.claim_id for c in candidate.claims if c.claim_id not in supported]
             missing = list(dict.fromkeys(review.missing_requirements + [t.missing for t in review.coverage
                 if t.status != 'ANSWERED']))
@@ -558,6 +596,8 @@ def review_answer(provider, draft, pack, repair_attempts=1):
             # pipeline must never call this SUFFICIENT.
             report = {'status':'PARTIAL' if kept else 'FAIL','iterations':reports,
                 'missing':missing,'rejected_claim_ids':rejected}
+            if not kept and local_rejections:
+                report['error_code']=next(iter(local_rejections.values()))
             return candidate.model_copy(update={'claims':kept,'semantic_review':report,
                 'limitations':list(dict.fromkeys(candidate.limitations+['answer_coverage']))}), [
                 'ANSWER_SEMANTIC_REVIEW_INCOMPLETE' if kept else 'ANSWER_QUALITY_BLOCKED']

@@ -111,6 +111,7 @@ TOPICS=[replace(topic,phrases=topic.phrases+ALIASES.get(topic.key,())) for topic
 
 def detect_topics(query):
     text=fold(query)
+    explicit_hours=bool(re.search(r'(?:lam(?: viec)?|thoi gio lam viec|thoi gian lam viec)[^.;?!]{0,35}(?:toi da|gioi han)[^.;?!]{0,25}(?:bao nhieu|may)\s+(?:gio|tieng)\b',text))
     accident_context=('tai nan lao dong' in text or 'tai nan' in text and any(
         phrase in text for phrase in ('trong gio lam viec','tai noi lam viec','khi dang lam viec','khi thuc hien cong viec')))
     # Occurrence during working hours is context for investigating an accident,
@@ -119,7 +120,33 @@ def detect_topics(query):
     # Personal leave is an absence, not termination. Keep separately stated
     # termination clauses available instead of excluding the entire question.
     termination_text=re.sub(r'(?<!\w)(?:toi muon |xin )?nghi viec rieng(?!\w)',' ',text)
-    return [topic for topic in TOPICS if (topic.key=='occupational_accident' and accident_context) or any(
+    return [topic for topic in TOPICS if (topic.key=='occupational_accident' and accident_context)
+      or (topic.key=='normal_hours' and explicit_hours) or any(
       re.search(r'(?<!\w)'+re.escape(fold(phrase))+r'(?!\w)',
       termination_text if topic.issue=='TERMINATION' else hours_text if topic.key=='normal_hours' else text)
+      and _surface_phrase_matches(query,phrase)
       for phrase in topic.phrases)]
+
+
+_TONES={'\u0300','\u0301','\u0303','\u0309','\u0323'}
+
+def _surface_phrase_matches(query,phrase):
+    """Use supplied Vietnamese accents to disambiguate folded collisions.
+
+    Unaccented tokens remain supported. Tone position variants such as hòa/hoà
+    are equivalent; different supplied tones, e.g. đình/định, are not erased.
+    """
+    query=unicodedata.normalize('NFC',query.lower())
+    for abbreviation,expanded in {'hdld':'hợp đồng lao động','hđlđ':'hợp đồng lao động',
+            'nld':'người lao động','nlđ':'người lao động','nsdld':'người sử dụng lao động',
+            'nsdlđ':'người sử dụng lao động','tuldtt':'thỏa ước lao động tập thể'}.items():
+        query=re.sub(r'\b'+abbreviation+r'\b',expanded,query)
+    actual=re.findall(r'\w+',query);expected=re.findall(r'\w+',unicodedata.normalize('NFC',phrase.lower()))
+    def compatible(a,b):
+        if fold(a)!=fold(b):return False
+        left=unicodedata.normalize('NFD',a);right=unicodedata.normalize('NFD',b)
+        if not any(unicodedata.category(c)=='Mn' for c in left):return True
+        return (''.join(c for c in left if c not in _TONES)==''.join(c for c in right if c not in _TONES)
+            and sorted(c for c in left if c in _TONES)==sorted(c for c in right if c in _TONES))
+    return any(all(compatible(a,b) for a,b in zip(actual[i:i+len(expected)],expected))
+        for i in range(len(actual)-len(expected)+1))

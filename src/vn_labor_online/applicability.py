@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from .audit import applicability
 from .taxonomy import classify_subissues,taxonomy_exclusion,profile_requirements,locator_matches,profile_covers_issues
 from .config import ApplicabilityConfig
-from .errors import StructuredOutputError
+from .errors import StructuredOutputError,LLMProviderError
 from .runtime import RequestStopped
 from .models import ApplicabilityDecision,Evidence,ProviderApplicability
 from .providers import HttpJsonProvider,OllamaProvider,GeminiProvider
@@ -26,10 +26,20 @@ class LegalApplicabilityAuditor:
             if not cfg.url or not cfg.model: raise ValueError('HTTP applicability mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)
 
-    def _structured(self,provider,system,serialized,schema):
+    def _fallback_configured(self):
+        return (self.cfg.mode=='hybrid' and self.cfg.unresolved_provider=='gemini'
+            and bool(self.cfg.unresolved_model or os.getenv('GEMINI_MODEL'))
+            and bool(os.getenv('GEMINI_API_KEY')))
+
+    def _structured(self,provider,system,serialized,schema,*,secondary=False):
         from .runtime import operation_budget
-        with operation_budget('applicability',self.cfg.budget_seconds,
-                self.cfg.call_timeout_seconds,self.cfg.reserve_seconds):
+        # Reserve time at BOTH the component and request levels. Otherwise a
+        # timed-out primary consumes the very allowance needed for a fallback.
+        reserve=(min(self.cfg.unresolved_timeout_seconds,self.cfg.budget_seconds/2)
+            if not secondary and self._fallback_configured() else 0)
+        call_limit=min(self.cfg.call_timeout_seconds,self.cfg.unresolved_timeout_seconds) if secondary else self.cfg.call_timeout_seconds
+        with operation_budget('applicability',self.cfg.budget_seconds-reserve,
+                call_limit,self.cfg.reserve_seconds+reserve):
             return provider.structured(system,serialized,schema)
 
     def audit(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str='EXPLAIN',plan=None):
@@ -102,6 +112,15 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 serialized=json.dumps(batch_payload,ensure_ascii=False)
                 from .context_budget import fits_context
                 too_large=not fits_context(self.provider,system,serialized)
+                if too_large:
+                    # AI diagnostic checklists are auxiliary annotations, not
+                    # statutory text. Drop only those annotations before
+                    # splitting candidates; retain all source/ancestor text.
+                    omitted=sum(bool(entry['evidence'].pop('diagnostic_checklist',[])) for entry in batch_payload['candidates'])
+                    if omitted:
+                        serialized=json.dumps(batch_payload,ensure_ascii=False)
+                        too_large=not fits_context(self.provider,system,serialized)
+                        warnings.append('APPLICABILITY_AUXILIARY_CHECKLIST_OMITTED')
                 if not too_large or len(batch)==1: break
                 batch=batch[:max(1,len(batch)//2)]
             del pending[:len(batch)]
@@ -144,20 +163,36 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             except Exception as exc:
                 failed.update(ids)
                 warnings.append('APPLICABILITY_PROVIDER_ERROR:'+type(exc).__name__)
+                from .demo_progress import public_error
+                code=public_error(exc).get('ma_loi')
+                if code:warnings.append('APPLICABILITY_PROVIDER_ERROR:'+code)
                 if isinstance(exc,StructuredOutputError):
                     from .answer_review import review_error_code
                     code=('APPLICABILITY_BATCH_IDS_MISMATCH' if str(exc)=='applicability batch IDs do not exactly match candidates'
                           else review_error_code(exc))
                     warnings.append('APPLICABILITY_OUTPUT_INVALID:'+code)
+                if isinstance(exc,LLMProviderError):
+                    # Do not spend the rest of the request repeating a failed
+                    # transport. An independently validated second opinion may
+                    # assess these candidates; an error itself approves none.
+                    break
         # A bounded second opinion may resolve unknown prerequisites. Hard FAILs
         # and deterministic decisions are excluded; UNKNOWN is never auto-PASS.
-        if (self.cfg.unresolved_provider=='gemini' and
-            not any(self._passes(d) for d in list(locked.values())+list(model_decisions.values()))):
-            unresolved=[by_item[uid] for uid,d in model_decisions.items()
-                if d.audit_status=='UNRESOLVED' and d.relevant and d.supports_claim]
+        passed=[by_item[d.evidence_id] for d in list(locked.values())+list(model_decisions.values()) if self._passes(d)]
+        missing_groups=False
+        if plan is not None:
+            from .evidence_budget import required_groups,prioritize_candidates
+            missing_groups=any(not any(any(locator_matches(item,loc) for loc in group) for item in passed)
+                for _,group in required_groups(plan))
+        if self.cfg.unresolved_provider=='gemini' and (not passed or missing_groups):
+            unresolved=[item for item in eligible if item.unit_id in failed
+                or item.unit_id not in model_decisions
+                or (model_decisions[item.unit_id].audit_status=='UNRESOLVED'
+                    and model_decisions[item.unit_id].relevant and model_decisions[item.unit_id].supports_claim)]
+            if plan is not None:unresolved=prioritize_candidates(unresolved,plan,passed)
             second,notices=self._second_opinion(unresolved,system,payload,requested_outcome)
             model_decisions.update(second);warnings+=notices
-        overflow+=pending
+        overflow=[item for item in overflow+pending if item.unit_id not in model_decisions]
         merged=[]
         for item in items:
             uid=item.unit_id
@@ -170,6 +205,9 @@ Do not infer missing facts, choose a different law version, create evidence, or 
         accepted=[by_item[d.evidence_id] for d in merged if self._passes(d)]
         warnings+=['APPLICABILITY_UNRESOLVED:'+d.evidence_id for d in merged if d.audit_status=='UNRESOLVED']
         if overflow: warnings.append('APPLICABILITY_BATCH_LIMIT:'+str(len(overflow)))
+        # The deterministic pass was only provisional. Do not retain stale
+        # UNRESOLVED warnings for candidates subsequently validated by a model.
+        base_warnings=[w for w in base_warnings if not w.startswith('APPLICABILITY_UNRESOLVED:')]
         return accepted,merged,list(dict.fromkeys(base_warnings+warnings))
 
     def _second_opinion(self,items,system,payload,requested_outcome):
@@ -193,7 +231,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             # One SDK call, at most five seconds for a shared RPM slot. Preserve
             # time for adjudication and the final semantic review.
             provider.rate_policy=replace(provider.rate_policy,max_retries=0,max_wait_seconds=min(5,provider.rate_policy.max_wait_seconds))
-            raw=self._structured(provider,system+' This is an independent second opinion on unresolved candidates. Do not assume the first auditor was wrong. Retain UNKNOWN when a material fact is genuinely missing.',json.dumps(body,ensure_ascii=False),schema)
+            raw=self._structured(provider,system+' This is an independent second opinion on unresolved or unassessed candidates. A previous transport error is neither a relevance verdict nor proof of applicability. Retain UNKNOWN when a material fact is genuinely missing.',json.dumps(body,ensure_ascii=False),schema,secondary=True)
             values=raw.get('decisions')
             if set(raw)!={'decisions'} or not isinstance(values,dict) or set(values)!=set(ids):
                 raise StructuredOutputError('applicability batch IDs do not exactly match candidates')
@@ -210,7 +248,11 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             return result,['APPLICABILITY_SECOND_OPINION_USED']
         except RequestStopped:raise
         except Exception as exc:
-            return {},['APPLICABILITY_SECOND_OPINION_ERROR:'+type(exc).__name__]
+            from .demo_progress import public_error
+            notices=['APPLICABILITY_SECOND_OPINION_ERROR:'+type(exc).__name__]
+            code=public_error(exc).get('ma_loi')
+            if code:notices.append('APPLICABILITY_SECOND_OPINION_ERROR:'+code)
+            return {},notices
 
     def _payload(self,item,query,issues,facts,requested_outcome):
         diagnostics=self.store.diagnostic_items(item.unit_id) if self.store is not None else []

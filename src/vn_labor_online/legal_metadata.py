@@ -1,4 +1,5 @@
 """Display metadata and norm role, derived from existing artifact fields."""
+import re
 def document_type(number, title=None, declared=None):
     if declared: return declared
     number=str(number or '').upper(); title=str(title or '').lower()
@@ -13,5 +14,7 @@ def document_type(number, title=None, declared=None):
 def norm_role(number, title, text):
     if number=='12/2022/NĐ-CP' or 'xử phạt' in str(title or '').lower():
         return 'SANCTION'
-    if 'phạt tiền' in str(text or '').lower(): return 'SANCTION'
+    # A prohibition OF a fine is a governing rule, not a sanction merely
+    # because the words 'phạt tiền' occur in its quoted text.
+    if re.search(r'\b(?:bị\s+)?phạt tiền\s+(?:từ\b|đến\b|\d)',str(text or '').lower()):return 'SANCTION'
     return 'RULE'

@@ -13,6 +13,7 @@ _DIGITS={'khong':0,'mot':1,'hai':2,'ba':3,'bon':4,'tu':4,'nam':5,'lam':5,
 _TOKEN=r'(?:khong|mot|hai|ba|bon|tu|nam|lam|sau|bay|tam|chin|muoi|tram|linh|le)'
 _NUMBER=rf'(?:\d+|{_TOKEN}(?:\s+{_TOKEN}){{0,5}})'
 _DURATION=re.compile(rf'\bthu viec(?P<prefix>[^.;?!]{{0,50}}?)\b(?P<number>{_NUMBER})\s*(?P<unit>ngay lam viec|ngay|thang|tuan|nam)\b')
+_SHORT_DURATION=re.compile(rf'\b(?:cho(?: toi)?|yeu cau(?: toi)?)\s+thu(?P<prefix>\s+(?:trong\s+)?)\b(?P<number>{_NUMBER})\s*(?P<unit>ngay lam viec|ngay|thang|tuan|nam)\b')
 
 
 def _integer(text):
@@ -38,6 +39,8 @@ def probation_duration(query):
     """Return an explicit count and its original unit, or None if ambiguous."""
     text=_fold(query)
     matches=list(_DURATION.finditer(text))
+    if not matches and any(term in text for term in ('thu viec','cong ty','nguoi lao dong','tuyen dung')):
+        matches=list(_SHORT_DURATION.finditer(text))
     if len(matches)!=1:return None
     match=matches[0];prefix=match.group('prefix')
     if re.search(r'\b(?:tu|den|khoang|gan|hon|hay|it nhat|toi da|khong qua|luong|dong)\b|%',prefix):return None

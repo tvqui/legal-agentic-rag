@@ -17,7 +17,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 
 from .errors import LLMProviderError,StructuredOutputError,ProviderRateLimited
-from .runtime import checkpoint,request_timeout,RequestStopped
+from .runtime import checkpoint,request_timeout,RequestStopped,OperationBudgetExceeded
 from .demo_progress import observe_model
 from .gemini_quota import GeminiRatePolicy,get_gemini_limiter,quota_info
 from .gemini_diagnostics import classify_error,public_diagnostics
@@ -35,6 +35,16 @@ def _decode_content(content):
     except json.JSONDecodeError as exc: raise StructuredOutputError('INVALID_JSON') from exc
     if not isinstance(value,dict): raise StructuredOutputError('NON_OBJECT_STRUCTURED_OUTPUT')
     return value
+
+
+def _transport_error(exc,provider):
+    """Metadata only: never embed a URL, authorization header or raw message."""
+    import httpx
+    if isinstance(exc,httpx.TimeoutException):code=provider+'_TIMEOUT'
+    elif isinstance(exc,httpx.HTTPStatusError):code=provider+'_HTTP_'+str(exc.response.status_code)
+    elif isinstance(exc,httpx.TransportError):code=provider+'_CONNECTION_ERROR'
+    else:code=provider+'_CLIENT_ERROR'
+    return LLMProviderError(code,safe_code=code)
 
 
 class BaseProvider(ABC):
@@ -104,10 +114,10 @@ class HttpJsonProvider(BaseProvider):
             raw=self._post(payload,self._headers())
             content = raw["choices"][0]["message"]["content"]
             return _decode_content(content)
-        except (StructuredOutputError,RequestStopped):
+        except (StructuredOutputError,RequestStopped,OperationBudgetExceeded):
             raise
         except Exception as exc:
-            raise LLMProviderError(str(exc)) from exc
+            raise _transport_error(exc,'HTTP_JSON') from None
 
     def readiness(self) -> dict:
         if not self.health_url:
@@ -173,10 +183,10 @@ class OllamaProvider(BaseProvider):
             raw=self._post(payload,{"Content-Type": "application/json", "Accept": "application/json"})
             if raw.get('done_reason')=='length': raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
             return _decode_content(raw['message']['content'])
-        except (StructuredOutputError,RequestStopped):
+        except (StructuredOutputError,RequestStopped,OperationBudgetExceeded):
             raise
         except Exception as exc:
-            raise LLMProviderError(str(exc)) from exc
+            raise _transport_error(exc,'OLLAMA') from None
 
     def readiness(self) -> dict:
         try:
@@ -307,7 +317,7 @@ class GeminiProvider(BaseProvider):
                     if exc.validator in allowed: error.validation_keyword=exc.validator
                     raise error from None
                 return decoded
-            except (RequestStopped,StructuredOutputError,ProviderRateLimited):
+            except (RequestStopped,OperationBudgetExceeded,StructuredOutputError,ProviderRateLimited):
                 raise
             except Exception as exc:
                 status=getattr(exc,'code',None)

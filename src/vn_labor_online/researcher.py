@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json,re,unicodedata
-from .analysis import ISSUES,missing_fact_questions,_special_occupation_fact
+from .analysis import ISSUES,missing_fact_questions,_special_occupation_fact,LABOR_SCOPE_TERMS
 from .taxonomy import classify_subissues,parent_issues,TAXONOMY_VERSION,profile_covers_issues,relationship_comparison
 from .config import ResearcherConfig
 from .models import FactCandidate,QueryAnalysis,ResearcherResult,Route
@@ -24,7 +24,9 @@ def _entailed(field,value,quote):
     if field=='actor':
         return (value=='EMPLOYEE' and any(x in folded for x in ('toi ','nguoi lao dong'))) or (value=='EMPLOYER' and any(x in folded for x in ('cong ty','nguoi su dung lao dong')))
     if field=='contract_type':
-        return (value=='INDEFINITE' and 'khong xac dinh thoi han' in folded) or (value=='FIXED_TERM' and 'xac dinh thoi han' in folded and 'khong xac dinh' not in folded) or (value=='PROBATION' and 'thu viec' in folded)
+        from .analysis import _contract_type_fact
+        typed,span=_contract_type_fact(quote)
+        return (span is not None and typed==value) or (value=='PROBATION' and 'thu viec' in folded)
     if field=='notice_days' and value==0:
         return bool(re.search(r'\b(?:khong|chua)\s+(?:he\s+)?(?:bao|thong bao)\s+truoc|\bnghi\s+ngay\b',folded))
     if field in {'notice_days','worked_months','service_years','age','travel_days'}:
@@ -33,7 +35,9 @@ def _entailed(field,value,quote):
         from .analysis import _extract_facts
         return type(value) is int and _extract_facts(quote.lower(),None,None).get(field)==value
     if field=='notice_exception':
-        return (value is False and 'khong thuoc' in folded and 'khong can bao truoc' in folded) or (value is True and 'duoc nghi khong can bao truoc' in folded)
+        from .analysis import _notice_exception_fact
+        extracted,span=_notice_exception_fact(quote)
+        return type(value) is bool and span is not None and extracted is value
     if field=='special_occupation':
         extracted,_=_special_occupation_fact(quote)
         return extracted is not None and extracted is value
@@ -49,6 +53,14 @@ def _verified_candidate(candidate:FactCandidate,query:str)->FactCandidate|None:
         if len(occurrences)!=1: return None
         start,end=occurrences[0]
     if not _entailed(candidate.field,candidate.value,quote): return None
+    if candidate.field=='notice_exception':
+        from .analysis import _notice_exception_fact
+        interpreted,span=_notice_exception_fact(query)
+        if span is None or interpreted is not candidate.value:return None
+    if candidate.field=='contract_type' and candidate.value in {'FIXED_TERM','INDEFINITE'}:
+        from .analysis import _contract_type_fact
+        interpreted,span=_contract_type_fact(query)
+        if span is None or interpreted!=candidate.value:return None
     return candidate.model_copy(update={'char_start':start,'char_end':end,'origin':'RESEARCHER','verified':True})
 
 class LegalResearcher:
@@ -87,6 +99,7 @@ class LegalResearcher:
           'allowed_issue_labels':sorted(set(ISSUES)|{t.issue for t in TOPICS}),'allowed_fact_fields':sorted(SAFE_FACT_FIELDS),
           'baseline_tasks':[task.model_dump(mode='json') for task in analysis.answer_tasks]}
         system="""You are the Researcher of a Vietnamese labour-law retrieval system.
+Classify the actual requested legal outcome as IN_SCOPE, OUT_OF_SCOPE, MIXED, or UNCERTAIN and provide an exact scope_quote from the current query that establishes that classification. Labour law includes employment, workers' rights, wages, workplace safety, collective rights, social insurance and employment-related procedures. Payroll taxation or employer-provided housing can be employment-related; private property transactions, marriage or a criminal sentence do not become labour questions merely because a company or worker is mentioned. Keep MIXED questions in scope for their labour parts, and use UNCERTAIN when the relationship is genuinely unclear. Scope classification is routing, never a legal conclusion.
 Map only facts explicitly present in the current query into the supplied labour ontology and create at most a few short Vietnamese search queries.
 Decompose EVERY requested legal issue into answer_tasks. Each task needs a distinct task_id, an exact request_quote from the current query, a short description and a retrieval_query without invented citations. Cover primary entitlement, conditions, exceptions, requested consequences, amounts, procedure, temporal selection and source references when requested. Tasks are requests, never facts or legal evidence. Use depends_on only when a task's conclusion requires another task's result, not merely because tasks share a topic. Never create circular dependencies.
 You may propose fact_candidates only for allowed_fact_fields. Each candidate must quote an exact substring of the current query and provide its zero-based char_start and exclusive char_end.
@@ -96,6 +109,15 @@ The result improves retrieval recall and never counts as legal evidence. Return 
         try:
             raw=self.provider.structured(system,json.dumps(payload,ensure_ascii=False),ResearcherResult.model_json_schema())
             result=ResearcherResult.model_validate(raw)
+            # A semantic classifier may reject an otherwise unknown-domain
+            # question, but cannot erase an independently recognized labour
+            # issue or turn a mixed request into a complete out-of-scope gate.
+            labour_anchor=bool(analysis.legal_subissues or set(analysis.routing_topics)-{'income_tax'}
+                or ('income_tax' in analysis.routing_topics and any(term in query.lower()
+                    for term in LABOR_SCOPE_TERMS if term!='hợp đồng')))
+            if (result.scope=='OUT_OF_SCOPE' and result.scope_quote.strip()
+                    and result.scope_quote in query and not labour_anchor):
+                return analysis.model_copy(update={'in_scope':False,'retrieval_queries':[]}),['RESEARCHER_SCOPE_OUT_OF_SCOPE']
             allowed=set(ISSUES)|{t.issue for t in TOPICS}
             issues=list(dict.fromkeys(analysis.legal_issues+[item for item in result.legal_issues if item in allowed]))
             candidates=[candidate for proposed in result.fact_candidates if (candidate:=_verified_candidate(proposed,query)) is not None]

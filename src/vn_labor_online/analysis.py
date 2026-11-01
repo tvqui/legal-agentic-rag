@@ -260,6 +260,8 @@ def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference
     private_transactions=('mua bán nhà','bán nhà','mua nhà','chuyển nhượng nhà','thuế chuyển nhượng',
         'hợp đồng mua bán','hợp đồng thuê nhà','tranh chấp thừa kế','chia di sản',
         'quyền nuôi con','cấp dưỡng sau ly hôn','đăng ký kết hôn')
+    private_property=bool(re.search(r'\b(?:mua|bán|cho thuê|chuyển nhượng|tặng cho)\b[^.;?!]{0,45}\b(?:căn hộ|chung cư|bất động sản|nhà ở|nhà riêng)\b',query))
+    if not specific_labour and private_property:return True
     if not specific_labour and any(term in query for term in private_transactions):return True
     if foreign_instrument and not specific_labour:return True
     if any(term in query for term in CRIMINAL_QUESTION_TERMS) and (criminal_conclusion or not labour_conclusion): return True
@@ -328,6 +330,53 @@ def _probation_group_fact(query):
     return None,None
 
 
+def _notice_exception_fact(query):
+    """Read a stated exemption with its local negation and exact full span.
+
+    Negation *of an exemption* is not the negation inside 'không cần báo
+    trước'. Uncertainty, a yes/no question, or conflicting assertions cannot
+    establish either polarity. This extracts user premises, not legal proof.
+    """
+    pattern=re.compile(
+        r'\b(?P<negative>(?:không|chưa|chẳng)(?:\s+(?:hề|phải|có|bất|kỳ|tình|tiết|nào)){0,7}\s+)?'
+        r'(?P<membership>(?:thuộc|rơi vào)\s+(?:trường hợp|diện|nhóm)\s+)?'
+        r'(?:(?:được(?:\s+quyền)?\s+)?(?:nghỉ(?:\s+việc)?\s+)?không\s+(?:cần|phải)\s+báo trước'
+        r'|(?:được\s+)?miễn(?:\s+thời hạn)?\s+báo trước)',re.I)
+    matches=[]
+    for match in pattern.finditer(query):
+        if (re.match(r'miễn\b',match.group(),re.I) and not match.group('membership')
+                and not match.group('negative')):continue
+        prefix=re.split(r'[.;!?,]|\b(?:nhưng|tuy nhiên)\b',query[max(0,match.start()-90):match.start()])[-1]
+        suffix=re.split(r'[.;!\n]',query[match.end():match.end()+90],maxsplit=1)[0]
+        if re.search(r'không\s+(?:biết|rõ|chắc)|chưa\s+(?:biết|rõ|chắc|được xác nhận)|chưa xác định',prefix,re.I):continue
+        if re.search(r'\b(?:nào|liệu|phải chăng)\b[^.;?!]*$',prefix,re.I):continue
+        if re.search(r'\b(?:không|hay không|đúng không)\s*\?',suffix,re.I):continue
+        if re.search(r'\bcó\s*$',prefix,re.I) and '?' in suffix:continue
+        matches.append((not bool(match.group('negative')),match))
+    values={value for value,_ in matches}
+    return matches[0] if len(values)==1 else (None,None)
+
+
+def _contract_type_fact(query):
+    typed=list(re.finditer(r'không xác định thời hạn|xác định thời hạn',query,re.I))
+    matches=[]
+    for match in typed:
+        prefix=re.split(r'[.;!?,]',query[max(0,match.start()-100):match.start()])[-1]
+        suffix=re.split(r'[.;!\n]',query[match.end():match.end()+65],maxsplit=1)[0]
+        if re.search(r'không\s+(?:biết|rõ|chắc)|chưa\s+(?:biết|rõ|chắc|xác định)|không phải[^.;?!]{0,35}$',prefix,re.I):continue
+        if re.search(r'\b(?:có phải|liệu|phải chăng)\b',prefix,re.I) and re.search(r'không|\?',suffix):continue
+        value='INDEFINITE' if match.group().lower().startswith('không') else 'FIXED_TERM'
+        matches.append((value,match))
+    if typed:
+        return matches[0] if len({v for v,_ in matches})==1 else (None,None)
+    term=CONTRACT_TERM.search(query)
+    if term and 'thử việc' not in query.lower():
+        prefix=re.split(r'[.;!?,]',query[max(0,term.start()-75):term.start()])[-1]
+        if not re.search(r'không\s+(?:biết|rõ|chắc)|chưa\s+(?:biết|rõ|chắc|xác định)|có phải',prefix,re.I):
+            return 'FIXED_TERM',term
+    return None,None
+
+
 def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
     """Attach exact current-turn spans to facts produced by deterministic parsing."""
     patterns={'worked_months':WORKED_MONTHS,
@@ -377,8 +426,12 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
         elif field=='special_occupation':
             extracted,match=_special_occupation_fact(query)
             if extracted is not value: match=None
-        elif field=='contract_type' and value=='FIXED_TERM' and 'xác định thời hạn' not in query.lower():
-            match=CONTRACT_TERM.search(query)
+        elif field=='notice_exception':
+            extracted,match=_notice_exception_fact(query)
+            if extracted is not value:match=None
+        elif field=='contract_type' and value in {'FIXED_TERM','INDEFINITE'}:
+            extracted,match=_contract_type_fact(query)
+            if extracted!=value:match=None
         elif field=='disabled' and value is False:
             match=re.search(r'\b(?:không|chẳng)(?:\s+(?:hề|phải|là|người|bị|thuộc|nhóm|đối|tượng|có)){0,8}\s+(?:người\s+)?khuyết tật',query,re.I)
         elif field=='protected_status' and value=='NONE':
@@ -603,9 +656,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if premise and not re.search(r'có bị|có phải|bị coi|khi nào|(?:không|chưa)\s+(?:bị coi là\s+)?trái pháp luật',premise.group()):
         facts['query_intent']='STIPULATED_EMPLOYEE_LIABILITY'
         facts['actor']='EMPLOYEE'
-    if 'không xác định thời hạn' in q: facts['contract_type']='INDEFINITE'
-    elif 'xác định thời hạn' in q: facts['contract_type']='FIXED_TERM'
-    elif contract_term and 'thử việc' not in q: facts['contract_type']='FIXED_TERM'
+    contract_type,contract_span=_contract_type_fact(q)
+    if contract_span is not None:facts['contract_type']=contract_type
     elif 'thử việc' in q and not relationship_comparison(q): facts['contract_type']='PROBATION'
     if any(attribute_polarity(q,(term,)) is True for term in ('mang thai','thai sản','nuôi con dưới 12 tháng')):
         facts['protected_status']='MATERNITY'
@@ -621,13 +673,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if explicit_employer_action(q) or any(term in q for term in ('công ty cho tôi nghỉ','công ty cho người lao động nghỉ','người sử dụng lao động cho người lao động nghỉ','người sử dụng lao động chấm dứt','công ty chấm dứt','công ty chủ động chấm dứt','công ty đơn phương','công ty muốn đơn phương','người sử dụng lao động đơn phương','người sử dụng lao động muốn đơn phương','tôi bị công ty cho nghỉ','công ty sa thải')): facts['actor']='EMPLOYER'
     elif (re.search(r'\b(?:tôi|người lao động)\b[^.]{0,160}\b(?:nghỉ việc|xin nghỉ|chấm dứt hợp đồng|gửi thông báo nghỉ|muốn nghỉ|dự định nghỉ|sẽ nghỉ|(?:chỉ\s+)?báo trước)',q)
       or any(term in q for term in ('người lao động đơn phương','gửi thông báo đơn phương nghỉ','gửi thông báo','gửi email chấm dứt','gửi đơn chỉ báo trước','báo trước 1 ngày rồi nghỉ','báo trước 30 ngày'))): facts['actor']='EMPLOYEE'
-    if any(term in q for term in ('không thuộc trường hợp được nghỉ không cần báo trước',
-        'không thuộc trường hợp được miễn báo trước','không thuộc trường hợp không cần báo trước',
-        'không có bất kỳ tình tiết nào thuộc trường hợp được nghỉ không cần báo trước')):
-        facts['notice_exception']=False
-    elif (any(term in q for term in ('được nghỉ không cần báo trước','được quyền nghỉ không cần báo trước','được miễn báo trước'))
-          and not re.search(r'có\s+(?:được|quyền)|(?:được nghỉ|miễn báo trước)[^.;?!]{0,35}(?:không|hay không)\s*[?!.]*$',q)):
-        facts['notice_exception']=True
+    notice_exception,notice_exception_span=_notice_exception_fact(q)
+    if notice_exception_span is not None:facts['notice_exception']=notice_exception
     special_occupation,_=_special_occupation_fact(q)
     if special_occupation is not None: facts['special_occupation']=special_occupation
     if any(term in q for term in ('không có chi phí đào tạo','không phải hoàn trả chi phí đào tạo')): facts['training_costs']=False
@@ -682,7 +729,9 @@ def _fact_present(field:str,q:str,query_date:str|None,facts:dict)->bool:
         if isinstance(value,str) and value.strip().upper() in {'UNKNOWN','UNVERIFIED','N/A','KHÔNG BIẾT','CHƯA RÕ'}: return False
         return True
     if field.endswith('date'): return bool(query_date or DATE.search(q))
-    if field=='contract_type': return any(w in q for w in ('xác định thời hạn','không xác định thời hạn','thử việc'))
+    if field=='contract_type':
+        value,span=_contract_type_fact(q)
+        return span is not None or ('thử việc' in q and not relationship_comparison(q))
     if field=='termination_reason': return any(w in q for w in ('vì','do ','lý do','thường xuyên không hoàn thành công việc','tự ý bỏ việc'))
     if field=='workplace_context': return any(w in q for w in ('nơi làm việc','công ty','cơ quan','trong công việc'))
     if field=='protected_status': return any(w in q for w in ('mang thai','thai sản','nuôi con'))
@@ -695,7 +744,9 @@ def plan_evidence(analysis:QueryAnalysis)->EvidencePlan:
     plan=plan_with_profiles(analysis,_legacy_plan_evidence(analysis))
     resolved=getattr(analysis,'resolved_rule_requirements',{})
     queries={task.task_id:task.retrieval_query for task in analysis.answer_tasks if not task.legal_subissues} if len(analysis.answer_tasks)>1 else {}
-    return plan.model_copy(update={'task_queries':queries,'slot_requirements':{slot:resolved.get(slot,groups)
+    sanction_request=bool(re.search(r'xử phạt hành chính|mức (?:xử )?phạt|bị phạt[^.;?!]{0,45}(?:bao nhiêu|thế nào|đúng không)',analysis.query_text,re.I))
+    roles=['RULE'] if analysis.requested_outcome=='ASSESS_LEGALITY' and not sanction_request else ['RULE','SANCTION']
+    return plan.model_copy(update={'task_queries':queries,'governing_roles':roles,'slot_requirements':{slot:resolved.get(slot,groups)
         for slot,groups in plan.slot_requirements.items()}})
 
 def _legacy_plan_evidence(analysis:QueryAnalysis)->EvidencePlan:

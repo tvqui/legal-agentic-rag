@@ -264,6 +264,8 @@ def create_app(config_path:str|Path|None=None):
           'online_features':{'conversation_context':'user-turns-v2-short-history','history_storage':'browser',
             'material_fact_confirmation':'confirmed-fields-v2','numeric_task_contract':'task-scoped-money-v1',
             'generic_evidence_plan':'source-driven-dependencies-v1','auditor_budget':'cumulative-reserved-v1',
+            'auditor_recovery':'reserved-independent-fallback-v2','scope_classification':'grounded-routing-v1',
+            'notice_fact_polarity':'negation-span-v2','review_batch_memory':'supported-context-v1',
             'event_date_roles':'grounded-events-v1','confirmed_task_plan':'batched-preserved-tasks-v2','document_freshness':'dated-public-qualification-v1','dense_query_batching':'deduplicated-batch-v1','default_query_date':'vietnam-current-date-v1','relative_query_dates':'bounded-vietnam-calendar-v1',
             'request_retrieval_cache':'bounded-request-only-v1',
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',

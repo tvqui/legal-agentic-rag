@@ -95,6 +95,8 @@ class AnswerTask(BaseModel):
 
 class ResearcherResult(BaseModel):
     model_config=ConfigDict(extra='forbid')
+    scope:Literal['IN_SCOPE','OUT_OF_SCOPE','MIXED','UNCERTAIN']='UNCERTAIN'
+    scope_quote:str=Field(default='',max_length=1000)
     answer_tasks:list[AnswerTask]=Field(default_factory=list,max_length=12)
     legal_issues:list[str]=Field(default_factory=list,max_length=8)
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
@@ -141,6 +143,7 @@ class LegalLocator(BaseModel):
 
 class EvidencePlan(BaseModel):
     mandatory_slots:list[str]; conditional_slots:list[str]=Field(default_factory=list)
+    governing_roles:list[Literal['RULE','SANCTION']]=Field(default_factory=lambda:['RULE','SANCTION'])
     slot_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
     task_queries:dict[str,str]=Field(default_factory=dict)
 class Evidence(BaseModel):

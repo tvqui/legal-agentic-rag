@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v14'
+TAXONOMY_VERSION = 'labor-subissues-v15'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -111,8 +111,9 @@ SUBISSUES = {
 
 def original_documents(query: str) -> bool:
     q=' '.join(query.lower().split())
+    postfix=bool(re.search(r'(?:văn bằng|bằng đại học|bằng tốt nghiệp|chứng chỉ|giấy tờ|căn cước|hộ chiếu)\s+(?:bản\s+)?gốc\b',q))
     return (any(term in q for term in ('giữ bản chính','giữ bằng')) or
-      any(term in q for term in ('bản gốc','bản chính')) and
+      (postfix or any(term in q for term in ('bản gốc','bản chính'))) and
       any(term in q for term in ('giữ','nộp','thu','giao')) and
       any(term in q for term in ('văn bằng','bằng đại học','bằng tốt nghiệp','chứng chỉ','giấy tờ','căn cước','hộ chiếu')))
 
@@ -194,7 +195,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         if label not in found: found.append(label)
     has = lambda *terms: any(term in q for term in terms)
     intent = facts.get('query_intent')
-    employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','nlđ','nsdlđ','công ty',
+    employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','người sử dụng lao động','nhân viên','nlđ','nsdlđ','công ty',
       'doanh nghiệp','hợp đồng dịch vụ','hợp đồng cộng tác viên','cộng tác viên')
     employment_contract=(has('hợp đồng lao động','hđlđ') or (
         has('hợp đồng') and (has('làm việc','công việc','nhân viên') or 'CONTRACT' in issues)))
@@ -202,7 +203,10 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     form_terms=has('hình thức hợp đồng','thỏa thuận miệng','hợp đồng miệng','bằng lời nói',
                   'phương tiện điện tử','thông điệp dữ liệu','hợp đồng điện tử',
                   'giữ một bản','giữ 1 bản','mỗi bên giữ','lập thành hai bản','lập thành 2 bản')
-    if employment_contract and form_terms and not has('thử việc'):
+    independent_form=(not has('thử việc') or has('hợp đồng lao động','hđlđ') or any(
+        'hợp đồng' in part and any(term in part for term in ('bằng lời nói','hợp đồng miệng','hợp đồng điện tử','hình thức hợp đồng'))
+        and 'thử việc' not in part for part in re.split(r'[.;?!]',q)))
+    if employment_contract and form_terms and independent_form:
         add('CONTRACT.FORM')
     continues=employment_contract and (has('hết hạn','hết thời hạn','hợp đồng thứ ba','lần thứ ba','lần thứ 3','ký 3 lần')
         and has('tiếp tục','vẫn làm','ký tiếp','ký mới','ký lại','trở thành','trở loại','lần thứ ba','lần thứ 3'))
@@ -660,7 +664,11 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key == 'TERMINATION.WITHDRAWAL': rule('withdrawal_rule', '38', '40')
         elif key == 'LEAVE.ANNUAL_LEAVE':
             article = '111' if historical else '113'; facts = analysis.facts
-            if facts.get('query_intent') == 'ANNUAL_LEAVE_CALC':
+            query=getattr(analysis,'query_text','').lower()
+            overview=bool(re.search(r'liệt kê|so sánh|các nhóm|từng nhóm|mọi nhóm|tất cả|các trường hợp',query))
+            personal=bool(re.search(r'\b(?:tôi|của tôi|trường hợp của)\b',query))
+            scoped_case=bool(facts.get('work_category') and personal and not overview)
+            if not overview and (facts.get('query_intent') == 'ANNUAL_LEAVE_CALC' or scoped_case):
                 points=annual_leave_points(facts)
                 require('leave_base_rule', *[[loc(article,'1',point)] for point in points] if points else [[loc(article,'1')]])
             else:
