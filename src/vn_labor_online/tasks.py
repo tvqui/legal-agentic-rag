@@ -45,6 +45,14 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         if REQUEST.search(span): request_spans.append(span)
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
+        if (topic.key=='other_leave' and 'WORKING_TIME.WEEKLY_REST' in subissues
+                and 'LEAVE.PUBLIC_HOLIDAY' not in subissues
+                and any(term in query.lower() for term in ('trùng','nghỉ bù'))):
+            continue
+        if topic.key=='overtime' and 'WAGE.NIGHT_PAY' in subissues and 'WAGE.OVERTIME_PAY' not in subissues:
+            from .taxonomy import affirmative_phrase
+            if not affirmative_phrase(query,('làm thêm','làm ngoài giờ','tăng ca')):
+                continue
         if topic.key=='minimum_wage' and 'CONTRACT.PROBATION_PAY' in subissues and 'thử việc' in query.lower():
             regional_wage_requested=any(
                 term in span.lower()

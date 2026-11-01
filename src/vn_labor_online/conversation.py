@@ -20,13 +20,25 @@ TOPIC_LABELS = {
     'COLLECTIVE_RELATIONS': 'quan hệ lao động tập thể',
 }
 RESET = re.compile(r'\b(?:chuyện khác|vấn đề khác|tình huống mới|trường hợp khác|công ty khác|giả sử|giả định|nếu như|nếu tôi|nếu công ty|đổi chủ đề)\b', re.I)
+SAME_CASE = re.compile(r'\b(?:cùng (?:công việc|hợp đồng|công ty|trường hợp|vụ việc)|chính công việc (?:ấy|đó|này)|hợp đồng (?:ấy|đó|này)|trường hợp (?:ấy|đó|này)|thời (?:gian|hạn) (?:ấy|đó|này))\b', re.I)
+
+
+def _resets_case(text):
+    marker=RESET.search(text)
+    if not marker:return False
+    # An explicit new-case marker always wins. Only a conditional that points
+    # back to the same object may retain the old user's verified facts.
+    explicit=re.search(r'\b(?:chuyện khác|vấn đề khác|tình huống mới|trường hợp khác|công ty khác|giả sử|giả định|đổi chủ đề)\b',text,re.I)
+    return bool(explicit or not SAME_CASE.search(text))
+
+
 FOLLOWUP = re.compile(r'^(?:(?:nếu\s+)?(?:hết|sau|trong)\s+(?:thời gian|thời hạn|giai đoạn)\s+(?:đó|này)\b|còn\b|vậy\b|thế\b|thì\b|trường hợp (?:đó|này)|điều đó|việc đó|thử bao lâu|bao lâu|bao nhiêu|bao giờ|khi nào|mấy (?:ngày|tháng|năm)|tại sao|vì sao|tôi làm\b|tôi là\b|tôi chỉ\b|thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|ngày (?:là|dự kiến)|không thuộc\b)', re.I)
 
 
 FACT_REPLY = re.compile(
-    r'^(?:tôi\s+(?:(?:không|chưa)\s+)?(?:làm|là|thuộc|chỉ)\b|'
+    r'^(?:tôi\s+(?:(?:không|chưa)\s+)?(?:làm|là|phải|thuộc|chỉ)\b|'
     r'(?:công việc|ngành nghề|nghề|hợp đồng|mức lương|loại hợp đồng)\s+'
-    r'(?:(?:của tôi|này)\s+)?(?:là|không|chưa|thuộc)\b|'
+    r'(?:(?:của tôi|này)\s+)?(?:là|không|chưa|thuộc|cần|yêu cầu|đòi hỏi)\b|'
     r'tôi bổ sung\b|bổ sung(?: dữ kiện| thông tin| thêm| cho cùng vụ việc)?\s*[:：]|'
     r'thực ra\b|đính chính\b|tôi sửa\b|lương (?:là|của)|'
     r'ngày (?:là|dự kiến)|không thuộc\b)', re.I)
@@ -39,17 +51,29 @@ TEMPORAL_CHANGE = re.compile(
 )
 MATERIAL_FACTS = {
     'contract_type', 'contract_duration_months', 'termination_basis', 'notice_days', 'notice_exception',
-    'termination_date', 'work_category', 'special_occupation',
+    'termination_date', 'contract_start_year', 'work_category', 'special_occupation',
     'protected_status', 'salary_base_amount', 'salary_base_unit',
+    'disabled', 'minor', 'age', 'worked_months', 'service_years',
+    'probation_work_group', 'probation_duration_value', 'probation_duration_unit',
+    'mutual_termination_agreement', 'training_costs',
+    'notice_date', 'force_majeure_exception', 'work_reassignment_exception',
 }
 FACT_LABELS = {
     'contract_type': 'loại hợp đồng', 'contract_duration_months': 'thời hạn hợp đồng',
     'termination_basis': 'lý do chấm dứt',
     'notice_days': 'thời gian báo trước', 'notice_exception': 'trường hợp miễn báo trước',
     'termination_date': 'ngày chấm dứt', 'work_category': 'nhóm công việc',
+    'contract_start_year':'năm giao kết hợp đồng',
     'special_occupation': 'ngành, nghề hoặc công việc đặc thù',
     'protected_status': 'tình trạng được bảo vệ',
     'salary_base_amount': 'mức lương công việc', 'salary_base_unit': 'đơn vị tiền lương',
+    'disabled':'tình trạng khuyết tật', 'minor':'tình trạng chưa thành niên',
+    'age':'tuổi', 'worked_months':'số tháng làm việc', 'service_years':'thâm niên',
+    'probation_work_group':'nhóm công việc thử việc',
+    'probation_duration_value':'thời gian thử việc', 'probation_duration_unit':'đơn vị thời gian thử việc',
+    'mutual_termination_agreement':'thỏa thuận chấm dứt', 'training_costs':'chi phí đào tạo',
+    'notice_date':'ngày báo trước', 'force_majeure_exception':'ngoại lệ bất khả kháng',
+    'work_reassignment_exception':'ngoại lệ điều chuyển công việc',
 }
 
 
@@ -96,7 +120,7 @@ def resolve_context(request):
     current_records=[record for candidate in current.fact_candidates
         if candidate.verified and (record:=_provenance_record('current_request',request.question,candidate))]
     correction=bool(CORRECTION.search(request.question.strip()) or CONFIRMATION.search(request.question.strip()))
-    if RESET.search(request.question) and not correction:
+    if _resets_case(request.question) and not correction:
         result.facts=dict(current.facts)
         result.provenance=current_records
         result.query_date=current.query_date
@@ -114,7 +138,7 @@ def resolve_context(request):
             continue
         analysis = analyze(envelope)
         next_topic = _topic(analysis)
-        if RESET.search(text) or not analysis.in_scope:
+        if _resets_case(text) or not analysis.in_scope:
             active, topic = [], None
             # Hypothetical scenarios must never become the next turn's personal facts.
             continue
@@ -130,7 +154,16 @@ def resolve_context(request):
         if topic:
             active.append((turn_id, text, analysis))
     current_topic = _topic(current)
-    continuation = bool(FOLLOWUP.search(request.question.strip()) or FACT_REPLY.search(request.question.strip()) or correction)
+    continuation = bool(FOLLOWUP.search(request.question.strip()) or FACT_REPLY.search(request.question.strip()) or correction
+        or SAME_CASE.search(request.question))
+    deictic_only=re.fullmatch(
+        r'(?:(?:vậy|thế|thì|vậy thì|thế thì)\s+)?(?:việc (?:đó|này)\s+)?'
+        r'(?:có\s+)?(?:được|đúng|hợp pháp)(?:\s+(?:như thế|như vậy|không|hay không))*[?!.]*',
+        request.question.strip(),re.I)
+    if continuation and deictic_only and not current_topic and not current.fact_candidates:
+        result.clarification='Bạn đang hỏi việc hoặc điều kiện cụ thể nào có được phép? Vui lòng nêu lại nội dung muốn kiểm tra.'
+        result.clarification_reason='AMBIGUOUS_FOLLOWUP'
+        return result
     related_subtopic = topic == 'thử việc' and current_topic == TOPIC_LABELS['WAGE']
     prior_fact_fields={candidate.field for _,_,analysis in active
         for candidate in analysis.fact_candidates if candidate.verified}

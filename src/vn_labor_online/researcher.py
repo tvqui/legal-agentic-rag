@@ -20,6 +20,7 @@ def _fold(value):
 
 def _entailed(field,value,quote):
     folded=_fold(quote); rendered=_fold(value)
+    if field in {'notice_days','worked_months','service_years','age','travel_days'} and type(value) is not int:return False
     if field=='actor':
         return (value=='EMPLOYEE' and any(x in folded for x in ('toi ','nguoi lao dong'))) or (value=='EMPLOYER' and any(x in folded for x in ('cong ty','nguoi su dung lao dong')))
     if field=='contract_type':
@@ -27,8 +28,10 @@ def _entailed(field,value,quote):
     if field=='notice_days' and value==0:
         return bool(re.search(r'\b(?:khong|chua)\s+(?:he\s+)?(?:bao|thong bao)\s+truoc|\bnghi\s+ngay\b',folded))
     if field in {'notice_days','worked_months','service_years','age','travel_days'}:
-        try: return bool(re.search(r'(?<!\d)'+re.escape(str(int(value)))+r'(?!\d)',quote))
-        except (TypeError,ValueError): return False
+        # A number appearing in a quote is insufficient: its unit and role
+        # must match this fact (20 days of notice is not 20 months of service).
+        from .analysis import _extract_facts
+        return type(value) is int and _extract_facts(quote.lower(),None,None).get(field)==value
     if field=='notice_exception':
         return (value is False and 'khong thuoc' in folded and 'khong can bao truoc' in folded) or (value is True and 'duoc nghi khong can bao truoc' in folded)
     if field=='special_occupation':
@@ -67,6 +70,8 @@ class LegalResearcher:
     def execution_path(self,analysis:QueryAnalysis)->str:
         if not self.provider: return 'DETERMINISTIC'
         if not analysis.in_scope: return 'SKIPPED_SCOPE_GATE'
+        from .query_clock import unpublished_change_prediction
+        if unpublished_change_prediction(analysis.query_text,analysis.query_date):return 'SKIPPED_FUTURE_PREDICTION'
         if self.cfg.adaptive:
             if analysis.missing_facts: return 'SKIPPED_FACT_GATE'
             if analysis.route==Route.DIRECT and analysis.requested_outcome=='LOOKUP': return 'SKIPPED_EXACT_LOOKUP'

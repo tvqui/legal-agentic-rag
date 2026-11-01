@@ -32,6 +32,7 @@ class RequestBudget:
     retrieval_cache: dict = field(default_factory=dict)
     retrieval_cache_hits: int = 0
     retrieval_cache_misses: int = 0
+    operation_spent: dict = field(default_factory=dict)
 
     def remaining(self):
         if self.cancelled.is_set():
@@ -43,6 +44,44 @@ class RequestBudget:
 
 
 _current: ContextVar[RequestBudget | None] = ContextVar('online_budget', default=None)
+_operation: ContextVar[tuple | None] = ContextVar('online_operation', default=None)
+
+
+class OperationBudgetExceeded(OnlineError):
+    """One bounded component exhausted its allowance; not a legal decision."""
+    safe_code='COMPONENT_TIME_BUDGET_EXHAUSTED'
+
+
+def _operation_remaining():
+    operation=_operation.get()
+    if operation is None:return float('inf')
+    remaining=operation[1]-time.monotonic()
+    if remaining<=0:raise OperationBudgetExceeded('COMPONENT_TIME_BUDGET_EXHAUSTED')
+    return remaining
+
+
+@contextmanager
+def operation_budget(name, total_seconds, call_seconds, reserve_seconds=0):
+    """Bound repeated component calls cumulatively and reserve downstream work.
+
+    Request cancellation/deadline always wins. A local timeout never verifies
+    evidence or creates an answer; callers retain only decisions already checked.
+    """
+    parent=_current.get()
+    allowance=total_seconds-(parent.operation_spent.get(name,0) if parent else 0)
+    if parent:allowance=min(allowance,parent.remaining()-reserve_seconds)
+    allowance=min(allowance,call_seconds,_operation_remaining())
+    if allowance<=0:raise OperationBudgetExceeded('COMPONENT_TIME_BUDGET_EXHAUSTED')
+    started=time.monotonic()
+    token=_operation.set((name,started+allowance))
+    try:
+        yield
+        if parent:parent.remaining()
+        _operation_remaining()
+    finally:
+        if parent:parent.operation_spent[name]=parent.operation_spent.get(name,0)+(time.monotonic()-started)
+        _operation.reset(token)
+
 
 
 @contextmanager
@@ -75,11 +114,13 @@ def checkpoint(stage=None):
         budget.remaining()
         if stage:
             budget.stage = stage
+    _operation_remaining()
 
 
 def request_timeout(configured):
     budget = _current.get()
-    return min(configured, budget.remaining()) if budget else configured
+    remaining=budget.remaining() if budget else configured
+    return min(configured,remaining,_operation_remaining())
 
 
 @contextmanager

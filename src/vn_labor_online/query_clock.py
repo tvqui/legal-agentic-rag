@@ -51,4 +51,6 @@ def unpublished_change_prediction(query,query_date,today=None):
     forecast=bool(re.search(r'sẽ\s+(?:nâng|hạ|sửa đổi|thay đổi|ban hành)',q))
     published=any(term in q for term in ('đã ban hành','đã được quy định','theo nghị định','theo luật số','theo quyết định'))
     mixed=any(term in q for term in ('so sánh','quy định hiện hành','hiện nay là'))
-    return future and hypothetical and forecast and not published and not mixed
+    uncertain_change=(bool(re.search(r'chính phủ|quốc hội|(?:sửa đổi|ban hành)\s+(?:luật|nghị định|quy định)',q))
+        and bool(re.search(r'có\s+chắc chắn\s+(?:sẽ\s+)?(?:tăng|giảm|nâng|hạ|thay đổi|sửa đổi|ban hành)',q)))
+    return future and ((hypothetical and forecast) or uncertain_change) and not published and not mixed

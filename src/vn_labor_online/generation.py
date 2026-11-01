@@ -636,10 +636,20 @@ class LegalAdjudicator:
             if simple and (len(output.claims)>4 or any(len(c.text)>1000 for c in output.claims)):
                 raise StructuredOutputError('ADAPTIVE_CLAIM_LIMIT_EXCEEDED')
             by_evidence={item.evidence_id:item for item in pack.evidence}
+            from .audit import claim_reference_issues
+            kept=[];locator_warnings=[]
             for claim in output.claims:
+                if set(claim.evidence_ids)-allowed_ids:
+                    raise StructuredOutputError('claim references evidence outside pack')
                 attached=[by_evidence[uid] for uid in claim.evidence_ids if uid in by_evidence]
+                if claim_reference_issues(claim.text,attached):
+                    locator_warnings.append('ADJUDICATION_UNSUPPORTED_LOCATOR_DROPPED')
+                    continue
                 if semantic_issues(claim.text,attached,context_query=pack.query):
                     raise StructuredOutputError('SEMANTIC_CLAIM_REJECTED')
+                kept.append(claim)
+            if not kept:raise StructuredOutputError('NO_SUPPORTED_LOCATOR_CLAIMS')
+            output=output.model_copy(update={'claims':kept})
             draft=AdjudicationDraft(answer_summary='',claims=[Claim(claim_id=f'claim_{i:03d}',**claim.model_dump())
               for i,claim in enumerate(output.claims,1)],applicable_law_versions=[],assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
             if any(set(claim.evidence_ids)-allowed_ids for claim in draft.claims): raise StructuredOutputError('claim references evidence outside pack')
@@ -655,7 +665,7 @@ class LegalAdjudicator:
                 lines.append(f'- {claim.text} {markers}')
             if partial: lines.append('Kết quả chỉ là một phần vì còn thiếu bằng chứng bắt buộc được nêu trong limitations.')
             canonical='\n'.join(lines) if draft.claims else 'Không đủ bằng chứng đã xác minh để kết luận.'
-            return draft.model_copy(update={'answer_summary':canonical}),[]
+            return draft.model_copy(update={'answer_summary':canonical}),list(dict.fromkeys(locator_warnings))
         except Exception as exc:
             if not self.cfg.fail_closed: raise
             return safe_fallback(),['ADJUDICATION_PROVIDER_FALLBACK:'+type(exc).__name__]

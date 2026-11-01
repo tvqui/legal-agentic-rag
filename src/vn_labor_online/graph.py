@@ -37,6 +37,20 @@ PROFILE_SLOT_NAMES={
 for slot in PROFILE_SLOT_NAMES:
     GAP_RELATIONS.setdefault(slot,{'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'IMPLEMENTS':{'IN'}})
 
+def search_seeds(accepted,source_audited,decisions,limit):
+    """Unresolved applicability can seed a search, never a legal answer.
+
+    A verified source relevant to the question may point to a missing exception
+    or prerequisite. Hard failures and unverified source text remain excluded.
+    """
+    unresolved={d.evidence_id for d in decisions if d.audit_status=='UNRESOLVED'
+        and d.relevant and d.supports_claim}
+    result={item.unit_id:item for item in accepted if item.verified}
+    for item in source_audited:
+        if len(result)>=limit:break
+        if item.verified and item.unit_id in unresolved:result.setdefault(item.unit_id,item)
+    return list(result.values())[:limit]
+
 class GraphExplorer:
     def __init__(self,store:ArtifactStore,cfg:GraphConfig):
         self.store=store; self.cfg=cfg; self.adj=defaultdict(list); self.degree=defaultdict(int)
@@ -58,15 +72,22 @@ class GraphExplorer:
         for gap in gaps:
             for relation,directions in GAP_RELATIONS.get(gap,{}).items(): preferred.setdefault(relation,set()).update(directions)
         query_terms=_terms(query)
+        from .runtime import checkpoint
+        preparation_expired=False
         for source in frontier_ids:
             for edge,target,direction in self.adj.get(source,[]):
+                checkpoint()
+                if (time.monotonic()-started)*1000>=time_limit:
+                    preparation_expired=True;break
                 if edge['type'] not in self.cfg.allowed_relations: continue
                 if target in visited: continue
                 if not fixed and (not preferred or direction not in preferred.get(edge['type'],set())): continue
                 score,parts=self._score(edge,target,gaps,query,source,direction,_query_terms=query_terms,_preferred=preferred)
                 heapq.heappush(queue,(-score,serial,target,source,edge,direction,parts)); serial+=1
-        added=[]; new_frontier=[]; edge_count=0; followed=[]; stop_reason=None
+            if preparation_expired:break
+        added=[]; new_frontier=[]; edge_count=0; followed=[]; stop_reason='TIME_BUDGET' if preparation_expired else None
         while queue and len(new_frontier)<remaining_nodes and edge_count<remaining_edges:
+            checkpoint()
             if (time.monotonic()-started)*1000>=time_limit:
                 stop_reason='TIME_BUDGET'; break
             neg,_,node_id,parent,edge,direction,parts=heapq.heappop(queue); edge_count+=1

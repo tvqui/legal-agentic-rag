@@ -100,7 +100,7 @@ ALIASES={
  'equality':('phân biệt đối xử trong lao động','đối xử bất bình đẳng','chỉ tuyển nam','chỉ tuyển nữ','không tuyển nam','không tuyển nữ'),
  'older_workers':('người cao tuổi làm việc','đã hưởng lương hưu'),
  'labour_hire':('thuê lại người lao động',),
- 'individual_dispute':('tranh chấp cá nhân','kiện công ty'),
+ 'individual_dispute':('tranh chấp cá nhân','kiện công ty','hòa giải','ra tòa án'),
  'collective_dispute':('tranh chấp về quyền','tranh chấp về lợi ích'),
  'occupational_safety':('vệ sinh, an toàn lao động',),
  'unemployment':('đóng bhtn','hưởng thất nghiệp'),

@@ -11,6 +11,11 @@ def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|
     out=[]
     for item in items:
         issues=[]; warnings=list(item.audit_warnings); source=store.units_by_id.get(item.unit_id)
+        # Reject unreadable source context before model calls. Keep raw bytes
+        # and metadata unchanged; a clean alternative edition may still pass.
+        readable='\n'.join(x for x in (item.ancestor_context,item.source_text or item.text) if x)
+        severe={'EMPTY_OR_DECORATIVE_TEXT','CORRUPTED_CHARACTERS','SUSPECT_OCR_WORD','SUSPECT_LEGAL_LOCATOR'}
+        issues+=['SOURCE_TEXT_QUALITY:'+code for code in language_issues(readable,allow_admin=True) if code in severe]
         if not source: issues.append('UNKNOWN_UNIT_ID')
         if item.document_id and item.document_id not in store.nodes_by_id: issues.append('UNKNOWN_DOCUMENT_NODE')
         if source and item.source_url!=(source.get('source_url') or None): issues.append('SOURCE_URL_NOT_FROM_UNIT')
@@ -146,6 +151,17 @@ def _claim_reference_supported(text:str,claim_items:list[Evidence])->list[str]:
         if url.rstrip('.,;') not in allowed_urls:
             problems.append('CLAIM_UNSUPPORTED_URL:'+url.rstrip('.,;'))
     return problems
+def claim_reference_issues(text,items):
+    """Run the same locator guard before semantic review on a packed draft."""
+    from types import SimpleNamespace
+    adapted=[]
+    for item in items:
+        if isinstance(item,Evidence):adapted.append(item);continue
+        adapted.append(SimpleNamespace(document_number=item.instrument_number,article_number=item.article,
+            clause_number=item.clause,point_number=item.point,source_url=item.official_url,
+            source_text=item.full_text or item.text,text=item.text,breadcrumb=item.ancestor_context))
+    return _claim_reference_supported(text,adapted)
+
 def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:list[Claim]|None=None,*,context_query:str='')->tuple[bool,list[str]]:
     ids={x.unit_id for x in items if x.verified}; problems=[]
     # Source-copy corruption is checked by the adjudicator; guard the final public surface too.

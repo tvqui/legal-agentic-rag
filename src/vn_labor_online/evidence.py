@@ -18,7 +18,7 @@ DELEGATION_PHRASES=(
 
 def _source_penalty(item:Evidence)->int:
     """Rank existing alternatives; never guess missing OCR words or edit bytes."""
-    text=item.source_text or item.text
+    text='\n'.join(x for x in (item.ancestor_context,item.source_text or item.text) if x)
     suspect=('nguời','ngưòi','ngàỵ','sừ dụng','tố chức','phải có lực hành vi')
     return len(language_issues(text,allow_admin=True))+sum(text.lower().count(term) for term in suspect)
 
@@ -112,7 +112,7 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
         # provisions remain distinct; all conflicts are checked on input items.
         family='BLLD_2019' if item.document_number in {'45/2019/QH14','18/VBHN-VPQH'} else item.document_number or item.document_id or item.unit_id
         content=(family,item.article_number,item.clause_number,item.point_number,
-          item.valid_from,item.valid_to,' '.join((item.source_text or item.text).split()))
+          item.valid_from,item.valid_to,' '.join(item.ancestor_context.split()),' '.join((item.source_text or item.text).split()))
         if content in seen_content: continue
         seen_content.add(content); ordered.append(item)
     selected=[]; selected_ids=set()

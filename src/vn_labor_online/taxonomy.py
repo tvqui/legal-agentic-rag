@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v13'
+TAXONOMY_VERSION = 'labor-subissues-v14'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -55,7 +55,7 @@ SUBISSUES = {
     'CONTRACT.APPENDIX':'Giá trị và giới hạn sửa đổi của phụ lục hợp đồng',
     'CONTRACT.CONFIDENTIALITY':'Thỏa thuận bảo vệ bí mật kinh doanh và công nghệ',
     'CONTRACT.PROBATION_PAY':'Tiền lương trong thời gian thử việc',
-    'CONTRACT.PROBATION_DURATION':'Các nhóm thời gian thử việc',
+    'CONTRACT.PROBATION_DURATION':'Thời hạn thử việc',
     'CONTRACT.PROBATION_END':'Kết thúc thử việc và tiếp tục làm việc',
     'CONTRACT.PROBATION_CANCELLATION':'Hủy bỏ thỏa thuận trong thời gian thử việc',
     'CONTRACT.PROBATION_EXCLUSION':'Trường hợp không áp dụng thử việc',
@@ -159,6 +159,8 @@ def covered_profile_parents(analysis) -> set[str]:
     if 'WORKING_TIME.OVERTIME_LIMITS' in keys and not any(term in q for term in ('tiền lương','trả lương','tiền làm thêm')): covered.add('WAGE')
     if 'WAGE.NIGHT_PAY' in keys and not any(term in q for term in ('nghỉ giữa giờ','lịch làm việc','thời giờ nghỉ')): covered.add('WORKING_TIME')
     if 'WAGE.NIGHT_PAY' in keys and 'LEAVE.PUBLIC_HOLIDAY' not in keys: covered.add('LEAVE')
+    if ('WORKING_TIME.WEEKLY_REST' in keys and 'LEAVE.PUBLIC_HOLIDAY' not in keys
+            and any(term in q for term in ('trùng','nghỉ bù'))):covered.add('LEAVE')
     return covered
 
 def profile_covers_issues(analysis) -> bool:
@@ -240,7 +242,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('CONTRACT.PROBATION_EXCLUSION')
     probation_repeat=has('thử việc') and (has('hai lần','2 lần','nhiều lần','lần hai','lần thứ hai','lần thứ 2','thử việc lại')
       or bool(re.search(r'(?:thử việc[^.?!]{0,55}(?:thêm|tiếp|lại)[^.?!]{0,25}(?:lần|đợt)|thử việc[^.?!]{0,55}(?:lần|đợt)\s+nữa)',q)))
-    duration_request=has('tối đa','bao lâu','mấy ngày','mấy tháng','thời hạn thử việc','các nhóm thời gian thử việc') or probation_duration(query) is not None or bool(re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q))
+    duration_request=bool(facts.get('probation_duration_value')) or has('tối đa','bao lâu','mấy ngày','mấy tháng','thời hạn thử việc','các nhóm thời gian thử việc') or probation_duration(query) is not None or bool(re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q))
     if has('thử việc') and duration_request:
         add('CONTRACT.PROBATION_DURATION')
     if probation_repeat:
@@ -277,12 +279,13 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
             add('WAGE.PAYMENT_DELAY')
         if has('ngân hàng','tài khoản','chuyển khoản','tiền mặt','phí chuyển lương','phí mở tài khoản'):
             add('WAGE.PAYMENT_METHODS')
-        if has('ép','bắt buộc','can thiệp','hạn chế') and has('dùng lương','dùng tiền lương','sử dụng tiền lương'):
+        if (has('ép','bắt','buộc','can thiệp','hạn chế') and
+                re.search(r'(?:dùng|sử dụng|chi tiêu)[^.;?!]{0,65}(?:tiền\s+)?lương',q)):
             add('WAGE.PAYMENT_DISPOSAL')
         if has('ngừng việc') and not has('đình công'):
             add('WAGE.DOWNTIME')
     overtime=affirmative_phrase(q,('làm thêm','làm ngoài giờ','tăng ca'))
-    night=has('ban đêm','làm đêm')
+    night=has('ban đêm','làm đêm','ca đêm','giờ đêm')
     protective_purpose=bool(re.search(r'bảo vệ(?:\s+ngay)?\s+(?:tính mạng|tài sản)|cứu người|cứu nạn',q))
     emergency=overtime and (protective_purpose or has('quốc phòng','an ninh'))
     if emergency:add('WORKING_TIME.EMERGENCY_OVERTIME')

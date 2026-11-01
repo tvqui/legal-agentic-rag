@@ -34,6 +34,25 @@ def semantic_issues(text, items, *, context_query=''):
     if invalid_clause_locator(text): problems.append('CLAIM_CLAUSE_POINT_CONFUSION')
     invalidity=re.search(r'khong co gia tri phap ly|\bvo hieu\b|khong phat sinh quyen',q)
     form_source=' '.join(fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text) for item in items)
+    penalty=re.search(r'(?:bi\s+phat\s+tien|muc\s+phat\s+tien|phat\s+tien\s+(?:tu|bang))',q)
+    money=r'\d[\d.,]*(?:\s+(?:nghin|trieu|ty))?\s+dong\b'
+    if penalty and re.search(money,q):
+        negated=re.search(r'(?:khong|chua)(?:\s+(?:co|du|the|phai|duoc|can|cu|xac|dinh|ket|luan|khang)){0,8}\s*$',q[max(0,penalty.start()-55):penalty.start()])
+        if not negated and not ('phat tien' in form_source and re.search(money,form_source)):
+            problems.append('CLAIM_MONETARY_PENALTY_WITHOUT_SANCTION_SOURCE')
+    unknown=re.search(r'chua (?:duoc )?xac nhan|chua xac minh|chua ro|chua biet|khong biet|khong ro',q)
+    if unknown:
+        adverse=re.search(r'khong thuoc (?:nhom|truong hop)|khong co quyen|khong duoc huong|khong dap ung',q[unknown.end():])
+        qualified=re.search(r'chua the (?:ket luan|khang dinh)|khong the (?:ket luan|khang dinh)',q)
+        if adverse and not qualified and q not in form_source:
+            problems.append('CLAIM_UNCERTAINTY_AS_NEGATIVE_FACT')
+    universal=r'\b(?:trong moi truong hop|trong bat ky truong hop nao|khong co bat ky ngoai le nao|khong co ngoai le|luon luon)\b'
+    # A source about a qualified act cannot prove an absolute statement about
+    # all situations. Prefer its actual scope to an unnecessary universal.
+    absolute=re.search(universal,q)
+    if absolute and not re.search(universal,form_source):
+        qualified=re.search(r'(?:khong the (?:ket luan|khang dinh)|chua the khang dinh|khong dong nghia)[^.;]{0,100}$',q[:absolute.start()])
+        if not qualified:problems.append('CLAIM_UNSUPPORTED_UNIVERSAL_SCOPE')
     if invalidity and 'bang van ban' in form_source:
         qualified=re.search(r'khong (?:dong nghia|co nghia|the coi|duoc coi)[^.;]{0,50}$',q[:invalidity.start()])
         explicit=any(term in form_source for term in ('vo hieu','khong co gia tri phap ly','khong phat sinh quyen'))

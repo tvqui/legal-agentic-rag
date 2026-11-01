@@ -119,7 +119,7 @@ class OnlinePipeline:
         snapshot=self.cfg.corpus_snapshot_as_of
         defaulted_query_date=False
         from .query_clock import today_vietnam
-        current_day=today_vietnam().isoformat()
+        current_day=today_vietnam(env.received_at).isoformat()
         if analysis.query_date is None and analysis.temporal_resolution!='AMBIGUOUS':
             analysis=analyze(env,current_day,request.facts)
             analysis=analysis.model_copy(update={'temporal_intent':'CURRENT','temporal_resolution':'RESOLVED'})
@@ -199,7 +199,9 @@ class OnlinePipeline:
         # Explain general rules while clarifying; a concrete case must wait
         # when a decisive factual prerequisite is unknown.
         # Warnings appended after an unconditional verdict cannot repair it.
+        from .analysis import personal_result_needs_facts
         clarify_during_answer=bool(analysis.missing_facts and self.cfg.answer_while_clarifying
+          and not personal_result_needs_facts(analysis.query_text)
           and analysis.route!=Route.DIRECT and analysis.requested_outcome!='ASSESS_LEGALITY'
           and analysis.temporal_resolution!='AMBIGUOUS')
         if clarify_during_answer:
@@ -402,7 +404,12 @@ class OnlinePipeline:
         budget_reason=None; stage=time.perf_counter()
         graph_step=Step('graph')
         if self.cfg.graph.enabled and not exact_only:
-            graph_seeds=verified[:self.cfg.graph.max_nodes]
+            from .graph import search_seeds
+            graph_seeds=search_seeds(verified,audited,decisions,self.cfg.graph.max_nodes)
+            accepted_seed_ids={x.unit_id for x in verified}
+            trace.events.append({'event':'graph_search_seeds','accepted_ids':[x.unit_id for x in graph_seeds if x.unit_id in accepted_seed_ids],
+                'unresolved_search_only_ids':[x.unit_id for x in graph_seeds if x.unit_id not in accepted_seed_ids],
+                'policy':'SEARCH_HINTS_ARE_NOT_ACCEPTED_EVIDENCE'})
             visited={x.unit_id for x in graph_seeds}; paths={x.unit_id:list(x.graph_path) for x in graph_seeds}
             relation_paths={x.unit_id:list(x.graph_relations) for x in graph_seeds}; direction_paths={x.unit_id:list(x.graph_directions) for x in graph_seeds}
             frontier=list(visited)

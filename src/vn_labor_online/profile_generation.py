@@ -113,7 +113,9 @@ def render_profile(pack,partial,assumptions):
     # that disappears when semantic review re-renders the answer.
     historical=bool(pack.query_date and pack.query_date<'2021-01-01')
     scoped=probation_duration_clauses(analysis,historical)
-    duration=probation_duration(pack.query)
+    duration=probation_duration(pack.query) or ((pack.facts['probation_duration_value'],pack.facts['probation_duration_unit'])
+        if type(pack.facts.get('probation_duration_value')) is int and pack.facts['probation_duration_value']>0
+        and pack.facts.get('probation_duration_unit') in {'ngay','ngay lam viec','thang','tuan','nam'} else None)
     if 'CONTRACT.PROBATION_DURATION' in keys and len(scoped)==1 and duration:
         for i,claim in enumerate(claims):
             if not claim.proposition or claim.proposition.locator.clause!=str(scoped[0]): continue
@@ -135,7 +137,9 @@ def render_profile(pack,partial,assumptions):
         expected={values[index] for index in scoped}
         if {claim.proposition.value for claim in claims}!=expected: return None
         intro='Thời gian thử việc tối đa theo từng nhóm công việc được quy định như sau. Chỉ mức 06 ngày được tính theo ngày làm việc; các mức còn lại là ngày:'
-        duration=probation_duration(pack.query)
+        duration=probation_duration(pack.query) or ((pack.facts['probation_duration_value'],pack.facts['probation_duration_unit'])
+        if type(pack.facts.get('probation_duration_value')) is int and pack.facts['probation_duration_value']>0
+        and pack.facts.get('probation_duration_unit') in {'ngay','ngay lam viec','thang','tuan','nam'} else None)
         if duration:
             display_unit={'ngay':'ngày','ngay lam viec':'ngày làm việc','thang':'tháng','tuan':'tuần','nam':'năm'}[duration[1]]
             intro=('Chưa thể kết luận chỉ từ thời gian '+str(duration[0])+' '+display_unit+'. '

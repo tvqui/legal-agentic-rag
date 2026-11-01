@@ -120,9 +120,12 @@ class V3CorrectionTests(unittest.TestCase):
         accepted,_,_=LegalApplicabilityAuditor(ApplicabilityConfig()).audit([item],'Điều 1 Bộ luật Lao động quy định gì?',['CONTRACT'],{},'LOOKUP')
         self.assertEqual(len(accepted),1)
 
-    def test_independent_uncovered_issue_keeps_legacy_gate(self):
-        p=plan_evidence(analysis('Thời gian thử việc tối đa là bao lâu, và tranh chấp đó có phải hòa giải trước khi ra tòa án không?'))
-        self.assertIn('mandatory_reference',p.mandatory_slots)
+    def test_independent_uncovered_issue_preserves_tasks_without_invented_reference(self):
+        a=analysis('Thời gian thử việc tối đa là bao lâu, và tranh chấp đó có phải hòa giải trước khi ra tòa án không?')
+        p=plan_evidence(a)
+        self.assertNotIn('mandatory_reference',p.mandatory_slots)
+        self.assertGreaterEqual(len(a.answer_tasks),2)
+        self.assertIn('DISPUTE',a.legal_issues)
 
     def test_false_probation_repetition_claim_is_rejected(self):
         item=rule('intro','25',text='Chỉ được thử việc một lần đối với một công việc.')

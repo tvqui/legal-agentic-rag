@@ -53,6 +53,9 @@ class ResearcherConfig(StrictModel):
     timeout_seconds:float=120; max_queries:int=Field(2,ge=0,le=4)
 
 class ApplicabilityConfig(StrictModel):
+    budget_seconds:float=Field(90,ge=1,le=1200)
+    call_timeout_seconds:float=Field(45,ge=1,le=300)
+    reserve_seconds:float=Field(60,ge=0,le=300)
     unresolved_provider:Literal['none','gemini']='none'
     unresolved_model:str|None=None
     unresolved_max_items:int=Field(4,ge=1,le=8)

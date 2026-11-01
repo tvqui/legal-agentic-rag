@@ -121,7 +121,7 @@ class Retriever:
     def exception_context(self,items:list[Evidence],limit:int)->tuple[list[Evidence],dict]:
         """Append explicitly referenced exception units before audit, not to RRF.
 
-        Same document edition and article only; dates/authority/provenance and
+        Same document edition, explicit article/clause/point; dates/authority/provenance and
         applicability still require their normal checks. This is not a sweep
         over all sibling provisions or unrestricted NEXT edges.
         """
@@ -132,11 +132,12 @@ class Retriever:
             for locator in exception_locators(seed):
                 references+=1
                 if len(added)>=limit: continue
-                candidates=self._profile_units.get((seed.document_number,str(seed.article_number)),[])
+                candidates=self._profile_units.get((seed.document_number,str(locator.article)),[])
                 for unit in candidates:
                     if len(added)>=limit: break
                     if unit.get('document_id')!=seed.document_id or unit.get('kind')!='PROVISION': continue
-                    if str(unit.get('clause_number') or '')!=locator.clause: continue
+                    if locator.clause and str(unit.get('clause_number') or '')!=locator.clause: continue
+                    if locator.point and str(unit.get('point_number') or '')!=locator.point: continue
                     uid=unit['unit_id']
                     if uid in seen: continue
                     seen.add(uid)

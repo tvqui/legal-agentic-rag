@@ -1,0 +1,352 @@
+[
+  {
+    "id": "NEW-01",
+    "question": "Cửa hàng bắt nhân viên nộp phạt 750.000 đồng khi đi trễ, thay cho xử lý kỷ luật. Việc dùng tiền phạt như vậy có được phép không?",
+    "batch": "NEW_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-02",
+    "question": "Một lần vi phạm nội quy, công ty vừa khiển trách vừa kéo dài thời hạn nâng lương đối với tôi. Có được cộng hai hình thức cho cùng hành vi không?",
+    "batch": "NEW_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-03",
+    "question": "Người sử dụng lao động phải chứng minh lỗi của người lao động khi xử lý kỷ luật, hay người lao động phải tự chứng minh mình vô tội?",
+    "batch": "NEW_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-04",
+    "question": "Tôi 32 tuổi, không bị khuyết tật, vừa làm đủ một năm cho một chủ sử dụng trong điều kiện bình thường. Công ty giữ bản gốc chứng chỉ nghề của tôi và chỉ cho 7 ngày phép năm có lương. Đánh giá riêng từng việc.",
+    "batch": "MULTI_TASK",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-05",
+    "question": "Tôi thử việc lần đầu ở vị trí yêu cầu trung cấp, không phải quản lý doanh nghiệp, hợp đồng không dưới một tháng. Công ty yêu cầu thử việc 42 ngày và trả 79% lương công việc. Hãy kết luận riêng thời gian và tiền lương.",
+    "batch": "MULTI_TASK",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-06",
+    "question": "Doanh nghiệp bắt tôi dùng một phần lương để mua sản phẩm của họ. Tôi có quyền từ chối không?",
+    "batch": "NEW_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-07",
+    "question": "Tôi chỉ làm ca đêm trong giờ làm việc bình thường, không làm thêm giờ. Tôi được trả thêm tối thiểu bao nhiêu phần trăm?",
+    "batch": "NEGATION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-08",
+    "question": "Nếu ngày nghỉ hằng tuần của người lao động trùng ngày lễ thì có được nghỉ bù không?",
+    "batch": "RULE_CHAIN",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-09",
+    "question": "Công ty gọi văn bản là hợp đồng dịch vụ nhưng tôi làm việc có trả công và chịu quản lý, giám sát. Chỉ đổi tên hợp đồng như vậy có làm mất tính chất hợp đồng lao động không?",
+    "batch": "NEW_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "NEW-10",
+    "question": "Người lao động có phải nộp tiền đặt cọc hoặc giao bản gốc văn bằng để bảo đảm thực hiện hợp đồng lao động không?",
+    "batch": "MULTI_TASK",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "SCOPE-01",
+    "question": "Trộm một chiếc xe máy thì bị truy cứu hình sự theo Điều 173 như thế nào?",
+    "batch": "OUT_OF_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "SCOPE-02",
+    "question": "Tôi bán căn hộ riêng thì phải nộp thuế thu nhập cá nhân thế nào?",
+    "batch": "OUT_OF_SCOPE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "SCOPE-03",
+    "question": "Đơn vị sa thải người lao động vì trộm tài sản tại nơi làm việc thì phải xem điều kiện và thủ tục nào? Tôi chỉ hỏi kỷ luật lao động, không hỏi hình phạt hình sự.",
+    "batch": "SCOPE_BOUNDARY",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "TIME-01",
+    "question": "Ngày 15/12/2020, người lao động làm theo hợp đồng không xác định thời hạn muốn nghỉ vì lý do cá nhân. Điều kiện và thời hạn báo trước theo quy định có hiệu lực lúc đó là gì? Không dùng quy định bắt đầu áp dụng từ năm 2021.",
+    "batch": "HISTORICAL",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST"
+  },
+  {
+    "id": "TIME-02",
+    "question": "Tôi ký hợp đồng ngày 10/05/2018, bị công ty chấm dứt ngày 02/08/2026. Phải đánh giá việc chấm dứt theo thời điểm nào? Công ty nói vì hợp đồng ký năm 2018 nên chỉ áp dụng luật năm 2012. Có đúng không?",
+    "batch": "MULTIPLE_DATES",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST"
+  },
+  {
+    "id": "TIME-03",
+    "question": "Hiện nay người lao động làm đủ 12 tháng trong điều kiện bình thường được bao nhiêu ngày nghỉ hằng năm?",
+    "batch": "CURRENT_DATE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST"
+  },
+  {
+    "id": "TIME-04",
+    "question": "Ngày 31/02/2026, tôi ký hợp đồng không xác định thời hạn. Hãy đánh giá quyền nghỉ việc đúng thời điểm đó.",
+    "batch": "INVALID_DATE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST"
+  },
+  {
+    "id": "TIME-05",
+    "question": "Từ 20/12/2020 đến 10/01/2021, thời gian thử việc tối đa của công việc yêu cầu cao đẳng là bao lâu? Nếu quy định thay đổi trong khoảng này hãy phân biệt, đừng chọn ngẫu nhiên một ngày.",
+    "batch": "CROSS_REGIME_RANGE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST"
+  },
+  {
+    "id": "TIME-06",
+    "question": "Tháng sau Chính phủ có chắc chắn tăng số ngày phép năm lên 20 ngày không?",
+    "batch": "FUTURE_PREDICTION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST"
+  },
+  {
+    "id": "FACT-01",
+    "question": "Tôi muốn nghỉ việc. Tôi phải báo trước bao lâu?",
+    "batch": "MISSING_FACTS",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "FACT-02",
+    "question": "Công ty thử việc tôi 50 ngày. Vậy có vượt thời gian được phép không?",
+    "batch": "MISSING_FACTS",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "CHAT-01",
+    "question": "Công việc của tôi yêu cầu trình độ trung cấp, không phải người quản lý doanh nghiệp.",
+    "batch": "CONVERSATION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi muốn hỏi việc thử việc 50 ngày có hợp pháp không."
+      }
+    ]
+  },
+  {
+    "id": "CHAT-02",
+    "question": "Nếu hết thời gian đó mà yêu cầu tôi thử việc lại cho đúng công việc ấy thì sao?",
+    "batch": "CONVERSATION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi muốn hỏi việc thử việc 50 ngày có hợp pháp không."
+      },
+      {
+        "turn_id": "u1",
+        "role": "user",
+        "content": "Công việc của tôi yêu cầu trình độ trung cấp, không phải người quản lý doanh nghiệp."
+      }
+    ]
+  },
+  {
+    "id": "CHAT-03",
+    "question": "Đính chính: vị trí công việc yêu cầu cao đẳng, không phải trung cấp. Vậy 50 ngày có vượt mức tối đa không?",
+    "batch": "CONVERSATION_CORRECTION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi muốn hỏi việc thử việc 50 ngày có hợp pháp không."
+      },
+      {
+        "turn_id": "u1",
+        "role": "user",
+        "content": "Công việc của tôi yêu cầu trình độ trung cấp, không phải người quản lý doanh nghiệp."
+      }
+    ]
+  },
+  {
+    "id": "CHAT-04",
+    "question": "Tôi không làm công việc đặc thù, nghỉ vì lý do cá nhân, không được miễn báo trước. Tôi chỉ báo trước 20 ngày, công ty chưa đồng ý cho nghỉ sớm. Tôi nghỉ như vậy có đúng không?",
+    "batch": "CONVERSATION_FACTS",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi có hợp đồng lao động không xác định thời hạn và dự định nghỉ việc."
+      }
+    ]
+  },
+  {
+    "id": "CHAT-05",
+    "question": "Tôi chỉ có hợp đồng 18 tháng và đã báo trước 20 ngày. Tôi nghỉ vậy có đúng không?",
+    "batch": "CONVERSATION_CONFLICT",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi có hợp đồng lao động không xác định thời hạn và dự định nghỉ việc."
+      }
+    ]
+  },
+  {
+    "id": "CHAT-06",
+    "question": "Vậy có được như thế không?",
+    "batch": "AMBIGUOUS_FOLLOWUP",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi hỏi về thời gian thử việc."
+      },
+      {
+        "turn_id": "u1",
+        "role": "user",
+        "content": "Tôi cũng có câu hỏi về nghỉ hằng năm."
+      }
+    ]
+  },
+  {
+    "id": "CHAT-07",
+    "question": "Chuyện khác: bán nhà có phải nộp thuế không?",
+    "batch": "TOPIC_RESET",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15",
+    "conversation_turns": [
+      {
+        "turn_id": "u0",
+        "role": "user",
+        "content": "Tôi có hợp đồng lao động không xác định thời hạn và dự định nghỉ việc."
+      },
+      {
+        "turn_id": "u1",
+        "role": "user",
+        "content": "Tôi không làm công việc đặc thù, nghỉ vì lý do cá nhân, không được miễn báo trước. Tôi chỉ báo trước 20 ngày, công ty chưa đồng ý cho nghỉ sớm. Tôi nghỉ như vậy có đúng không?"
+      }
+    ]
+  },
+  {
+    "id": "META-01",
+    "question": "Tôi chưa được xác nhận là người khuyết tật. Công việc của tôi trong điều kiện bình thường, làm đủ 12 tháng. Có thể khẳng định ngay số ngày phép của tôi chỉ là 12 ngày không?",
+    "batch": "UNCERTAIN_ATTRIBUTE",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "META-02",
+    "question": "Điều 35 quy định gì? Tôi chưa nói văn bản nào.",
+    "batch": "AMBIGUOUS_LOCATOR",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "META-03",
+    "question": "Điều 1 Nghị định 145/2020/NĐ-CP quy định gì? Trình bày đủ phạm vi điều chỉnh và dẫn nguồn.",
+    "batch": "LITERAL_LOOKUP",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-MR001",
+    "question": "Công ty phạt tôi 500 nghìn đồng vì đi muộn thay cho xử lý kỷ luật lao động. Cách phạt này có được phép không?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-MR002",
+    "question": "Cùng một hành vi vi phạm kỷ luật, công ty vừa khiển trách vừa kéo dài thời hạn nâng lương. Có được áp dụng đồng thời không?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-MR010",
+    "question": "Lao động nữ trong thời gian hành kinh được nghỉ mỗi ngày tối thiểu bao nhiêu phút theo Bộ luật Lao động? Thời gian này có được trả lương không?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-MR019",
+    "question": "Tôi 30 tuổi, không phải người khuyết tật, vừa làm đủ 12 tháng cho cùng một công ty trong điều kiện bình thường. Công ty giữ bản chính bằng đại học và quy định kỳ nghỉ hằng năm của 12 tháng đó chỉ có 6 ngày hưởng lương. Hãy kết luận riêng việc giữ bằng và số ngày phép tối thiểu.",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-MR020",
+    "question": "Tôi thử việc lần đầu ở vị trí chuyên môn yêu cầu cao đẳng, không phải người quản lý doanh nghiệp; hợp đồng không thuộc loại dưới một tháng. Công ty yêu cầu thử việc 90 ngày và trả 80% lương của công việc. Hãy đánh giá riêng thời gian và mức lương.",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-TL009",
+    "question": "Doanh nghiệp ép nhân viên dùng lương mua sản phẩm do chính công ty bán. Có phù hợp không?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-TL013",
+    "question": "Làm việc vào ban đêm nhưng không làm thêm giờ, có khoản trả thêm tối thiểu bao nhiêu?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-NP003",
+    "question": "Nếu ngày nghỉ hằng tuần trùng ngày nghỉ lễ, người lao động có được nghỉ bù không?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-CD007",
+    "question": "Nhân viên có hợp đồng 24 tháng, không làm công việc đặc thù và không thuộc trường hợp được bảo vệ tại Điều 37. Người này thường xuyên không hoàn thành công việc theo tiêu chí đánh giá hợp lệ, được ban hành sau khi tham khảo ý kiến tổ chức đại diện người lao động tại cơ sở nơi có tổ chức này. Công ty có quyền đơn phương chấm dứt không và phải báo trước bao lâu?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  },
+  {
+    "id": "REG-CD008",
+    "question": "Người lao động không thuộc các trường hợp bảo vệ tại Điều 37, tự ý bỏ việc không có lý do chính đáng đủ 5 ngày làm việc liên tục. Nếu công ty đơn phương chấm dứt theo điểm e khoản 1 Điều 36 thì có phải báo trước không?",
+    "batch": "V12_REGRESSION",
+    "origin": "GENERALIZATION_DEVELOPMENT_TEST",
+    "query_date": "2026-09-15"
+  }
+]
