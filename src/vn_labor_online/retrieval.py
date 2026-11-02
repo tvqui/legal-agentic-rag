@@ -52,7 +52,7 @@ def request_cached_retrieval(fn):
         return result
     return wrapped
 def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evidence:
-    keys={'ancestor_context','unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status'}
+    keys={'ancestor_context','unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status','promulgated_date','consolidation_as_of','version_role'}
     data={k:unit.get(k) for k in keys}; data.update(score=float(score),retrieval_method=method,rank=rank,component_scores=components or {})
     data['ancestor_context']=str(data.get('ancestor_context') or '')
     data['authority_rank']=int(data.get('authority_rank') or 0)
@@ -451,7 +451,11 @@ def temporal_filter(items:list[Evidence],query_date:str|None,strict:bool=True,qu
     if not query_date: return items,[]
     range_start=date.fromisoformat(query_date); range_end=date.fromisoformat(query_date_end or query_date); out=[]; removed=[]
     if range_end<range_start: raise ValueError('query_date_end must not precede query_date')
+    from .temporal import source_available_from
     for e in items:
+        try:available=source_available_from(e)
+        except (ValueError,TypeError):removed.append(e.unit_id);continue
+        if available and available>range_end:removed.append(e.unit_id);continue
         if e.provision_version_id and not e.provision_temporal_verified:
             # Strict mode requires provision-level human review. Provisional mode may
             # fall back only to a verified document-level interval.
@@ -464,7 +468,7 @@ def temporal_filter(items:list[Evidence],query_date:str|None,strict:bool=True,qu
         # silently discarded as if the event occurred on its first day.
         if not start or start>range_end or end and end<=range_start: removed.append(e.unit_id); continue
         warnings=list(e.audit_warnings)
-        if range_start!=range_end and (start>range_start or end and end<=range_end):
+        if range_start!=range_end and (start>range_start or end and end<=range_end or available and available>range_start):
             warnings.append('IMPRECISE_QUERY_DATE_OVERLAPS_VERSION_BOUNDARY')
         out.append(e.model_copy(update={'audit_warnings':list(dict.fromkeys(warnings))}))
     return out,removed

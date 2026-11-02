@@ -1,16 +1,23 @@
 """Ground attribute polarity and expose verbatim user statements, not legal findings."""
 import re
 
+def assertion_uncertain(query,start,end):
+    prefix=re.split(r'[.;!?,]|\b(?:nhưng|tuy nhiên)\b',query[max(0,start-100):start])[-1]
+    suffix=query[end:end+55]
+    if re.search(r'(?:không\s+(?:biết|rõ|chắc)|chưa\s+(?:biết|rõ|chắc|được xác nhận)|chưa xác định)[^.;?!]*$',prefix,re.I):
+        return True
+    if re.match(r'\s*(?:hay|hoặc)\s+không\b',suffix,re.I):return True
+    return bool(re.search(r'\b(?:có|liệu|phải chăng)[^.;?!]{0,50}$',prefix,re.I)
+                and re.search(r'\bkhông\s*[?!.]',suffix,re.I))
+
+
 def attribute_polarity(query,terms):
     q=query.lower();values=set()
     for term in sorted(terms,key=len,reverse=True):
         for match in re.finditer(re.escape(term),q):
             prefix=re.split(r'[.;!?,]|\b(?:nhưng|tuy nhiên)\b',q[max(0,match.start()-90):match.start()])[-1]
             suffix=q[match.end():match.end()+40]
-            if re.search(r'(?:chưa (?:rõ|biết|được xác nhận)|không (?:biết|rõ))[^.;?!]*$',prefix):
-                continue
-            if re.search(r'\b(?:có|liệu|phải chăng)[^.;?!]{0,50}$',prefix) and re.search(r'\bkhông\s*[?!.]',suffix):
-                continue
+            if assertion_uncertain(query,match.start(),match.end()):continue
             negative=bool(re.search(r'\b(?:không|chẳng)(?:\s+(?:hề|phải|là|người|bị|thuộc|nhóm|đối|tượng|có)){0,8}\s*$',prefix))
             values.add(not negative)
     # A contradiction cannot silently choose one fact; the conversation layer

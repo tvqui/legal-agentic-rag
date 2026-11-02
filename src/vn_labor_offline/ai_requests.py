@@ -68,7 +68,10 @@ class AIRequests:
     @property
     def stop_reason(self):
         if self.failures>=self.limit: return 'AI_CIRCUIT_OPEN'
-        if time.monotonic()-self.started>=self.seconds: return 'AI_STAGE_BUDGET_EXHAUSTED'
+        remaining=self.seconds-(time.monotonic()-self.started)
+        timeout=getattr(self.provider,'timeout',0)
+        if remaining<=0 or isinstance(timeout,(int,float)) and remaining<timeout:
+            return 'AI_STAGE_BUDGET_EXHAUSTED'
         return None
 
     def observe(self,event,**details):
@@ -84,7 +87,8 @@ class AIRequests:
         if event=='cache_hit': self.cache_hits+=1
         if event=='success': self.failures=0
         # A length/schema problem is task-specific, not proof of provider outage.
-        recoverable={'AI_OUTPUT_TOKEN_LIMIT','AI_INVALID_STRUCTURED_OUTPUT'} if self.settings.get('ai_compact_output',False) else set()
+        recoverable={'AI_OUTPUT_TOKEN_LIMIT','AI_INVALID_STRUCTURED_OUTPUT','AI_CONTEXT_BUDGET_EXCEEDED'} if (
+            self.settings.get('ai_compact_output',False) or self.settings.get('ai_source_accounting',False)) else set()
         if event=='error' and details.get('reason') not in {'AI_CIRCUIT_OPEN','AI_STAGE_BUDGET_EXHAUSTED'} | recoverable:
             self.failures+=1
         row={'schema_version':1,'run_id':self.run_id,'stage':self.stage,'event':event,
@@ -103,6 +107,9 @@ class AIRequests:
         Failures and saturated outputs can split to a bounded depth. Cache fragments are
         read even when the network circuit is open. No tail truncation occurs.
         """
+        if self.settings.get('ai_source_accounting',False):
+            from .source_accounting import generate_accounted
+            return generate_accounted(self,system,payload,schema,identity)
         source=payload.get('source','')
         envelope=dict(payload); envelope['source']=''; envelope['source_offset']=0
         context=int(self.settings.get('ai_context_tokens',16384))

@@ -87,9 +87,30 @@ class OnlinePipeline:
               'facts':{**resolved.facts,**request.facts},
               'conversation_context':[turn.content for turn in request.conversation_turns] if request.conversation_turns else request.conversation_context,
               'query_date':request.query_date or resolved.query_date})
-            response=self._ask(effective)
+            from .period_answers import rule_periods,combine_period_answers
             from .freshness import qualify_freshness
-            response=qualify_freshness(response,self.store,self.cfg.corpus_snapshot_as_of,self.cfg.allow_partial)
+            periods=rule_periods(effective,self.store)
+            if periods:
+                period_responses=[]
+                for period in periods:
+                    checkpoint('dated_period')
+                    child=effective.model_copy(update={'question':period.question,'query_date':period.start})
+                    result=self._ask(child,period_end=period.end)
+                    period_responses.append(qualify_freshness(result,self.store,self.cfg.corpus_snapshot_as_of,self.cfg.allow_partial))
+                response=combine_period_answers(effective,periods,period_responses)
+            else:
+                response=self._ask(effective)
+                response=qualify_freshness(response,self.store,self.cfg.corpus_snapshot_as_of,self.cfg.allow_partial)
+            from .scope import mixed_scope_exclusions
+            exclusions=mixed_scope_exclusions(effective.question)
+            if exclusions:
+                response.answer+='\nPhần ngoài phạm vi pháp luật lao động, hệ thống chưa trả lời: '+ ' | '.join(exclusions)
+                response.limitations=list(dict.fromkeys(response.limitations+['mixed_scope_unanswered_parts']))
+                response.warnings=list(dict.fromkeys(response.warnings+['MIXED_SCOPE_PARTIALLY_HANDLED']))
+                if response.status==Stop.SUFFICIENT:response.status=Stop.PARTIAL_ALLOWED
+                if response.trace:
+                    response.trace.stop_reason=response.status
+                    response.trace.events.append({'event':'mixed_scope','excluded_request_quotes':exclusions})
             checkpoint('completed')
             from .runtime import measured_timings,retrieval_cache_summary
             if response.trace:
@@ -110,7 +131,7 @@ class OnlinePipeline:
                     persist(response.trace,self.cfg.trace_dir)
             return response
 
-    def _ask(self,request:QueryRequest)->AnswerResponse:
+    def _ask(self,request:QueryRequest,*,period_end:str|None=None)->AnswerResponse:
         from .runtime import checkpoint
         checkpoint('analysis')
         start=time.perf_counter(); stage=time.perf_counter()
@@ -124,6 +145,9 @@ class OnlinePipeline:
             analysis=analyze(env,current_day,request.facts)
             analysis=analysis.model_copy(update={'temporal_intent':'CURRENT','temporal_resolution':'RESOLVED'})
             defaulted_query_date=True
+        if period_end:
+            analysis=analysis.model_copy(update={'query_date_end':period_end,'query_date_precision':'RANGE',
+                'temporal_resolution':'RESOLVED'})
         analysis_ms=round((time.perf_counter()-stage)*1000,2)
         checkpoint('understanding')
         researcher_started=time.perf_counter()
@@ -498,7 +522,7 @@ class OnlinePipeline:
                 warnings.append('INDEPENDENT_TASK_RULES_ONLY')
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=observed('pack',build_verified_pack,env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome,summary=lambda v:{'so_nguon':len(v.evidence),'so_ky_tu':sum(len(x.text) for x in v.evidence),'trang_thai_du_kien':status.value})
-        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
+        pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'scope_exclusions':analysis.scope_exclusions,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
         if (exact_only and lookup_scope_complete and len(analysis.explicit_references)==1
           and not conflicts and not analysis.facts and not analysis.legal_subissues
           and len(pack.evidence)==len(items)==len(selected)):
@@ -596,7 +620,7 @@ class OnlinePipeline:
                 state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+preserved_gaps))})
                 pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
                   [x for x in decisions if x.evidence_id in {item.unit_id for item in selected}],analysis.requested_outcome)
-                pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
+                pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'scope_exclusions':analysis.scope_exclusions,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
                 sufficient=bool(selected) and not state.gaps
                 actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
                 partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial

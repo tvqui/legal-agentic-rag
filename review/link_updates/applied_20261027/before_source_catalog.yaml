@@ -1,0 +1,816 @@
+# Curated source metadata. Unknown values remain unresolved; SHA binds entries to files.
+sources:
+  legal_corpus/consolidated/2026_131_18_VBHN-VPQH.pdf:
+    sha256: 9f0ead44c45112ca46882b01036179c23772d1494f7af32024c07f2366a62d27
+    document_number: 18/VBHN-VPQH
+    source_document_number: 18/VBHN-VPQH
+    instrument_number: 45/2019/QH14
+    instrument_type: LAW
+    title: Văn bản hợp nhất Bộ luật Lao động
+    issuer: Văn phòng Quốc hội
+    promulgated_date: '2026-02-12'
+    effective_from: '2021-01-01'
+    consolidation_as_of: '2026-02-12'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-18-vbhn-vpqh-468971.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/consolidated/2026_133_19_VBHN-VPQH.pdf:
+    sha256: 90cf1e79ba6e778fd1bb7702662167372c7f646622edf83efd9851035af642b7
+    document_number: 19/VBHN-VPQH
+    source_document_number: 19/VBHN-VPQH
+    instrument_number: 41/2024/QH15
+    instrument_type: LAW
+    title: Văn bản hợp nhất Luật Bảo hiểm xã hội
+    issuer: Văn phòng Quốc hội
+    promulgated_date: '2026-02-12'
+    effective_from: '2025-07-01'
+    consolidation_as_of: '2026-02-12'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-19-vbhn-vpqh-468972.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/consolidated/2026_134_21_VBHN-VPQH.pdf:
+    sha256: 6c2bbf0fba807ac2a3c84320da8bb5c88a4e0b0e264222f75c2fe6d99c1d36b9
+    document_number: 21/VBHN-VPQH
+    source_document_number: 21/VBHN-VPQH
+    instrument_number: 92/2015/QH13
+    instrument_type: LAW
+    title: Văn bản hợp nhất Bộ luật Tố tụng dân sự
+    issuer: Văn phòng Quốc hội
+    promulgated_date: '2026-02-12'
+    effective_from: '2016-07-01'
+    consolidation_as_of: '2026-02-12'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-21-vbhn-vpqh-468974.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/128-2025-ND-CP_Phan-quyen-noi-vu_OFFICIAL_HTML.html:
+    sha256: fda0f8c441e97758c073ed620577d88ef4d5772455c246f4912591fbe062ac76
+    instrument_number: 128/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về phân quyền, phân cấp trong quản lý nhà nước lĩnh vực nội vụ
+    issuer: Chính phủ
+    promulgated_date: '2025-06-11'
+    effective_from: '2025-07-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vanban.chinhphu.vn/?docid=213921&pageid=27160
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/97-2025-QH15_Sua-Luat-Cong-doan_OFFICIAL_HTML.html:
+    sha256: 99d8e8afa401c104edff5ad0047ac97dfd034e778cfe11e4ba7a2f12a5e0235f
+    instrument_number: 97/2025/QH15
+    instrument_type: LAW
+    title: Luật sửa đổi, bổ sung một số điều của Luật Mặt trận Tổ quốc Việt Nam, Luật Công đoàn, Luật Thanh niên và Luật Thực hiện dân chủ ở cơ sở
+    issuer: Quốc hội
+    promulgated_date: '2025-06-27'
+    effective_from: '2025-07-01'
+    source_url: https://congbao.chinhphu.vn/van-ban/luat-so-97-2025-qh15-45535.htm
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/consolidated/90-VBHN-VPQH_Luat-Cong-doan_OFFICIAL_HTML.html:
+    sha256: c8dbf2b7f9f18efc7f88faa51bc8f5d8ba019745ff8abecaec5ffcbb098d5327
+    document_number: 90/VBHN-VPQH
+    source_document_number: 90/VBHN-VPQH
+    instrument_number: 50/2024/QH15
+    instrument_type: LAW
+    title: Văn bản hợp nhất Luật Công đoàn
+    issuer: Văn phòng Quốc hội
+    promulgated_date: '2025-08-22'
+    effective_from: '2025-07-01'
+    consolidation_as_of: '2025-08-22'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/van-ban-hop-nhat-so-90-vbhn-vpqh-45984.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/145-2020-ND-CP_Huong-dan-BLLD.pdf:
+    sha256: a72a1ff295cc06fbddd335d57257688f5118826968cd8b62d58f50fc1554b230
+    instrument_number: 145/2020/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Bộ luật Lao động về điều kiện lao động và quan hệ lao động
+    issuer: Chính phủ
+    promulgated_date: '2020-12-14'
+    effective_from: '2021-02-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=152668
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/293-2025-ND-CP_Luong-toi-thieu.pdf:
+    sha256: 80d2943b04403338a18af20c488b4f215a98b023046ba3775f99b6e2cda93169
+    instrument_number: 293/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định mức lương tối thiểu đối với người lao động làm việc theo hợp đồng lao động
+    issuer: Chính phủ
+    promulgated_date: '2025-11-10'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=183939
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/140-2018-ND-CP_Sua-ND44-va-ND11.pdf:
+    sha256: f53ea03405c28b95c8782a16bf65bd9aa3c4ce4c4d979e56b568654fbb13586c
+    instrument_number: 140/2018/NĐ-CP
+    instrument_type: DECREE
+    title: Sửa đổi, bổ sung các Nghị định liên quan đến điều kiện đầu tư kinh doanh và thủ tục hành chính thuộc phạm vi quản lý nhà nước của Bộ Lao động - Thương binh và Xã hội
+    issuer: Chính phủ
+    promulgated_date: '2018-10-08'
+    effective_from: '2018-10-08'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/bonoivu/Pages/vbpq-thuoctinh.aspx?ItemID=131493
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/92-2015-QH13_Bo-luat-To-tung-dan-su.pdf:
+    sha256: fea333cfe1e69659cca3999e0f7678d9f74beb2bc6c8190e3144450fed7558c2
+    instrument_number: 92/2015/QH13
+    instrument_type: LAW
+    title: Bộ luật Tố tụng dân sự
+    issuer: Quốc hội
+    promulgated_date: '2015-11-25'
+    effective_from: '2016-07-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-thuoctinh.aspx?ItemID=96115
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/06-2020-TT-BLDTBXH_Cong-viec-nghiem-ngat-ATVSLD.pdf:
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    instrument_type: CIRCULAR
+    metadata_verified: true
+    temporal_verified: true
+    status_checked_at: '2026-09-13'
+    sha256: 66a2ad19e6b8cdaa8ee6bf3e4cc32765a206d2f007ac8c89af65f4cab51de5fe
+    instrument_number: 06/2020/TT-BLĐTBXH
+    title: Ban hành Danh mục công việc có yêu cầu nghiêm ngặt về an toàn, vệ sinh lao động
+    promulgated_date: '2020-08-20'
+    effective_from: '2020-10-05'
+    legal_status: EFFECTIVE
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=143667
+  legal_corpus/circulars/08-2023-TT-BLDTBXH_Sua-doi-thu-tuc-cu-tru.pdf:
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    instrument_type: CIRCULAR
+    title: Sửa đổi, bổ sung, bãi bỏ một số điều của các Thông tư, Thông tư liên tịch có quy định liên quan đến giấy tờ về cư trú khi thực hiện thủ tục hành chính
+    metadata_verified: true
+    temporal_verified: true
+    status_checked_at: '2026-09-13'
+    sha256: 8cd13c18fcdd6d88e442bc7c6ff2af25601c026fd60a570f72fa0890b0fac5b8
+    instrument_number: 08/2023/TT-BLĐTBXH
+    promulgated_date: '2023-08-29'
+    effective_from: '2023-10-12'
+    legal_status: PARTIALLY_EXPIRED
+    source_url: https://vbpl.vn/TW/Pages/vbpq-lichsu.aspx?ItemID=167031
+  legal_corpus/circulars/18-2021-TT-BLDTBXH_Thoi-gio-lam-viec-thoi-vu.pdf:
+    sha256: dac0bce70e502e765045a6bd4c95719515b0b802f83a2cf424432758115d740f
+    instrument_number: 18/2021/TT-BLĐTBXH
+    instrument_type: CIRCULAR
+    title: Quy định về thời giờ làm việc, thời giờ nghỉ ngơi đối với người lao động làm các công việc sản xuất có tính thời vụ, công việc gia công theo đơn đặt hàng
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    promulgated_date: '2021-12-15'
+    effective_from: '2022-02-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=153297
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/21-2021-TT-BLDTBXH_Lao-dong-VN-di-lam-viec-o-nuoc-ngoai.pdf:
+    sha256: 2630af5e30afd39e376e85ca1426ca55f9f2a8a829459a0358b6c232d3251c94
+    instrument_number: 21/2021/TT-BLĐTBXH
+    instrument_type: CIRCULAR
+    title: Quy định chi tiết một số điều của Luật Người lao động Việt Nam đi làm việc ở nước ngoài theo hợp đồng
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    promulgated_date: '2021-12-15'
+    effective_from: '2022-02-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/bolaodong/Pages/ivbpq-thuoctinh.aspx?ItemID=162453
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/VanBanGoc_TT 10 2020 BLĐTBXH.pdf:
+    sha256: b2b7e891bec31090825b93cd4e3d582cb4c779d34aca5e32e5234d9023efc853
+    instrument_number: 10/2020/TT-BLĐTBXH
+    instrument_type: CIRCULAR
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Bộ luật Lao động về hợp đồng lao động, Hội đồng thương lượng tập thể và nghề, công việc có ảnh hưởng xấu tới chức năng sinh sản, nuôi con
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    promulgated_date: '2020-11-12'
+    effective_from: '2021-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-thuoctinh.aspx?ItemID=146696
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/VanBanGoc_TT 11 2020 BLĐTBXH.pdf:
+    sha256: f73a6dced376520d2ad196564abd538d201ffd6e9c6ead30de946e0c85118a3e
+    instrument_number: 11/2020/TT-BLĐTBXH
+    instrument_type: CIRCULAR
+    title: Ban hành danh mục nghề, công việc nặng nhọc, độc hại, nguy hiểm và nghề, công việc đặc biệt nặng nhọc, độc hại, nguy hiểm
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    promulgated_date: '2020-11-12'
+    effective_from: '2021-03-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-luocdo.aspx?ItemID=146697
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/VanBanGoc_thong-tu-09-2020-tt-bldtbxh-huong-dan-bo-luat-lao-dong-ve-lao-dong-chua-thanh-nien.pdf:
+    sha256: 5b0269b01d366688fcc0f3ca0091710cf2218df3508597edd1f531c8a80e55e1
+    instrument_number: 09/2020/TT-BLĐTBXH
+    instrument_type: CIRCULAR
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Bộ luật Lao động về lao động chưa thành niên
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    promulgated_date: '2020-11-12'
+    effective_from: '2021-03-15'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-lichsu.aspx?ItemID=152670
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/VanBanGoc_thong-tu-24-2022-tt-bldtbxh-boi-duong-bang-hien-vat-doi-voi-nld-lam-viec-trong-dieu-kien-nguy-hiem-doc-hai.pdf:
+    sha256: bc5d02af1a04d138195904694e22de128e0900ef7dad81de659c58134517ff80
+    instrument_number: 24/2022/TT-BLĐTBXH
+    instrument_type: CIRCULAR
+    title: Quy định việc bồi dưỡng bằng hiện vật đối với người lao động làm việc trong điều kiện có yếu tố nguy hiểm, yếu tố có hại
+    issuer: Bộ Lao động - Thương binh và Xã hội
+    promulgated_date: '2022-11-30'
+    effective_from: '2023-03-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-toanvan.aspx?ItemID=159196
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/45-2019-QH14_Bo-luat-Lao-dong.pdf:
+    sha256: a0c0fcc3b9e040bcdcab70191f0ab95952183be94a6f5bc6424e8d3e85697139
+    instrument_number: 45/2019/QH14
+    instrument_type: LAW
+    title: Bộ luật Lao động
+    issuer: Quốc hội
+    promulgated_date: '2019-11-20'
+    effective_from: '2021-01-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/bonoivu/Pages/vbpq-thuoctinh.aspx?ItemID=139264
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/69-2020-QH14_NLD-Viet-Nam-o-nuoc-ngoai.pdf:
+    sha256: da46b079e36457b4eb2c56b8650d66a93d09428e6646353b0685a97351093af6
+    instrument_number: 69/2020/QH14
+    instrument_type: LAW
+    title: Luật Người lao động Việt Nam đi làm việc ở nước ngoài theo hợp đồng
+    issuer: Quốc hội
+    promulgated_date: '2020-11-13'
+    effective_from: '2022-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=146643
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/84-2015-QH13_An-toan-ve-sinh-lao-dong.pdf:
+    sha256: 7b2eb250573593b9bd479e164f27269ed8d5cb6f9ffb5bc30266d7f8c9f27f1a
+    instrument_number: 84/2015/QH13
+    instrument_type: LAW
+    title: Luật An toàn, vệ sinh lao động
+    issuer: Quốc hội
+    promulgated_date: '2015-06-25'
+    effective_from: '2016-07-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/bonoivu/Pages/vbpq-thuoctinh.aspx?ItemID=70811
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/41-2024-QH15_Luat-Bao-hiem-xa-hoi.pdf:
+    sha256: d46db2fcf0a62e8d788f99612071c881bbba0e00ec1992691f615fd1832ce8e8
+    instrument_number: 41/2024/QH15
+    instrument_type: LAW
+    title: Luật Bảo hiểm xã hội
+    issuer: Quốc hội
+    promulgated_date: '2024-06-29'
+    effective_from: '2025-07-01'
+    effective_to: '2026-01-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/bolaodong/Pages/ivbpq-thuoctinh.aspx?ItemID=175027
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/50-2024-QH15_Luat-Cong-doan.pdf:
+    sha256: 7ddcbdf2d1db00d6d6a85ca01a086f8ed729ad3bba8d24a31913aec84965314e
+    instrument_number: 50/2024/QH15
+    instrument_type: LAW
+    title: Luật Công đoàn
+    issuer: Quốc hội
+    promulgated_date: '2024-11-27'
+    effective_from: '2025-07-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-thuoctinh.aspx?ItemID=172553
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/71-2025-QH15_Luat-Cong-nghiep-cong-nghe-so.pdf:
+    sha256: b80b983f152d364e0e3299d20ef967cb646df5d75d02caff661d1dd88ae8df51
+    instrument_number: 71/2025/QH15
+    instrument_type: LAW
+    title: Luật Công nghiệp công nghệ số
+    issuer: Quốc hội
+    promulgated_date: '2025-06-14'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-lichsu.aspx?ItemID=179989
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/113-2025-QH15_Luat-Dan-so.pdf:
+    sha256: 792cc0e350fd37e05e38fed76341bab9479b239313af3e6e57926d18d6b085af
+    instrument_number: 113/2025/QH15
+    instrument_type: LAW
+    title: Luật Dân số
+    issuer: Quốc hội
+    promulgated_date: '2025-12-10'
+    effective_from: '2026-07-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vanban.chinhphu.vn/?classid=1&docid=216497&pageid=27160&typegroupid=3
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/124-2025-QH15_Luat-Giao-duc-nghe-nghiep.pdf:
+    sha256: 4d5837340a71715a8b9c474632a4ea060cb4ddca69b9919b875db652762f1127
+    instrument_number: 124/2025/QH15
+    instrument_type: LAW
+    title: Luật Giáo dục nghề nghiệp
+    issuer: Quốc hội
+    promulgated_date: '2025-12-10'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-toanvan.aspx?ItemID=187742
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/08-2026-TT-BNV_Huong-dan-HDLD-dien-tu.pdf:
+    sha256: e14a80342e6914629d7f34f3cfafc827c1685d728f511f03859a376acc3b3999
+    instrument_number: 08/2026/TT-BNV
+    instrument_type: CIRCULAR
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Nghị định số 337/2025/NĐ-CP về hợp đồng lao động điện tử
+    issuer: Bộ Nội vụ
+    promulgated_date: '2026-05-15'
+    effective_from: '2026-07-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/thong-tu-so-08-2026-tt-bnv-469695.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/circulars/09-2026-TT-BNV_Sua-TT21-2021_Lao-dong-ngoai-nuoc.pdf:
+    sha256: 3de2237b0d83604c0867b48e2142620bb4194e48a6d9d3fcd720f44c5f701b9b
+    instrument_number: 09/2026/TT-BNV
+    instrument_type: CIRCULAR
+    title: Sửa đổi, bổ sung một số điều của Thông tư số 21/2021/TT-BLĐTBXH về người lao động Việt Nam đi làm việc ở nước ngoài theo hợp đồng
+    issuer: Bộ Nội vụ
+    promulgated_date: '2026-05-15'
+    effective_from: '2026-06-30'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/thong-tu-so-09-2026-tt-bnv-469696.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/10-2024-ND-CP_Khu-cong-nghe-cao_Sua-doi-lien-quan-ND145.pdf:
+    sha256: 9bbb4c8c7ee072b5b79d89e2444ef6a8686922557719b0138881bd39c6fd30fe
+    instrument_number: 10/2024/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về khu công nghệ cao
+    issuer: Chính phủ
+    promulgated_date: '2024-02-01'
+    effective_from: '2024-03-25'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vanban.chinhphu.vn/?classid=0&docid=209657&pageid=27160
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/105-2026-ND-CP_Tai-chinh-cong-doan.pdf:
+    sha256: 123ed511cede44d31fdd70dbc31848ac887071a2e4ba8f2f4516717ac9b9c0f2
+    instrument_number: 105/2026/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Luật Công đoàn về tài chính công đoàn
+    issuer: Chính phủ
+    promulgated_date: '2026-03-31'
+    effective_from: '2026-05-16'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://congbao.chinhphu.vn/van-ban/nghi-dinh-so-105-2026-nd-cp-469290.htm
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/112-2021-ND-CP_Huong-dan-Luat-69-2020.pdf:
+    sha256: 64f90db071566152494a173c5ddcff719af7b81a3585c82ca7b896f03aaf380b
+    instrument_number: 112/2021/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết một số điều và biện pháp thi hành Luật Người lao động Việt Nam đi làm việc ở nước ngoài theo hợp đồng
+    issuer: Chính phủ
+    promulgated_date: '2021-12-10'
+    effective_from: '2022-01-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=152929
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/12-2022-ND-CP_Xu-phat-lao-dong-BHXH.pdf:
+    sha256: 6773588aae73522a26ddb1d5e5f4551912008e0ac62fcc0117be3e95e79c7ae1
+    instrument_number: 12/2022/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định xử phạt vi phạm hành chính trong lĩnh vực lao động, bảo hiểm xã hội, người lao động Việt Nam đi làm việc ở nước ngoài theo hợp đồng
+    issuer: Chính phủ
+    promulgated_date: '2022-01-17'
+    effective_from: '2022-01-17'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-vanbanlienquan.aspx?ItemID=153913
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/129-2025-ND-CP_Phan-dinh-tham-quyen-Bo-Noi-vu.pdf:
+    sha256: 72735be7240c01db3c66295ea27161d92e6f87432e48459f6284f94d60c1a113
+    instrument_number: 129/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về phân định thẩm quyền của chính quyền địa phương 02 cấp trong lĩnh vực quản lý nhà nước của Bộ Nội vụ
+    issuer: Chính phủ
+    promulgated_date: '2025-06-11'
+    effective_from: '2025-07-01'
+    effective_to: '2027-03-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=178294
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/135-2020-ND-CP_Tuoi-nghi-huu.pdf:
+    sha256: 3e14d2e05041c12b6d71739dbb958015e0604eed41a6432e6d8cbbd4276455b0
+    instrument_number: 135/2020/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về tuổi nghỉ hưu
+    issuer: Chính phủ
+    promulgated_date: '2020-11-18'
+    effective_from: '2021-01-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-lichsu.aspx?ItemID=152734
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/158-2025-ND-CP_BHXH-bat-buoc.pdf:
+    sha256: 51b605010600da706432e19bf80bada5f099f66806e3eba502517febc70d3e95
+    instrument_number: 158/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm xã hội về bảo hiểm xã hội bắt buộc
+    issuer: Chính phủ
+    promulgated_date: '2025-06-25'
+    effective_from: '2025-07-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=178757
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/159-2025-ND-CP_BHXH-tu-nguyen.pdf:
+    sha256: 8ffa3bdce6cdf2856eb0ffd21161dc194d38f8c7ff88114b91e24ea3d7b07b36
+    instrument_number: 159/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm xã hội về bảo hiểm xã hội tự nguyện
+    issuer: Chính phủ
+    promulgated_date: '2025-06-25'
+    effective_from: '2025-07-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=179149
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/176-2025-ND-CP_Tro-cap-huu-tri-xa-hoi.pdf:
+    sha256: 7942675d74c11a731cc3d57fcbd218e85aad853b7e881fbe0988ad2d2edfeb3f
+    instrument_number: 176/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Luật Bảo hiểm xã hội về trợ cấp hưu trí xã hội
+    issuer: Chính phủ
+    promulgated_date: '2025-06-30'
+    effective_from: '2025-07-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=184035
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/219-2025-ND-CP_Lao-dong-nuoc-ngoai.pdf:
+    sha256: 4757806c7e00ecdee50184e7c563732ca83bb559ea74f2d5578458efb42a184f
+    instrument_number: 219/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về người lao động nước ngoài làm việc tại Việt Nam
+    issuer: Chính phủ
+    promulgated_date: '2025-08-07'
+    effective_from: '2025-08-07'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=180273
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/274-2025-ND-CP_Cham-tron-dong-BHXH-BHTN.pdf:
+    sha256: 41364e90f8f10f76755ea52fcfd95aba75c53a3e1a1d1ab76f7a945842ec93ac
+    instrument_number: 274/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết một số điều của Luật Bảo hiểm xã hội về chậm đóng, trốn đóng bảo hiểm xã hội bắt buộc, bảo hiểm thất nghiệp; khiếu nại, tố cáo về bảo hiểm xã hội
+    issuer: Chính phủ
+    promulgated_date: '2025-10-16'
+    effective_from: '2025-11-30'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vanban.chinhphu.vn/?docid=215646&pageid=27160&typegroupid=4
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/337-2025-ND-CP_Hop-dong-lao-dong-dien-tu.pdf:
+    sha256: 9a04efe6691b871da3cc8ac3fd6984cc9425040a973f27990e6a3081d9d76fec
+    instrument_number: 337/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về hợp đồng lao động điện tử
+    issuer: Chính phủ
+    promulgated_date: '2025-12-24'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=185561
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/338-2025-ND-CP_Ho-tro-tao-viec-lam.pdf:
+    sha256: 5fa5c87a9803435523b6cc3ee5d5c05bc9f6f1caa75fb8d727afc181ef435093
+    instrument_number: 338/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết một số điều của Luật Việc làm về chính sách hỗ trợ việc làm
+    issuer: Chính phủ
+    promulgated_date: '2025-12-25'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=185562
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/35-2022-ND-CP_Sua-doi-lien-quan-ND145.pdf:
+    sha256: e74b6cf08e204c105130e34937044475f27a59d9559bde11720551ef37ef0e35
+    instrument_number: 35/2022/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về quản lý khu công nghiệp và khu kinh tế
+    issuer: Chính phủ
+    promulgated_date: '2022-05-28'
+    effective_from: '2022-07-15'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=158798
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/372-2025-ND-CP_Sua-ND112.pdf:
+    sha256: 18128cd9fede4032054d95fc5f783f019460e4e3461d0bc746ac9c27e1b1ae04
+    instrument_number: 372/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Sửa đổi, bổ sung một số điều của Nghị định số 112/2021/NĐ-CP
+    issuer: Chính phủ
+    promulgated_date: '2025-12-31'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=186453
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/374-2025-ND-CP_Bao-hiem-that-nghiep.pdf:
+    sha256: 4d315f8dabefed454759302b45921f4c02e9fc3426682a377306b8982918e3dd
+    instrument_number: 374/2025/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết một số điều của Luật Việc làm về bảo hiểm thất nghiệp
+    issuer: Chính phủ
+    promulgated_date: '2025-12-31'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=186281
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/39-2016-ND-CP_Huong-dan-ATVSLD.pdf:
+    sha256: 1bf9d48b13e76a3525b6014d9df1692999a5f457ad52136c9f4f773cd607da66
+    instrument_number: 39/2016/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết thi hành một số điều của Luật An toàn, vệ sinh lao động
+    issuer: Chính phủ
+    promulgated_date: '2016-05-15'
+    effective_from: '2016-07-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=105821
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/44-2016-ND-CP_Kiem-dinh-huan-luyen-ATVSLD.pdf:
+    sha256: 533e22a7d88811de684c9e33ca9129c2253e35e7298725ae1ff2a7319945e7d8
+    instrument_number: 44/2016/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết một số điều của Luật An toàn, vệ sinh lao động về kiểm định kỹ thuật, huấn luyện và quan trắc môi trường lao động
+    issuer: Chính phủ
+    promulgated_date: '2016-05-15'
+    effective_from: '2016-07-01'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=117760
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/decrees/88-2020-ND-CP_BH-tai-nan-lao-dong-benh-nghe-nghiep.pdf:
+    sha256: 19d43e580e3072ec64dff4893cb6d2ee00eb6924a632f400f38d21ec17e562b5
+    instrument_number: 88/2020/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết và hướng dẫn thi hành một số điều của Luật An toàn, vệ sinh lao động về bảo hiểm tai nạn lao động, bệnh nghề nghiệp bắt buộc
+    issuer: Chính phủ
+    promulgated_date: '2020-07-28'
+    effective_from: '2020-09-15'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=143470
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/10_laodong.doc:
+    sha256: bce1476121f0ab70ba4ea255f98f4dd7723cb0389d57182508ab91a1ddeaffe9
+    instrument_number: 10/2012/QH13
+    instrument_type: LAW
+    title: Bộ luật Lao động
+    issuer: Quốc hội
+    promulgated_date: '2012-06-18'
+    effective_from: '2013-05-01'
+    effective_to: '2021-01-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=27615
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/152-2020-ND-CP_Lao-dong-nuoc-ngoai-cu.pdf:
+    sha256: f7f2c507fee5d05fbc0f0152e4ab309f3a6ebfb82b1bd3a646b75a3661cc26ef
+    instrument_number: 152/2020/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định về người lao động nước ngoài làm việc tại Việt Nam và tuyển dụng, quản lý người lao động Việt Nam làm việc cho tổ chức, cá nhân nước ngoài tại Việt Nam
+    issuer: Chính phủ
+    promulgated_date: '2020-12-30'
+    effective_from: '2021-02-15'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=152669
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/28nd.signed.pdf:
+    sha256: 8b6011860f8ef102d023a73285ad62c2f8ef4ac1edac4ade94c52d5fecc8192c
+    instrument_number: 28/2015/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định chi tiết thi hành một số điều của Luật Việc làm về bảo hiểm thất nghiệp
+    issuer: Chính phủ
+    promulgated_date: '2015-03-12'
+    effective_from: '2015-05-01'
+    effective_to: '2026-01-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=55726
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/38-2013-QH13_Luat-Viec-lam-cu.pdf:
+    sha256: 7384f7ace45493621d03f3b1529ec4227d5d9d7e7d721e22ca12513717208104
+    instrument_number: 38/2013/QH13
+    instrument_type: LAW
+    title: Luật Việc làm
+    issuer: Quốc hội
+    promulgated_date: '2013-11-16'
+    effective_from: '2015-01-01'
+    effective_to: '2026-01-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=32912
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/38-2022-ND-CP_Luong-toi-thieu-cu.pdf:
+    sha256: 092677375bf6b34e861c9ee5fd55e8fb8de1a11a9aa8ecc01967b5c1f3684341
+    instrument_number: 38/2022/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định mức lương tối thiểu đối với người lao động làm việc theo hợp đồng lao động
+    issuer: Chính phủ
+    promulgated_date: '2022-06-12'
+    effective_from: '2022-07-01'
+    effective_to: '2024-07-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=154245
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/58-2014-QH13_Luat-BHXH-cu.pdf:
+    sha256: 10dc17ba706c03f93a5b9f0aae492a3e637a09b480cbf01c7e12d6ffc547e64d
+    instrument_number: 58/2014/QH13
+    instrument_type: LAW
+    title: Luật Bảo hiểm xã hội
+    issuer: Quốc hội
+    promulgated_date: '2014-11-20'
+    effective_from: '2016-01-01'
+    effective_to: '2025-07-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=46744
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/70-2023-ND-CP_Sua-ND152.pdf:
+    sha256: 323f28188f977c0f04cf1fa8937e37fd80659928d0598ce04ccf6a11ba5f9d0e
+    instrument_number: 70/2023/NĐ-CP
+    instrument_type: DECREE
+    title: Sửa đổi, bổ sung một số điều của Nghị định số 152/2020/NĐ-CP về người lao động nước ngoài làm việc tại Việt Nam
+    issuer: Chính phủ
+    promulgated_date: '2023-09-18'
+    effective_from: '2023-09-18'
+    legal_status: PARTIALLY_EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=162330
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/74-2024-ND-CP_Luong-toi-thieu-cu.pdf:
+    sha256: 416134481b357b75ad2fbd1365e631d525007801483deaf1e19fdf63f3b344fb
+    instrument_number: 74/2024/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định mức lương tối thiểu đối với người lao động làm việc theo hợp đồng lao động
+    issuer: Chính phủ
+    promulgated_date: '2024-06-30'
+    effective_from: '2024-07-01'
+    effective_to: '2026-01-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=168670
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/historical/90-2019-ND-CP_Luong-toi-thieu-cu.pdf:
+    sha256: aa61975fb17282b4b6aa2cf0a1ff28d05cf6901e142c3d366acf4700e2c299df
+    instrument_number: 90/2019/NĐ-CP
+    instrument_type: DECREE
+    title: Quy định mức lương tối thiểu vùng đối với người lao động làm việc theo hợp đồng lao động
+    issuer: Chính phủ
+    promulgated_date: '2019-11-15'
+    effective_from: '2020-01-01'
+    effective_to: '2022-07-01'
+    legal_status: EXPIRED
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=139094
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/laws/74-2025-QH15_Luat-Viec-lam.pdf:
+    sha256: 64bc8c066afea584cd661d040b5e12996e797a9dc7460f1a0c12181d98f7e3c7
+    instrument_number: 74/2025/QH15
+    instrument_type: LAW
+    title: Luật Việc làm
+    issuer: Quốc hội
+    promulgated_date: '2025-06-16'
+    effective_from: '2026-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=179273
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/resolutions/2014_567 + 568-01_2014_NQ-HĐTP.pdf:
+    sha256: f6c86888a5103b55d6de0e28de80f76dd694e3aad890793366f07e034c9cb3cb
+    instrument_number: 01/2014/NQ-HĐTP
+    instrument_type: RESOLUTION
+    title: Hướng dẫn thi hành một số quy định của Luật Trọng tài thương mại
+    issuer: Hội đồng Thẩm phán Tòa án nhân dân tối cao
+    promulgated_date: '2014-03-20'
+    effective_from: '2014-07-02'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=126384
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/resolutions/2019_253 + 254_01-2019-NQ-HĐTP.pdf:
+    sha256: bfe12a3c23ef0aa5a8307aa54b9a9000bf847010d8eabee981d6059ba7329738
+    instrument_number: 01/2019/NQ-HĐTP
+    instrument_type: RESOLUTION
+    title: Hướng dẫn áp dụng một số quy định của pháp luật về lãi, lãi suất, phạt vi phạm
+    issuer: Hội đồng Thẩm phán Tòa án nhân dân tối cao
+    promulgated_date: '2019-01-11'
+    effective_from: '2019-03-15'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=134278
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/resolutions/326-2016-UBTVQH14_text_copy.doc:
+    sha256: 53eb26316b62895e8bd336123a19cabf4a26048dac04a9dae83f03ec3549ab07
+    instrument_number: 326/2016/UBTVQH14
+    instrument_type: RESOLUTION
+    title: Quy định về mức thu, miễn, giảm, thu, nộp, quản lý và sử dụng án phí và lệ phí Tòa án
+    issuer: Ủy ban Thường vụ Quốc hội
+    promulgated_date: '2016-12-30'
+    effective_from: '2017-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=119086
+    metadata_verified: true
+    temporal_verified: true
+  legal_corpus/resolutions/326_2016_UBTVQH14(16723).pdf:
+    sha256: 25b7fa97779eb34fbb8b32cc04d5a980a22d23280ae308a0f485ccfb4aa101f8
+    instrument_number: 326/2016/UBTVQH14
+    instrument_type: RESOLUTION
+    title: Quy định về mức thu, miễn, giảm, thu, nộp, quản lý và sử dụng án phí và lệ phí Tòa án
+    issuer: Ủy ban Thường vụ Quốc hội
+    promulgated_date: '2016-12-30'
+    effective_from: '2017-01-01'
+    legal_status: EFFECTIVE
+    status_checked_at: '2026-09-14'
+    source_url: https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=119086
+    metadata_verified: true
+    temporal_verified: true

@@ -50,6 +50,21 @@ def extra_requirements(analysis):
         if not old: out['discipline_implementing_procedure']=[[loc(70,documents=['145/2020/NĐ-CP'])]]
     if has('ky luat','cuoc hop ky luat') and has('danh','bao luc','xam pham','nhuc ma','xuc pham','hanh hung'):
         clauses('discipline_prohibited_acts',128 if old else 127,[1])
+    if has('tam dinh chi cong viec'):
+        article=129 if old else 128
+        # Each facet needs its own operative provision. These are source
+        # requirements, not a finding that the employer met the prerequisites.
+        payment=has('luong','tam ung','hoan tra','tra lai')
+        if payment and has('khong bi xu ly ky luat','khong xu ly ky luat'):
+            clauses('work_suspension_full_wage',article,[4])
+        elif payment and has('bi xu ly ky luat','van bi ky luat'):
+            clauses('work_suspension_advance_return',article,[3])
+        elif payment:
+            clauses('work_suspension_wage_outcomes',article,[2,3,4])
+        if has('thoi han','bao lau','bao nhieu ngay','tam ung'):
+            clauses('work_suspension_duration_advance',article,[2])
+        if has('dieu kien','thu tuc','co duoc','co quyen','hop phap','dung khong') or not payment:
+            clauses('work_suspension_prerequisites',article,[1])
     if has('cao tuoi') and has('the nao','dinh nghia','khai niem','duoc hieu','la gi'):
         clauses('elderly_definition',166 if old else 148,[1])
         if not old: clauses('retirement_age_reference',169,[2])

@@ -197,7 +197,7 @@ def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceS
       norm_role=norm_role(x.document_number,x.document_title,' '.join((x.ancestor_context,x.source_text or x.text))),
       clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),
       full_text=' '.join((x.ancestor_context+'\n'+(x.source_text or x.text)).split()),
-      ancestor_context=x.ancestor_context,valid_from=x.valid_from,
+      ancestor_context=x.ancestor_context,promulgated_date=x.promulgated_date,consolidation_as_of=x.consolidation_as_of,version_role=x.version_role,valid_from=x.valid_from,
       valid_to=x.valid_to,official_url=x.source_url,authority_rank=x.authority_rank,binding=x.binding,
       official_source=x.official_source,provenance_span=x.provenance_span,
       applicability=by_decision.get(x.unit_id),warnings=x.audit_warnings) for x in items if x.verified

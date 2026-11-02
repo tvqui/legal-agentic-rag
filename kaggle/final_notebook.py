@@ -15,7 +15,7 @@ def make_notebook():
     md("""# VN Labor — OFFLINE final build (checkpoint-first)
 
 Notebook này dùng hai Kaggle Input Private: package code mới và một checkpoint `vn_labor_results.zip` mới nhất (hoặc V8.1 Aura).
-Mặc định tiếp tục AI từ build 13/10: kiểm corpus/SHA/provenance/indexes, giữ AI cache và kết quả đã khớp,
+Mặc định tiếp tục AI từ ZIP cuối result_14-10: kiểm corpus/SHA/provenance/indexes, giữ AI cache và kết quả đã khớp,
 chạy AI phần thiếu → dựng knowledge/graph → nạp Aura → audit → xuất ZIP cuối. Không OCR hoặc dựng Dense/BM25 lại.
 Nếu cần cập nhật extraction, đặt RESUME_AI_ONLY=False và REFRESH_EXTRACTION_QUALITY=True.
 
@@ -63,8 +63,8 @@ if len(matches) != 1:
     raise RuntimeError('Cần đúng một Dataset package VN Labor mới; tìm thấy: ' + str(len(matches)))
 source = matches[0].parent
 bundle_revision = json.loads(matches[0].read_text(encoding='utf-8')).get('bundle_revision')
-if bundle_revision != '20261013-anchored-ai-resume-v1':
-    raise RuntimeError('Dataset code cũ: cần upload ZIP mới có revision 20261013-anchored-ai-resume-v1.')
+if bundle_revision != '20261027-source-links-v3':
+    raise RuntimeError('Dataset code cũ: cần upload ZIP mới có revision 20261027-source-links-v3.')
 print('Bundle revision:', bundle_revision, flush=True)
 
 restore = RESTORE_ARCHIVE

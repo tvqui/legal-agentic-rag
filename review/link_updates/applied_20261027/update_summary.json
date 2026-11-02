@@ -1,0 +1,40 @@
+{
+  "updated_at": "2026-10-27T14:36:02.920781+00:00",
+  "source_links_changed": 72,
+  "newly_added_links": 23,
+  "documents_with_configured_url": 84,
+  "documents_missing_url": 11,
+  "source_catalog_sha256": "095b1d16b4adf866cf056f08c9804c2da2b2fc4f9b4fceae6107d04158073b35",
+  "workbook_sha256": "385239f7be5f11ceb6d9b9f7a10fb7ce8996e401f60d1309aecb3b9f1b624c6a",
+  "unit_tests": {
+    "passed": 875,
+    "errors": 0
+  },
+  "evaluation_tests": {
+    "passed": 28,
+    "errors": 0
+  },
+  "real_artifact_metadata_smoke": "PASS",
+  "metadata_smoke_documents": 95,
+  "gpu_ocr_llm_aura_executed": false,
+  "package": {
+    "bundle_revision": "20261027-source-links-v3",
+    "bundle": "vn_labor_kaggle_v8.zip",
+    "sha256": "f4da440a0f2c4fda7d49035bc30dd65d1495f16854604ed4af52acffe1fa6026",
+    "sha256_file": "vn_labor_kaggle_v8.zip.sha256",
+    "workflow": "V8_1_CHECKPOINT_FIRST_REBUILD_AI_AURA",
+    "size_mb": 230.46,
+    "files": 348,
+    "corpus_files": 96,
+    "converted_docs": 4,
+    "zip_crc_check": "PASS",
+    "notebook_code_syntax": "PASS",
+    "uploaded": false,
+    "remote_execution_tested": false
+  },
+  "all_72_urls_match_bundle": true,
+  "manifest_file_sha_checks": 348,
+  "quality_refresh_notebook_flags": "PASS",
+  "production_artifact_modified": false,
+  "human_legal_approvals_created": 0
+}

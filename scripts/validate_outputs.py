@@ -95,6 +95,13 @@ def audit(check_neo4j=False, output_dir=None, config_path=None):
     check("graph", "version anchors", bool(required_versions) and required_versions <= versioned)
     units = rows("06_indexes/retrieval_units.jsonl", "indexes")
     unique(units, "unit_id", "indexes")
+    from vn_labor_offline.source_links import audit_source_links
+    catalog = rows('00_manifest/source_catalog_resolved.jsonl', 'registry')
+    source_links=audit_source_links(cfg['project_root'],OUT,registry,units,nodes,catalog)
+    for stage,component in [('registry','registry'),('registry','source_catalog'),('graph','graph_documents'),('indexes','retrieval_units')]:
+        bad=[issue for issue in source_links['issues'] if issue['stage']==component]
+        check(stage,'source URLs match config / '+component,not bad,
+              f'{len(bad)} mismatches; use a technical rebuild/Quality Refresh, not AI-resume, after editing source URLs')
     check("indexes", "retrieval units resolve to graph", bool(units) and all(u.get("unit_id") in node_ids for u in units))
     check("indexes", "all accepted provisions have retrieval units",
           set(provs) <= {u.get('unit_id') for u in units},
@@ -148,7 +155,7 @@ def audit(check_neo4j=False, output_dir=None, config_path=None):
     stages = {stage: all(c["passed"] for c in checks if c["stage"] == stage) for stage in ("registry", "structure", "graph", "indexes")}
     report = dict(checked_at=datetime.now(timezone.utc).isoformat(), ready_for_offline_v1=all(stages.values()), stages=stages, checks=checks, metadata_gaps=metadata_gaps)
     report['legal_quality_evaluation'] = reviewed_quality_gate(OUT, nodes, edges)
-    catalog = rows('00_manifest/source_catalog_resolved.jsonl', 'registry')
+    report['source_links']=source_links
     report['source_catalog_quality'] = source_catalog_gate(catalog, registry)
     report['semantic_quality'] = semantic_readiness_gate(OUT, registry)
     # Reviewer-authored Gold/qrels must pin this graph + retrieval + index build.

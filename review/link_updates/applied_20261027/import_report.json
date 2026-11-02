@@ -1,0 +1,589 @@
+{
+  "schema": "source-links-v1",
+  "changes": [
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/cassation_decisions/01-2025-LĐ-GĐT.pdf",
+      "old_url": "",
+      "new_url": "https://www.toaan.gov.vn/webcenter/ShowProperty?nodeId=%2FUCMServer%2FTAND367388",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/cassation_decisions/02-2021-LĐ-GĐT.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/3ta996499t1cvn/",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/cassation_decisions/03-2020-LĐ-GĐT.pdf",
+      "old_url": "",
+      "new_url": "https://anle.toaan.gov.vn/webcenter/ShowProperty?nodeId=%2FUCMServer%2FTAND198252",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/cassation_decisions/06-2022-LĐ-GĐT.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/3ta1067645t1cvn/",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/judgments/01-10-01-2023.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/2ta1122499t1cvn/chi-tiet-ban-an",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/judgments/03-2024-LĐ-PT.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/3ta1481896t1cvn/",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/judgments/14-2025-LĐ-PT.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/2ta1765069t1cvn/chi-tiet-ban-an",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/judgments/30-2025-LĐ-PT.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/2ta1825442t1cvn/chi-tiet-ban-an",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/judgments/54-2025-LD-PT_Ky-luat-sa-thai.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/2ta1991111t1cvn/chi-tiet-ban-an",
+      "note": "Đối chiếu số hiệu trên nguồn Tòa án và liên kết gợi ý/hồ sơ; chưa so sánh hash hay toàn văn PDF gốc.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/judgments/80-2025-LD-PT_Don-phuong-cham-dut-HDLĐ.pdf",
+      "old_url": "",
+      "new_url": "https://congbobanan.toaan.gov.vn/5ta1991134t1cvn/80_LDPT_2025_KHONG_2782025_NFUYEN_TIEN_D__CONG_TY_TNHH_P.pdf",
+      "note": "Đã đối chiếu số hiệu và nội dung vụ án; chỉ xác minh được PDF trên Cổng công bố bản án Tòa án, chưa có trang chi tiết.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/precedents/20-2018-AL.doc",
+      "old_url": "",
+      "new_url": "https://anle.toaan.gov.vn/webcenter/portal/anle/chitietanle?dDocName=TAND057541",
+      "note": "Đối chiếu đúng số án lệ trên Cổng án lệ TAND tối cao.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/precedents/69-2023-AL.pdf",
+      "old_url": "",
+      "new_url": "https://anle.toaan.gov.vn/webcenter/portal/anle/chitietanle?dDocName=TAND315866",
+      "note": "Đối chiếu đúng số án lệ trên Cổng án lệ TAND tối cao.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "judicial_corpus/precedents/70-2023-AL.pdf",
+      "old_url": "",
+      "new_url": "https://anle.toaan.gov.vn/webcenter/portal/anle/chitietanle?dDocName=TAND315867",
+      "note": "Đối chiếu đúng số án lệ trên Cổng án lệ TAND tối cao.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/ilo/Vietnam_Labour_Code_2019_EN_UNOFFICIAL_NATLEX.pdf",
+      "old_url": "",
+      "new_url": "https://natlex.ilo.org/dyn/natlex2/r/natlex/fe/details?p3_isn=110469",
+      "note": "Nguồn NATLEX/ILO xác nhận Bộ luật Lao động 45/2019/QH14 và bản dịch tiếng Anh không chính thức.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/ilo/Vietnam_ratifications_NORMLEX.html",
+      "old_url": "",
+      "new_url": "https://normlex.ilo.org/dyn/nrmlx_en/f?p=NORMLEXPUB%3A11200%3A0%3A%3ANO%3A%3Ap11200_country_id%3A103004",
+      "note": "Đã sửa mã quốc gia NORMLEX sang 103004; kết quả tra cứu ILO xác nhận Viet Nam. Trình thu thập gặp vòng lặp chuyển hướng.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/official_guidance/MOHA_2026_Huong-dan-HDLD-dien-tu.html",
+      "old_url": "",
+      "new_url": "https://isos.gov.vn/tin-hoat-dong/diem-tin/tu-ngay-0172026-hop-dong-lao-dong-dien-tu-duoc-quan-ly-bang-ma-dinh-danh-43968.html",
+      "note": "Đã đối chiếu đúng bài hướng dẫn về hợp đồng lao động điện tử của đơn vị Bộ Nội vụ.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/official_guidance/MOHA_Nen-tang-hop-dong-lao-dong-dien-tu.html",
+      "old_url": "",
+      "new_url": "https://hopdonglaodong.moha.gov.vn/landing-page",
+      "note": "Trang đích của nền tảng Bộ Nội vụ (đường dẫn /landing-page), không phải văn bản quy phạm pháp luật.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/social_insurance_guidance/2222_QD-BHXH_667488.doc",
+      "old_url": "",
+      "new_url": "https://quangngai.baohiemxahoi.gov.vn/vanban/Pages/default.aspx?ItemID=10372",
+      "note": "Đã sửa ItemID gợi ý ban đầu 10317 thành 10372; trang BHXH Quảng Ngãi có số 2222/QĐ-BHXH năm 2025; truy cập tự động bị timeout.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/social_insurance_guidance/313_QD-BHXH_700242.docx",
+      "old_url": "",
+      "new_url": "https://baohiemxahoi.gov.vn/vanban/Pages/default.aspx?ItemID=5012",
+      "note": "Kết quả tra cứu BHXH Việt Nam xác nhận Quyết định 313/QĐ-BHXH; truy cập tự động timeout.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/social_insurance_guidance/BHXHVN_1455-QD-BHXH_1252025.pdf",
+      "old_url": "",
+      "new_url": "https://baohiemxahoi.gov.vn/vanban/Pages/default.aspx?ItemID=4902",
+      "note": "Trang BHXH Việt Nam xác nhận Quyết định 1455/QĐ-BHXH ngày 12/05/2025.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/social_insurance_guidance/BHXHVN_1674-QD-BHXH_2752025.pdf",
+      "old_url": "",
+      "new_url": "https://baohiemxahoi.gov.vn/vanban/Pages/default.aspx?ItemID=4904",
+      "note": "Trang BHXH Việt Nam xác nhận Quyết định 1674/QĐ-BHXH ngày 27/05/2025.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/social_insurance_guidance/BHXHVN_366-QD-BHXH_2942026.pdf",
+      "old_url": "",
+      "new_url": "https://baohiemxahoi.gov.vn/vanban/Pages/default.aspx?ItemID=5018",
+      "note": "Kết quả tra cứu BHXH Việt Nam xác nhận Quyết định 366/QĐ-BHXH; truy cập tự động timeout.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "supplementary/social_insurance_guidance/BHXHVN_422-QD-BHXH_2752026.pdf",
+      "old_url": "",
+      "new_url": "https://baohiemxahoi.gov.vn/vanban/Pages/default.aspx?ItemID=5022",
+      "note": "Trang BHXH Việt Nam xác nhận Quyết định 422/QĐ-BHXH ngày 27/05/2026.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/06-2020-TT-BLDTBXH_Cong-viec-nghiem-ngat-ATVSLD.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=143667",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-06-2020-tt-bldtbxh-ban-hanh-danh-muc-cong-viec-co-yeu-cau-nghiem-ngat-ve-an-toan-ve-sinh-lao-dong--143667",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/08-2023-TT-BLDTBXH_Sua-doi-thu-tuc-cu-tru.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-lichsu.aspx?ItemID=167031",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-08-2023-tt-bldtbxh-sua-doi-bo-sung-bai-bo-mot-so-dieu-cua-cac-thong-tu-thong-tu-lien-tich-do-bo-truong-bo-lao-dong-thuong-binh-va-xa-hoi-ban-hanh-lien-tich-ban-hanh--167031",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/18-2021-TT-BLDTBXH_Thoi-gio-lam-viec-thoi-vu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=153297",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-18-2021-tt-bldtbxh-quy-dinh-ve-thoi-gio-lam-viec-thoi-gio-nghi-ngoi-doi-voi-nguoi-lao-dong-lam-cac-cong-viec-san-xuat-co-tinh-thoi-vu-cong-viec-gia-cong-theo-don-dat-hang--153297",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/21-2021-TT-BLDTBXH_Lao-dong-VN-di-lam-viec-o-nuoc-ngoai.pdf",
+      "old_url": "https://vbpl.vn/bolaodong/Pages/ivbpq-thuoctinh.aspx?ItemID=162453",
+      "new_url": "https://congbao.chinhphu.vn/van-ban/thong-tu-so-21-2021-tt-bldtbxh-36486.htm",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/VanBanGoc_TT 10 2020 BLĐTBXH.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-thuoctinh.aspx?ItemID=146696",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-10-2020-tt-bldtbxh-quy-dinh-chi-tiet-va-huong-dan-thi-hanh-mot-so-dieu-khoan-sau-day-cua-bo-luat-lao-dong-ve-noi-dung-cua-hop-dong-lao-dong-hoi-dong-thuong-luong-tap-the-va-nghe-cong-viec-co-anh-huong-xau-toi-chuc-nang-sinh-san-nuoi-con--146696",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/VanBanGoc_TT 11 2020 BLĐTBXH.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-luocdo.aspx?ItemID=146697",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-11-2020-tt-bldtbxh-ban-hanh-danh-muc-nghe-cong-viec-nang-nhoc-doc-hai-nguy-hiem-va-nghe-cong-viec-dac-biet-nang-nhoc-doc-hai-nguy-hiem--146697",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/VanBanGoc_thong-tu-09-2020-tt-bldtbxh-huong-dan-bo-luat-lao-dong-ve-lao-dong-chua-thanh-nien.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-lichsu.aspx?ItemID=152670",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-09-2020-tt-bldtbxh-quy-dinh-chi-tiet-va-huong-dan-thi-hanh-mot-so-dieu-cua-bo-luat-lao-dong-ve-lao-dong-chua-thanh-nien--152670",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/circulars/VanBanGoc_thong-tu-24-2022-tt-bldtbxh-boi-duong-bang-hien-vat-doi-voi-nld-lam-viec-trong-dieu-kien-nguy-hiem-doc-hai.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-toanvan.aspx?ItemID=159196",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/thong-tu-so-24-2022-tt-bldtbxh-quy-dinh-viec-boi-duong-bang-hien-vat-doi-voi-nguoi-lao-dong-lam-viec-trong-dieu-kien-co-yeu-to-nguy-hiem-yeu-to-co-hai--159196",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/112-2021-ND-CP_Huong-dan-Luat-69-2020.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=152929",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-112-2021-nd-cp-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-nguoi-lao-dong-viet-nam-di-lam-viec-o-nuoc-ngoai-theo-hop-dong--152929",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/12-2022-ND-CP_Xu-phat-lao-dong-BHXH.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-vanbanlienquan.aspx?ItemID=153913",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-12-2022-nd-cp-quy-dinh-xu-phat-vi-pham-hanh-chinh-trong-linh-vuc-lao-dong-bao-hiem-xa-hoi-nguoi-lao-dong-viet-nam-di-lam-viec-o-nuoc-ngoai-theo-hop-dong--153913",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/129-2025-ND-CP_Phan-dinh-tham-quyen-Bo-Noi-vu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=178294",
+      "new_url": "https://vanban.chinhphu.vn/?docid=213920&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/135-2020-ND-CP_Tuoi-nghi-huu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-lichsu.aspx?ItemID=152734",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-135-2020-nd-cp-quy-dinh-ve-tuoi-nghi-huu--152734",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/145-2020-ND-CP_Huong-dan-BLLD.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=152668",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-145-2020-nd-cp-quy-dinh-chi-tiet-va-huong-dan-thi-hanh-mot-so-dieu-cua-bo-luat-lao-dong-ve-dieu-kien-lao-dong-va-quan-he-lao-dong--152668",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/158-2025-ND-CP_BHXH-bat-buoc.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=178757",
+      "new_url": "https://vanban.chinhphu.vn/?docid=214189&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/159-2025-ND-CP_BHXH-tu-nguyen.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=179149",
+      "new_url": "https://vanban.chinhphu.vn/?docid=214269&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/176-2025-ND-CP_Tro-cap-huu-tri-xa-hoi.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=184035",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-176-2025-nd-cp-huong-dan-luat-bao-hiem-xa-hoi-ve-tro-cap-huu-tri-xa-hoi--184035",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/219-2025-ND-CP_Lao-dong-nuoc-ngoai.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=180273",
+      "new_url": "https://vanban.chinhphu.vn/?docid=214840&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/293-2025-ND-CP_Luong-toi-thieu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=183939",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-293-2025-nd-cp-quy-dinh-muc-luong-toi-thieu-doi-voi-nguoi-lao-dong-lam-viec-theo-hop-dong-lao-dong--183939",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/337-2025-ND-CP_Hop-dong-lao-dong-dien-tu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=185561",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-337-2025-nd-cp-quy-dinh-ve-hop-dong-lao-dong-dien-tu--185561",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/338-2025-ND-CP_Ho-tro-tao-viec-lam.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=185562",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-338-2025-nd-cp-quy-dinh-chi-tiet-mot-so-dieu-cua-luat-viec-lam-ve-chinh-sach-ho-tro-viec-lam--185562",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/35-2022-ND-CP_Sua-doi-lien-quan-ND145.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=158798",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-35-2022-nd-cp-quy-dinh-ve-quan-ly-khu-cong-nghiep-va-khu-kinh-te--158798",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/372-2025-ND-CP_Sua-ND112.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=186453",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-372-2025-nd-cp-sua-doi-bo-sung-mot-so-dieu-cua-nghi-dinh-so-112-2021-nd-cp-ngay-10-thang-12-nam-2021-cua-chinh-phu-quy-dinh-chi-tiet-mot-so-dieu-va-bien-phap-thi-hanh-luat-nguoi-lao-dong-viet-nam-di-lam-viec-o-nuoc-ngoai-theo-hop-dong--186453",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/374-2025-ND-CP_Bao-hiem-that-nghiep.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=186281",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-374-2025-nd-cp-quy-dinh-chi-tiet-mot-so-dieu-cua-luat-viec-lam-ve-bao-hiem-that-nghiep--186281",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/39-2016-ND-CP_Huong-dan-ATVSLD.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=105821",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-39-2016-nd-cp-quy-dinh-chi-tiet-thi-hanh-mot-so-dieu-cua-luat-an-toan-ve-sinh-lao-dong--105821",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/44-2016-ND-CP_Kiem-dinh-huan-luyen-ATVSLD.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=117760",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-44-2016-nd-cp-quy-dinh-chi-tiet-mot-so-dieu-cua-luat-an-toan-ve-sinh-lao-dong-ve-hoat-dong-kiem-dinh-ky-thuat-an-toan-lao-dong-huan-luyen-an-toan-ve-sinh-lao-dong-va-quan-trac-moi-truong-lao-dong--117760",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/decrees/88-2020-ND-CP_BH-tai-nan-lao-dong-benh-nghe-nghiep.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=143470",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-88-2020-nd-cp-quy-dinh-chi-tiet-va-huong-dan-thi-hanh-mot-so-dieu-cua-luat-an-toan-ve-sinh-lao-dong-ve-bao-hiem-tai-nan-lao-dong-benh-nghe-nghiep-bat-buoc--143470",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/10_laodong.doc",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=27615",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/bo-luat-lao-dong-so-10-2012-qh13--27615",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/140-2018-ND-CP_Sua-ND44-va-ND11.pdf",
+      "old_url": "https://vbpl.vn/bonoivu/Pages/vbpq-thuoctinh.aspx?ItemID=131493",
+      "new_url": "https://vanban.chinhphu.vn/default.aspx?docid=194984&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/152-2020-ND-CP_Lao-dong-nuoc-ngoai-cu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=152669",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-152-2020-nd-cp-quy-dinh-ve-nguoi-lao-dong-nuoc-ngoai-lam-viec-tai-viet-nam-va-tuyen-dung-quan-ly-nguoi-lao-dong-viet-nam-lam-viec-cho-to-chuc-ca-nhan-nuoc-ngoai-tai-viet-nam--152669",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/28nd.signed.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=55726",
+      "new_url": "https://vanban.chinhphu.vn/?docid=179249&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/38-2013-QH13_Luat-Viec-lam-cu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=32912",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-viec-lam-so-38-2013-qh13--32912",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/38-2022-ND-CP_Luong-toi-thieu-cu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=154245",
+      "new_url": "https://vanban.chinhphu.vn/?docid=205950&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/58-2014-QH13_Luat-BHXH-cu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=46744",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-bao-hiem-xa-hoi-so-58-2014-qh13--46744",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/70-2023-ND-CP_Sua-ND152.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=162330",
+      "new_url": "https://vanban.chinhphu.vn/?docid=208673&pageid=27160",
+      "note": "Đã đối chiếu với trang chi tiết trên Cổng Chính phủ; dùng nguồn thay thế cho VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/74-2024-ND-CP_Luong-toi-thieu-cu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=168670",
+      "new_url": "https://vanban.chinhphu.vn/?docid=210536&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/historical/90-2019-ND-CP_Luong-toi-thieu-cu.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=139094",
+      "new_url": "https://vanban.chinhphu.vn/?docid=198341&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/124-2025-QH15_Luat-Giao-duc-nghe-nghiep.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-toanvan.aspx?ItemID=187742",
+      "new_url": "https://vanban.chinhphu.vn/?docid=216505&pageid=27160",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/41-2024-QH15_Luat-Bao-hiem-xa-hoi.pdf",
+      "old_url": "https://vbpl.vn/bolaodong/Pages/ivbpq-thuoctinh.aspx?ItemID=175027",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-bao-hiem-xa-hoi-so-41-2024-qh15--175027",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/45-2019-QH14_Bo-luat-Lao-dong.pdf",
+      "old_url": "https://vbpl.vn/bonoivu/Pages/vbpq-thuoctinh.aspx?ItemID=139264",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/bo-luat-lao-dong-so-45-2019-qh14--139264",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/50-2024-QH15_Luat-Cong-doan.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-thuoctinh.aspx?ItemID=172553",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-cong-doan-so-50-2024-qh15--172553",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/69-2020-QH14_NLD-Viet-Nam-o-nuoc-ngoai.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=146643",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-nguoi-lao-dong-viet-nam-di-lam-viec-o-nuoc-ngoai-theo-hop-dong-so-69-2020-qh14--146643",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/71-2025-QH15_Luat-Cong-nghiep-cong-nghe-so.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-lichsu.aspx?ItemID=179989",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-cong-nghiep-cong-nghe-so-so-71-2025-qh15--179989",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/74-2025-QH15_Luat-Viec-lam.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=179273",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-viec-lam-so-74-2025-qh15--179273",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/84-2015-QH13_An-toan-ve-sinh-lao-dong.pdf",
+      "old_url": "https://vbpl.vn/bonoivu/Pages/vbpq-thuoctinh.aspx?ItemID=70811",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/luat-an-toan-ve-sinh-lao-dong-so-84-2015-qh13--70811",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/laws/92-2015-QH13_Bo-luat-To-tung-dan-su.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-thuoctinh.aspx?ItemID=96115",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/bo-luat-to-tung-dan-su-so-92-2015-qh13--96115",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/resolutions/2014_567 + 568-01_2014_NQ-HĐTP.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=126384",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-quyet-so-01-2014-nq-hdtp-huong-dan-thi-hanh-mot-so-quy-dinh-luat-trong-tai-thuong-mai--126384",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/resolutions/2019_253 + 254_01-2019-NQ-HĐTP.pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/vbpq-thuoctinh.aspx?ItemID=134278",
+      "new_url": "https://congbao.chinhphu.vn/van-ban/nghi-quyet-so-01-2019-nq-hdtp-28517.htm",
+      "note": "Đã đối chiếu số hiệu/trích yếu trên Công báo hoặc Hệ thống văn bản Chính phủ; đây là nguồn thay thế VBPL.",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/resolutions/326-2016-UBTVQH14_text_copy.doc",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=119086",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-quyet-so-326-2016-ubtvqh14-quy-dinh-ve-muc-thu-mien-giam-thu-nop-quan-ly-va-su-dung-an-phi-va-le-phi-toa-an--119086",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    },
+    {
+      "kind": "SOURCE_PAGE",
+      "relative_path": "legal_corpus/resolutions/326_2016_UBTVQH14(16723).pdf",
+      "old_url": "https://vbpl.vn/TW/Pages/ivbpq-toanvan.aspx?ItemID=119086",
+      "new_url": "https://vbpl.vn/van-ban/chi-tiet/nghi-quyet-so-326-2016-ubtvqh14-quy-dinh-ve-muc-thu-mien-giam-thu-nop-quan-ly-va-su-dung-an-phi-va-le-phi-toa-an--119086",
+      "note": "Khớp số hiệu/trích yếu trong kết quả tra cứu VBPL mới; chưa kiểm thử mở trực tiếp (VBPL chặn truy cập tự động).",
+      "legal_approval_created": false
+    }
+  ],
+  "warnings": [],
+  "config_files": [
+    "source_catalog.yaml",
+    "source_attachments.yaml"
+  ],
+  "applied": true,
+  "artifact_modified": false,
+  "human_legal_approvals_created": 0
+}

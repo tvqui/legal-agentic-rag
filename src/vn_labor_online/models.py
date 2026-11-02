@@ -118,6 +118,7 @@ class QueryAnalysis(BaseModel):
     legal_subissues:list[str]=Field(default_factory=list)
     in_scope:bool=True
     query_text:str=''
+    scope_exclusions:list[str]=Field(default_factory=list)
     answer_tasks:list[AnswerTask]=Field(default_factory=list)
     routing_topics:list[str]=Field(default_factory=list,max_length=50)
     resolved_rule_requirements:dict[str,list[list['LegalLocator']]]=Field(default_factory=dict)
@@ -153,6 +154,7 @@ class Evidence(BaseModel):
     article_number:str|None=None; clause_number:str|None=None; point_number:str|None=None
     ancestor_context:str=''
     source_url:str|None=None; breadcrumb:str|None=None; text:str; source_text:str|None=None
+    promulgated_date:str|None=None; consolidation_as_of:str|None=None; version_role:str|None=None
     valid_from:str|None=None; valid_to:str|None=None; authority_rank:int=0; binding:bool=False
     temporal_verified:bool=False; provision_temporal_verified:bool=False; provenance:dict[str,Any]=Field(default_factory=dict)
     provenance_span:dict[str,Any]=Field(default_factory=dict); kind:str|None=None; level:str|None=None
@@ -199,6 +201,7 @@ class VerifiedEvidenceItem(BaseModel):
     point:str|None=None; text:str; valid_from:str|None=None; valid_to:str|None=None
     full_text:str=''
     ancestor_context:str=''
+    promulgated_date:str|None=None; consolidation_as_of:str|None=None; version_role:str|None=None
     document_type:str|None=None; document_title:str|None=None; issuer:str|None=None
     norm_role:Literal['RULE','SANCTION']='RULE'
     official_url:str|None=None; authority_rank:int=0; binding:bool=False; official_source:bool=False
@@ -213,6 +216,7 @@ class VerifiedEvidencePack(BaseModel):
     evidence_plan:EvidencePlan|None=None
     corpus_snapshot_as_of:str|None=None
     freshness_status:str='NOT_CHECKED'
+    scope_exclusions:list[str]=Field(default_factory=list)
     resolved_rule_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
     # Set only by the pipeline after an exact, complete scoped retrieval.
     lookup_reference:ExplicitReference|None=None

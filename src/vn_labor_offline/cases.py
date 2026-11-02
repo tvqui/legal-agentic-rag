@@ -169,6 +169,8 @@ Do not infer unstated facts. Use concise Vietnamese values. Return at most 12 fe
             # Preserve the full set of case records if interrupted partway through.
             write_jsonl(output_dir/'03_structure/cases.jsonl',enriched+cases[index:])
             _atomic(output_dir/'reports/case_ai_quality.json',{'cases':quality,'total_cases':len(cases),
+                'coverage_scope':'SOURCE_ACCOUNTING_NOT_LEGAL_APPROVAL' if requests.settings.get('ai_source_accounting') else 'LEGACY_FRAGMENT_HEURISTIC',
+                'human_legal_approved':False,
                 'ai_attempted':requests.network_calls,'ai_cache_hits':requests.cache_hits,
                 'ai_succeeded':succeeded,'complete_cases':sum(r['complete'] for r in quality),
                 'partial_cases':sum(bool(r['accepted_features']) and not r['complete'] for r in quality),

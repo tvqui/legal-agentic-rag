@@ -29,6 +29,24 @@ def write_notebook():
     for path in (destination,alias):
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         Path(str(path)+'.sha256').write_text(f'{digest}  {path.name}\n',encoding='ascii')
+    import copy
+    refresh=copy.deepcopy(notebook)
+    for cell in refresh['cells']:
+        if cell['cell_type']=='code':
+            source=''.join(cell['source']).replace('RESUME_AI_ONLY = True','RESUME_AI_ONLY = False').replace(
+                'REFRESH_EXTRACTION_QUALITY = False','REFRESH_EXTRACTION_QUALITY = True')
+            compile(source,'quality-refresh-cell','exec');cell['source']=source.splitlines(keepends=True)
+    refresh['cells'][0]['source']=('''# VN Labor — cập nhật extraction và dựng lại toàn bộ build
+
+Bản này áp dụng page corrections mới, dựng lại structure/knowledge/graph/indexes,
+kiểm tra link nguồn theo cấu hình mới, rồi chạy AI source-accounting-v2 và kiểm tra Aura. Dùng code ZIP mới và checkpoint
+result_14-10. Đòi hỏi nhiều thời gian hơn bản AI-resume; không dùng lại index cũ
+với text đã sửa. Technical checkpoint và recovery ZIP được xuất để tiếp tục khi cần.
+GPU T4 x2, Internet, bốn Aura Secrets. Không tạo human legal approval tự động.
+''').splitlines(keepends=True)
+    full=DEST/'VN_Labor_Quality_Refresh.ipynb'
+    full.write_text(json.dumps(refresh,ensure_ascii=False,indent=2),encoding='utf-8')
+    Path(str(full)+'.sha256').write_text(f'{hashlib.sha256(full.read_bytes()).hexdigest()}  {full.name}\n',encoding='ascii')
     print(json.dumps({'notebook': str(destination), 'code_syntax': 'PASS', 'workflow': 'V8_1_CHECKPOINT_FIRST_REBUILD_AI_AURA'}, ensure_ascii=False, indent=2))
     return destination
 
@@ -36,7 +54,7 @@ def write_notebook():
 def build():
     DEST.mkdir(parents=True, exist_ok=True)
     files = {}
-    for folder, suffixes in [('src', {'.py'}), ('config', {'.yaml', '.json', '.owl'}), ('review/templates', {'.json', '.jsonl'}),
+    for folder, suffixes in [('src', {'.py'}), ('config', {'.yaml', '.json', '.owl'}), ('review/templates', {'.json', '.jsonl'}), ('review/corrections', {'.txt', '.json'}),
                              ('kaggle', {'.py', '.txt'}),
                              ('tests', {'.py'}), ('review/attachments', {'.pdf'}), ('data', {'.pdf', '.doc', '.docx', '.html', '.htm', '.txt', '.json'})]:
         for p in sorted((ROOT / folder).rglob('*')):
@@ -47,6 +65,10 @@ def build():
                  'docs/kaggle/offline-quality-upgrade-20261012.md',
                  'docs/kaggle/offline-provenance-fix-20261012.md',
                  'docs/kaggle/offline-ai-resume-20261013.md',
+                 'docs/kaggle/final-data-upgrade-20261027.md',
+                 'docs/kaggle/source-links-applied-20261027.md',
+                 'scripts/source_links_workbook.py',
+                 'scripts/audit_final_dataset.py', 'scripts/check_official_sources.py',
                  'scripts/evaluate_gold.py', 'scripts/prepare_review_inputs.py', 'scripts/pin_online_artifact.py']:
         files[name] = ROOT / name
     converted = []
@@ -68,7 +90,7 @@ def build():
         with p.open('rb') as f:
             sha = hashlib.file_digest(f, 'sha256').hexdigest()
         entries.append({'path': name, 'bytes': p.stat().st_size, 'sha256': sha})
-    manifest = {'schema': 1, 'owner': 'qutrnvinh3', 'privacy': 'PRIVATE', 'bundle_revision': '20261013-anchored-ai-resume-v1',
+    manifest = {'schema': 1, 'owner': 'qutrnvinh3', 'privacy': 'PRIVATE', 'bundle_revision': '20261027-source-links-v3',
                 'corpus_files': sum(n.startswith('data/') for n in files),
                 'converted_docs': converted, 'files': entries}
     archive = DEST / 'vn_labor_kaggle_v8.zip'
@@ -93,7 +115,7 @@ def build():
         archive_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
     sidecar = Path(str(archive) + '.sha256')
     sidecar.write_text(f'{archive_sha256}  {archive.name}\n', encoding='ascii')
-    report = {'bundle_revision': '20261013-anchored-ai-resume-v1', 'bundle': archive.name, 'sha256': archive_sha256, 'sha256_file': sidecar.name,
+    report = {'bundle_revision': '20261027-source-links-v3', 'bundle': archive.name, 'sha256': archive_sha256, 'sha256_file': sidecar.name,
               'workflow': 'V8_1_CHECKPOINT_FIRST_REBUILD_AI_AURA',
               'size_mb': round(archive.stat().st_size / 1e6, 2),
               'files': len(files), 'corpus_files': manifest['corpus_files'], 'converted_docs': len(converted),

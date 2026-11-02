@@ -20,7 +20,7 @@ def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|
         if item.document_id and item.document_id not in store.nodes_by_id: issues.append('UNKNOWN_DOCUMENT_NODE')
         if source and item.source_url!=(source.get('source_url') or None): issues.append('SOURCE_URL_NOT_FROM_UNIT')
         if item.kind in {'PROVISION','CASE'} and not item.source_url: issues.append('MISSING_SOURCE_URL')
-        for field in ('document_id','document_number','article_number','clause_number','point_number','valid_from','valid_to'):
+        for field in ('document_id','document_number','article_number','clause_number','point_number','valid_from','valid_to','promulgated_date','consolidation_as_of','version_role'):
             if source and str(getattr(item,field) or '')!=str(source.get(field) or ''): issues.append('UNIT_FIELD_MISMATCH:'+field)
         provenance=(source or {}).get('provenance') or {}; file_id=provenance.get('file_id'); catalog=store.catalog_by_file_id.get(file_id)
         if not file_id or not catalog: issues.append('SOURCE_NOT_IN_CATALOG')
@@ -58,6 +58,12 @@ def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|
                     issues.append('INVALID_TEMPORAL_INTERVAL')
                 else:
                     if range_end<range_start: issues.append('INVALID_TEMPORAL_INTERVAL')
+                    from .temporal import source_available_from
+                    try:available=source_available_from(source or item)
+                    except (ValueError,TypeError):
+                        available=None;issues.append('INVALID_SOURCE_PUBLICATION_DATE')
+                    if available and available>range_end:issues.append('SOURCE_NOT_AVAILABLE_AT_QUERY_DATE')
+                    elif available and available>range_start:warnings.append('IMPRECISE_QUERY_DATE_OVERLAPS_VERSION_BOUNDARY')
                     if temporal_interval_valid and (not start or start>range_end or end and end<=range_start): issues.append('WRONG_VERSION')
                     else:
                         if temporal_interval_valid and range_start!=range_end and (start>range_start or end and end<=range_end): warnings.append('IMPRECISE_QUERY_DATE_OVERLAPS_VERSION_BOUNDARY')

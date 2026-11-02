@@ -21,7 +21,7 @@ attachments:
     source_sha256: a72a1ff295cc06fbddd335d57257688f5118826968cd8b62d58f50fc1554b230
     path: review/attachments/145-2020-ND-CP_official_full.pdf
     sha256: b69c83d5797d651ca16753cacdec81295e40287b38a26b5dc3aa86966c3d6817
-    source_url: https://congbao.chinhphu.vn/van-ban-dang-cong-bao/nghi-dinh-l1/trang-123.htm
+    source_url: https://vbpl.vn/van-ban/chi-tiet/nghi-dinh-so-145-2020-nd-cp-quy-dinh-chi-tiet-va-huong-dan-thi-hanh-mot-so-dieu-cua-bo-luat-lao-dong-ve-dieu-kien-lao-dong-va-quan-he-lao-dong--152668
     download_urls:
-      - https://congbao.chinhphu.vn/tai-ve-van-ban-so-145-2020-nd-cp-32732-33806
-      - https://congbao.chinhphu.vn/tai-ve-van-ban-so-145-2020-nd-cp-32732-33809
+    - https://congbao.chinhphu.vn/tai-ve-van-ban-so-145-2020-nd-cp-32732-33806
+    - https://congbao.chinhphu.vn/tai-ve-van-ban-so-145-2020-nd-cp-32732-33809

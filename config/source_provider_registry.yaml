@@ -3,11 +3,11 @@ providers:
   - id: vbpl
     name: Cơ sở dữ liệu quốc gia về pháp luật
     allowed_domains: [vbpl.vn]
-    allowed_routes: ["/TW/Pages/*.aspx", "/*/Pages/*.aspx", "/FileData/*/Attachments/*.pdf", "/FileData/*/Attachments/*.doc", "/FileData/*/Attachments/*.docx"]
+    allowed_routes: ["/van-ban/chi-tiet/*", "/TW/Pages/*.aspx", "/*/Pages/*.aspx", "/FileData/*/Attachments/*.pdf", "/FileData/*/Attachments/*.doc", "/FileData/*/Attachments/*.docx"]
     roles: [IDENTITY, BINARY, STATUS_HISTORY]
     role_routes:
-      IDENTITY: ["/TW/Pages/*.aspx", "/*/Pages/*.aspx"]
-      STATUS_HISTORY: ["/TW/Pages/vbpq-lichsu.aspx", "/*/Pages/vbpq-lichsu.aspx"]
+      IDENTITY: ["/van-ban/chi-tiet/*", "/TW/Pages/*.aspx", "/*/Pages/*.aspx"]
+      STATUS_HISTORY: ["/van-ban/chi-tiet/*", "/TW/Pages/vbpq-lichsu.aspx", "/*/Pages/vbpq-lichsu.aspx"]
       BINARY: ["/FileData/*/Attachments/*.pdf", "/FileData/*/Attachments/*.doc", "/FileData/*/Attachments/*.docx"]
     document_groups: [LEGAL_DOCUMENT, CONSOLIDATED, SUPPLEMENTARY]
     redirect_policy: same_provider

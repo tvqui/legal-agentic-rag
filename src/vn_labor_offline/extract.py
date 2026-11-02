@@ -101,6 +101,7 @@ def extract_pdf_pages(path: Path, row: dict, cfg: dict, output_dir: Path):
             from .page_content import native_form_layer
             form_proof=native_form_layer(page,native,coverage) if mode=='auto' and not rotation else None
             if form_proof: needs=False
+            if review.get('action')=='TEXT_OVERRIDE':needs=False
             text=native; method='pymupdf'; error=None; status='NOT_NEEDED'
             key=stable_id(EXTRACTION_SCHEMA,row['sha256'],str(i+1),json.dumps(cache_settings,sort_keys=True),json.dumps(review,sort_keys=True),prefix='page')
             cached=cache/(key+'.json')
@@ -126,8 +127,13 @@ def extract_pdf_pages(path: Path, row: dict, cfg: dict, output_dir: Path):
             elif needs: status='DISABLED'
             if review.get('action')=='NO_BODY_TEXT':
                 text=''; method='reviewed_no_body_text'; status='REVIEWED_NO_BODY_TEXT'
+            if review.get('action')=='TEXT_OVERRIDE':
+                from .page_reviews import correction_text
+                text=correction_text(review,cfg);method='source_bound_transcription';status='TRANSCRIBED'
             quality_reasons,_,agreement=initial_page_reasons(
                 native,text,used_ocr=method.startswith('docling'),blank=blank,settings=settings)
+            if review.get('review_kind')=='AI_VISUAL_TRANSCRIPTION':
+                quality_reasons.append('AI_TRANSCRIPTION_REQUIRES_REVIEW')
             # Keep geometric proof for harmless pagination-only cleaning. This
             # does not change blank detection, OCR selection or cache keys.
             non_body_evidence=None

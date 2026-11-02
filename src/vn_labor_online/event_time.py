@@ -18,23 +18,33 @@ MARKERS=[
 
 def resolve_event_dates(query,explicit_date=None):
     events=[]
-    for match in DATES.finditer(query):
-        y=match.group('y') or match.group('yy');m=match.group('m') or match.group('mm');d=match.group('d') or match.group('dd')
-        try:value=date(int(y),int(m),int(d)).isoformat()
-        except ValueError:continue
+    from .date_mentions import date_mentions
+    for mention in date_mentions(query):
+        if mention.precision!='DAY' or not mention.valid:continue
+        value=mention.start
+        start,end=mention.char_start,mention.char_end
         # Consider only the nearest clause/event marker. Do not attach a later
         # date to a contract verb in an earlier comma-separated clause.
-        prefix=query[max(0,match.start()-130):match.start()]
+        prefix=query[max(0,start-130):start]
         clause=re.split(r'[,;!?\n]|(?<!\d)\.(?!\d)',prefix)[-1]
         found=[]
         for role,pattern in MARKERS:
             for marker in re.finditer(pattern,clause,re.I):found.append((marker.end(),role))
-        role=max(found,key=lambda x:x[0])[1] if found else 'UNASSIGNED'
+        # In 'Ngày D tôi ký hợp đồng', the marker follows the date. Only
+        # use the same clause and stop before another calendar mention.
+        if not found:
+            suffix=re.split(r'[,;!?\n]|(?<!\d)\.(?!\d)',query[end:end+90],maxsplit=1)[0]
+            following=date_mentions(suffix)
+            if following:suffix=suffix[:following[0].char_start]
+            after=[(marker.start(),role) for role,pattern in MARKERS
+                   for marker in re.finditer(pattern,suffix,re.I)]
+            role=min(after,key=lambda x:x[0])[1] if after else 'UNASSIGNED'
+        else:role=max(found,key=lambda x:x[0])[1]
         if re.search(r'(?:ban hành|ra|ký|nhận)[^,;.!?]{0,30}quyết định',clause,re.I):role='DECISION_ISSUED_AT'
         # Issuing a dismissal decision and its effective date are distinct.
         if re.search(r'có hiệu lực|hiệu lực từ',clause,re.I):role='LAW_APPLICABLE_AT'
-        events.append({'role':role,'date':value,'source_quote':match.group(),
-            'char_start':match.start(),'char_end':match.end()})
+        events.append({'role':role,'date':value,'source_quote':mention.source_quote,
+            'char_start':start,'char_end':end})
     if explicit_date or not events:return events,None,False
     applicable={e['date'] for e in events if e['role']=='LAW_APPLICABLE_AT'}
     actual={e['date'] for e in events if e['role'] in {'TERMINATION_AT','VIOLATION_OCCURRED_AT'}}

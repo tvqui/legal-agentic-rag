@@ -13,7 +13,8 @@ def configure(config:Path,max_provisions:int):
       'ai_url':os.getenv('VN_LABOR_OFFLINE_AI_URL','http://127.0.0.1:11434/api/chat'),
       'ai_model':os.getenv('VN_LABOR_OFFLINE_AI_MODEL','qwen3:8b'),
       'ai_timeout_seconds':int(os.getenv('VN_LABOR_OFFLINE_AI_TIMEOUT_SECONDS','300')),
-      'ai_cache_dir':'artifacts/04_knowledge/ai_cache','ai_max_provisions':max_provisions})
+      'ai_cache_dir':'artifacts/04_knowledge/ai_cache','ai_max_provisions':max_provisions,
+      'ai_source_accounting':True,'ai_accounting_window':4,'ai_continuation_pages':4})
     config.write_text(yaml.safe_dump(raw,allow_unicode=True,sort_keys=False),encoding='utf-8')
 
 def main():

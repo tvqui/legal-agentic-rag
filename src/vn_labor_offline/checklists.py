@@ -263,6 +263,8 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
                     ai_attempted=requests.network_calls,ai_succeeded=ai_succeeded,ai_cache_hits=requests.cache_hits)
                 from .integrity import _atomic
                 _atomic(output_dir/'reports/checklist_ai_quality.json',{'mode':mode,'planned':planned,
+                    'coverage_scope':'SOURCE_ACCOUNTING_NOT_LEGAL_APPROVAL' if requests.settings.get('ai_source_accounting') else 'LEGACY_FRAGMENT_HEURISTIC',
+                    'human_legal_approved':False,
                     'attempted':ai_attempted,'network_calls':requests.network_calls,'cache_hits':requests.cache_hits,
                     'succeeded':ai_succeeded,'partial':ai_partial,'fallback':ai_fallback,
                     'skipped':max(0,planned-ai_attempted),'records':record_status,
@@ -279,6 +281,8 @@ def build_checklists(provisions: list[dict], cfg: dict, output_dir: Path, mode: 
     write_jsonl(output_dir/'reports/checklist_ai_failures.jsonl',failure_rows)
     from .integrity import _atomic
     _atomic(output_dir/'reports/checklist_ai_quality.json',{'mode':mode,'planned':planned,
+        'coverage_scope':'SOURCE_ACCOUNTING_NOT_LEGAL_APPROVAL' if requests and requests.settings.get('ai_source_accounting') else 'LEGACY_FRAGMENT_HEURISTIC',
+        'human_legal_approved':False,
         'attempted':ai_attempted,'network_calls':requests.network_calls if requests else 0,
         'cache_hits':requests.cache_hits if requests else 0,'succeeded':ai_succeeded,'partial':ai_partial,
         'fallback':ai_fallback,'skipped':max(0,planned-ai_attempted),'records':record_status,

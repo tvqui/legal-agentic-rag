@@ -98,22 +98,18 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     q=env.normalized_query; analysis_text=q; lower=q.lower(); refs=[]
     for m in REF.finditer(q):
         refs.append(ExplicitReference(instrument_number=m.group('instrument'),article=m.group('article'),clause=m.group('clause'),point=m.group('point')))
-    dates=['-'.join((m.group(1),m.group(2).zfill(2),m.group(3).zfill(2))) for m in DATE.finditer(analysis_text)]
-    dates+=['-'.join((m.group(3),m.group(2).zfill(2),m.group(1).zfill(2))) for m in DATE_DMY.finditer(analysis_text)]
-    invalid_dates=[];valid_dates=[]
-    for value in dates:
-        try:valid_dates.append(date.fromisoformat(value).isoformat())
-        except ValueError:invalid_dates.append(value)
-    dates=valid_dates
-    month_matches=[*MONTH_WORD.finditer(analysis_text),*MONTH_SLASH.finditer(analysis_text)]
-    month_dates=list(dict.fromkeys(f'{m.group(2)}-{m.group(1).zfill(2)}' for m in month_matches))
-    years=[m.group(1) for m in YEAR_WORD.finditer(analysis_text)]
-    precision='DAY' if explicit_date or dates else 'MONTH' if month_dates else 'YEAR' if years else 'NONE'
-    query_date=explicit_date or (dates[0] if dates else f'{month_dates[0]}-01' if month_dates else f'{years[0]}-01-01' if years else None)
-    if precision=='MONTH':
-        year,month=map(int,month_dates[0].split('-')); query_date_end=f'{year:04d}-{month:02d}-{calendar.monthrange(year,month)[1]:02d}'
-    elif precision=='YEAR': query_date_end=f'{years[0]}-12-31'
-    else: query_date_end=query_date
+    from .date_mentions import date_mentions
+    mentions=date_mentions(analysis_text)
+    valid_mentions=[mention for mention in mentions if mention.valid]
+    invalid_dates=[mention.source_quote for mention in mentions if not mention.valid]
+    dates=[mention.start for mention in valid_mentions if mention.precision=='DAY']
+    month_dates=[mention.start[:7] for mention in valid_mentions if mention.precision=='MONTH']
+    years=[mention.start[:4] for mention in valid_mentions if mention.precision=='YEAR']
+    chosen=next((mention for mention in valid_mentions if mention.precision=='DAY'),
+                next(iter(valid_mentions),None))
+    precision='DAY' if explicit_date else chosen.precision if chosen else 'NONE'
+    query_date=explicit_date or (chosen.start if chosen else None)
+    query_date_end=explicit_date or (chosen.end if chosen else None)
     from .query_clock import today_vietnam
     relative=relative_date_ranges(q,today_vietnam(env.received_at))
     temporal_ambiguous=bool(invalid_dates)
@@ -175,6 +171,12 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
             query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
     elif not explicit_date and dated_events and all(e['role'] in {'BIRTH_DATE','SOURCE_PROMULGATED_AT'} for e in dated_events):
         query_date=query_date_end=None;precision='NONE'
+    # An impossible calendar input cannot acquire certainty from a nested
+    # year, a second date, an event-role heuristic or the request-day default.
+    if invalid_dates:
+        query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
+    if (not explicit_date and not dated_events and len({(m.start,m.end) for m in valid_mentions})>1):
+        query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
     if 'nghỉ' in lower and re.search(r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',lower):
         issues=[key for key in issues if key!='GENERAL']+(['LEAVE'] if 'LEAVE' not in issues else [])
@@ -242,6 +244,8 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
       in_scope=not _clearly_out_of_scope(lower,issues,refs),
       temporal_resolution='AMBIGUOUS' if temporal_ambiguous else 'RESOLVED' if query_date else 'UNSPECIFIED')
     from .taxonomy import SUBISSUES
+    from .scope import mixed_scope_exclusions
+    result.scope_exclusions=mixed_scope_exclusions(q)
     result.routing_topics=[topic.key for topic in topics]
     result.temporal_events=dated_events
     result.query_received_at=env.received_at.isoformat()
@@ -252,7 +256,9 @@ def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference
     # The requested legal conclusion controls scope.  Incidental words such as
     # "công ty", "đồng nghiệp" or "giờ làm việc" must not turn a criminal or
     # land-law question into a labour-law question.
-    if any(term in query for term in LAND_QUESTION_TERMS): return True
+    from .scope import mixed_scope_exclusions,LABOUR_REQUEST
+    mixed=mixed_scope_exclusions(query)
+    if any(term in query for term in LAND_QUESTION_TERMS) and not (mixed or LABOUR_REQUEST.search(query)): return True
     criminal_conclusion=bool(re.search(r'mức án|cấu thành tội|phạt\s+(?:(?:bao nhiêu|mấy)\s+năm\s+)?tù|(?:có(?:\s+(?:thể|bị|được|phải)){0,2}|thủ tục)\s+(?:khởi tố|truy cứu)',query))
     labour_conclusion=any(term in query for term in ('kỷ luật lao động','cuộc họp kỷ luật','xử lý kỷ luật','quyền của người lao động','sa thải'))
     foreign_instrument=any(term in query for term in ('bộ luật hình sự','bộ luật dân sự','luật đất đai','luật hôn nhân và gia đình','91/2015/qh13','100/2015/qh13','31/2024/qh15'))
@@ -264,7 +270,7 @@ def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference
     if not specific_labour and private_property:return True
     if not specific_labour and any(term in query for term in private_transactions):return True
     if foreign_instrument and not specific_labour:return True
-    if any(term in query for term in CRIMINAL_QUESTION_TERMS) and (criminal_conclusion or not labour_conclusion): return True
+    if any(term in query for term in CRIMINAL_QUESTION_TERMS) and (criminal_conclusion or not labour_conclusion) and not mixed: return True
     # Vietnamese "do" is a causal connective, not the English auxiliary.
     # Require an English question signal rather than one ambiguous token.
     english_question=(bool(re.search(r'\b(?:how|what|when|where|why|who|does|should|please)\b',query,re.I))
@@ -319,15 +325,18 @@ def personal_result_needs_facts(query):
 
 def _probation_group_fact(query):
     q=query.lower()
+    matches=[]
+    from .fact_polarity import assertion_uncertain
     for group,pattern in (
       ('MANAGER',r'(?:công việc|vị trí) (?:của người )?quản lý doanh nghiệp|thuộc diện người quản lý doanh nghiệp'),
       ('COLLEGE',r'(?:công việc|chức danh|vị trí)(?:\s+(?:nghề nghiệp|chuyên môn|này|của tôi)){0,2}\s+(?:cần|yêu cầu|đòi hỏi) (?:trình độ )?(?:chuyên môn,? kỹ thuật )?(?:từ )?cao đẳng(?: trở lên)?'),
       ('INTERMEDIATE',r'(?:công việc|chức danh|vị trí)(?:\s+(?:nghề nghiệp|chuyên môn|này|của tôi)){0,2}\s+(?:cần|yêu cầu|đòi hỏi) (?:trình độ )?trung cấp|công nhân kỹ thuật|nhân viên nghiệp vụ'),
       ('OTHER',r'công việc khác|công việc phổ thông')):
-        match=re.search(pattern,q)
-        if match and not re.search(r'không(?:\s+(?:làm|là|thuộc|phải)){0,2}\s*$',q[max(0,match.start()-30):match.start()]):
-            return group,match
-    return None,None
+        for match in re.finditer(pattern,q):
+            if assertion_uncertain(q,match.start(),match.end()):continue
+            if not re.search(r'không(?:\s+(?:làm|là|thuộc|phải)){0,2}\s*$',q[max(0,match.start()-30):match.start()]):
+                matches.append((group,match))
+    return matches[0] if len({group for group,_ in matches})==1 else (None,None)
 
 
 def _notice_exception_fact(query):
@@ -677,8 +686,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if notice_exception_span is not None:facts['notice_exception']=notice_exception
     special_occupation,_=_special_occupation_fact(q)
     if special_occupation is not None: facts['special_occupation']=special_occupation
-    if any(term in q for term in ('không có chi phí đào tạo','không phải hoàn trả chi phí đào tạo')): facts['training_costs']=False
-    elif any(term in q for term in ('có chi phí đào tạo','phải hoàn trả chi phí đào tạo')): facts['training_costs']=True
+    training_costs=attribute_polarity(q,('có chi phí đào tạo',))
+    if training_costs is not None:facts['training_costs']=training_costs
     late_wage_terms = (
         'trả lương không đúng thời hạn', 'trả lương chậm', 'trả lương trễ',
         'trả lương cho tôi trễ', 'bị chậm trả lương', 'lương bị trả chậm',
@@ -696,7 +705,7 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
         facts['termination_basis']='WRONG_WORK';facts['actor']='EMPLOYEE'
         if re.search(r'không thuộc[^.;?!]{0,60}(?:điều chuyển|điều 29)',q):
             facts['work_reassignment_exception']=False
-    if 'quấy rối tình dục tại nơi làm việc' in q:
+    if attribute_polarity(q,('quấy rối tình dục tại nơi làm việc',)) is True:
         facts['termination_basis']='SEXUAL_HARASSMENT'; facts['notice_exception']=True; facts['actor']='EMPLOYEE'
     if any(term in q for term in ('cung cấp sai thông tin','cung cấp thông tin sai','cung cấp sai địa điểm','cung cấp thông tin không trung thực','cung cấp khi giao kết là không trung thực')) and any(term in q for term in ('giao kết','tuyển dụng','ảnh hưởng trực tiếp','không thể thực hiện công việc')) and any(term in q for term in ('nghỉ','chấm dứt')):
         facts['termination_basis']='EMPLOYER_MISINFORMATION'; facts['actor']='EMPLOYEE'

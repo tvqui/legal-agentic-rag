@@ -39,6 +39,7 @@ CONFIG_KEYS={
     'retrieval':{'embedding_model','embedding_model_path','embedding_device','embedding_batch_size','embedding_chunk_size','embedding_max_length','embedding_use_fp16','bm25_method','case_knn_k','community_algorithm'},
     'neo4j':{'load_batch_size'},
 }
+CONFIG_KEYS['knowledge'].update({'ai_source_accounting','ai_anchor_chars','ai_accounting_window','ai_continuation_pages'})
 
 
 def validate_config(cfg):
@@ -47,3 +48,9 @@ def validate_config(cfg):
     for section,allowed in CONFIG_KEYS.items():
         extra=set(cfg.get(section,{}))-allowed
         if extra: raise ValueError(f'Unused/unknown {section} config keys: {sorted(extra)}')
+    knowledge=cfg.get('knowledge',{})
+    if 'ai_source_accounting' in knowledge and type(knowledge['ai_source_accounting']) is not bool:
+        raise ValueError('ai_source_accounting must be boolean')
+    for key,low,high in [('ai_anchor_chars',64,400),('ai_accounting_window',1,4),('ai_continuation_pages',1,8)]:
+        if key in knowledge and (type(knowledge[key]) is not int or not low<=knowledge[key]<=high):
+            raise ValueError(f'{key} must be an integer from {low} to {high}')

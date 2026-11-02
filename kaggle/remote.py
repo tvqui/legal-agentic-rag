@@ -124,6 +124,13 @@ def export(archive_name='vn_labor_results.zip'):
     lines += ['', '## Số lượng', '']
     for key in ('documents', 'provisions', 'cases', 'diagnostic_items', 'graph_nodes', 'graph_edges'):
         lines.append(f'- {key}: {summary.get(key, "chưa có")}')
+    links=validation.get('source_links',{})
+    if links:
+        lines += ['', '## Link nguồn trong build', '',
+            '- Đồng bộ cấu hình: '+('PASS' if links.get('passed') else 'CHƯA ĐẠT'),
+            f'- Có link cấu hình: {links.get("configured_documents",0)}/{links.get("documents",0)} tài liệu',
+            f'- Chưa có link nguồn: {links.get("missing_source_count",0)} tài liệu',
+            '- Đây là kiểm đồng bộ URL, không phải xác nhận nội dung/hiệu lực pháp lý. Chi tiết: reports/source_links_validation.json.']
     lines += ['', '## Vấn đề còn lại', '']
     lines += [f'- {key}: {value}' for key, value in summary.get('issues_by_type', {}).items()]
     lines += ['', 'Nếu chưa cấu hình Aura, Graph DB chưa được nạp/kiểm chứng nên chưa thể PASS cả bốn đầu ra.',

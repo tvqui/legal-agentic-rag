@@ -31,10 +31,23 @@ def probe(cfg):
             except Exception as exc:
                 rows.append({'probe':label,'passed':False,'elapsed_seconds':round(time.monotonic()-started,3),**error_details(exc)})
                 break
+        if cfg['knowledge'].get('ai_source_accounting') and len(rows)==2 and all(r['passed'] for r in rows):
+            started=time.monotonic()
+            try:
+                from .ai_requests import AIRequests
+                from .cases import CASE_FEATURE_SCHEMA
+                requests=AIRequests(provider,cfg,cfg['output_dir'],'case_ontology')
+                fragments,errors,planned=requests.generate('Extract only explicitly stated labour-case features.',
+                    {'source':source[:120]},CASE_FEATURE_SCHEMA,'preflight-source-accounting-v2')
+                if errors or len(fragments)!=planned:raise ValueError('AI_PREFLIGHT_ACCOUNTING_FAILED')
+                rows.append({'probe':'source_accounting_v2','passed':True,'elapsed_seconds':round(time.monotonic()-started,3)})
+            except Exception as exc:
+                rows.append({'probe':'source_accounting_v2','passed':False,'elapsed_seconds':round(time.monotonic()-started,3),**error_details(exc)})
     finally:
         close=getattr(provider,'close',None)
         if callable(close): close()
-    result={'schema_version':1,'passed':len(rows)==2 and all(r['passed'] for r in rows),
+    expected=3 if cfg['knowledge'].get('ai_source_accounting') else 2
+    result={'schema_version':1,'passed':len(rows)==expected and all(r['passed'] for r in rows),
         'probes':rows,'note':'Connectivity/schema/latency smoke only; does not certify full corpus accuracy.'}
     _atomic(cfg['output_dir']/'reports/ai_provider_preflight.json',result)
     print('AI_PREFLIGHT '+json.dumps(result,ensure_ascii=False),flush=True)

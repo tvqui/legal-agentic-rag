@@ -74,6 +74,10 @@ def construct_from_extracted(cfg,extracted,checklist_mode=None,build_indexes=Tru
     write_jsonl(out/'06_indexes/retrieval_units.jsonl',units)
     communities={'community_nodes':[],'edges':[],'algorithm':'not_built'}
     nodes,edges=build_graph(registry,provisions,cases,issues,issue_edges,checklists,relations,communities,out,identities)
+    from .source_links import audit_source_links
+    links=audit_source_links(cfg['project_root'],out,registry,units,nodes,catalog)
+    if not links['passed']:
+        raise RuntimeError('Source URLs do not match current config; rebuild metadata and indexes. See reports/source_links_validation.json')
     # Persist a truthful report before any model/index step can fail.
     validate(registry,extracted,provisions,cases,checklists,nodes,edges,out,cfg)
     failures=[]

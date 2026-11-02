@@ -29,8 +29,14 @@ METADATA_FIELDS={'document_number','source_document_number','instrument_number',
     'binding','canonical_for_text','language','authority_rank','citation_aliases','policy_series','case_number'}
 
 
-def checked_metadata(values):
-    unknown=set(values)-METADATA_FIELDS-{'sha256'}
+SOURCE_PROVENANCE_FIELDS={'source_provider','official_source','collected_at','reviewer','reviewed_at','review_evidence'}
+
+def checked_metadata(values,*,source_catalog=False):
+    # Provenance belongs to the resolved source catalog. Accept its declared
+    # fields there without copying an unverified official_source flag into the
+    # document registry or permitting protected metadata_overrides.
+    allowed=SOURCE_PROVENANCE_FIELDS if source_catalog else set()
+    unknown=set(values)-METADATA_FIELDS-{'sha256'}-allowed
     if unknown: raise ValueError(f'Unknown/protected metadata fields: {sorted(unknown)}')
     return {key:value for key,value in values.items() if key in METADATA_FIELDS and value is not None}
 
@@ -198,7 +204,7 @@ def build_registry(extracted: list[dict], cfg: dict, output_dir: Path) -> list[d
         source=catalog.get(r['relative_path']) or catalog.get(r['filename']) or {}
         if source.get('sha256') and source['sha256']!=r['sha256']:
             raise ValueError(f"Source catalog SHA mismatch: {r['relative_path']}")
-        record.update(checked_metadata(source))
+        record.update(checked_metadata(source,source_catalog=True))
         if not legal:
             record['document_number']=''; record['instrument_number']=''
         elif role!='CONSOLIDATED':

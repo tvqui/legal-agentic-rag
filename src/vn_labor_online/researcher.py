@@ -22,7 +22,8 @@ def _entailed(field,value,quote):
     folded=_fold(quote); rendered=_fold(value)
     if field in {'notice_days','worked_months','service_years','age','travel_days'} and type(value) is not int:return False
     if field=='actor':
-        return (value=='EMPLOYEE' and any(x in folded for x in ('toi ','nguoi lao dong'))) or (value=='EMPLOYER' and any(x in folded for x in ('cong ty','nguoi su dung lao dong')))
+        from .analysis import _extract_facts
+        return value in {'EMPLOYEE','EMPLOYER'} and _extract_facts(quote.lower(),None,None).get('actor')==value
     if field=='contract_type':
         from .analysis import _contract_type_fact
         typed,span=_contract_type_fact(quote)
@@ -41,8 +42,10 @@ def _entailed(field,value,quote):
     if field=='special_occupation':
         extracted,_=_special_occupation_fact(quote)
         return extracted is not None and extracted is value
-    if field=='protected_status': return rendered in folded or value=='MATERNITY' and any(x in folded for x in ('mang thai','thai san','nuoi con'))
-    if field=='training_costs': return 'chi phi dao tao' in folded
+    if field in {'protected_status','training_costs'}:
+        from .analysis import _extract_facts
+        if field=='training_costs' and type(value) is not bool:return False
+        return _extract_facts(quote.lower(),None,None).get(field)==value
     return False
 
 def _verified_candidate(candidate:FactCandidate,query:str)->FactCandidate|None:
@@ -61,6 +64,9 @@ def _verified_candidate(candidate:FactCandidate,query:str)->FactCandidate|None:
         from .analysis import _contract_type_fact
         interpreted,span=_contract_type_fact(query)
         if span is None or interpreted!=candidate.value:return None
+    if candidate.field in {'special_occupation','protected_status','training_costs','actor'}:
+        from .analysis import _extract_facts
+        if _extract_facts(query.lower(),None,None).get(candidate.field)!=candidate.value:return None
     return candidate.model_copy(update={'char_start':start,'char_end':end,'origin':'RESEARCHER','verified':True})
 
 class LegalResearcher:
@@ -129,7 +135,10 @@ The result improves retrieval recall and never counts as legal evidence. Return 
                 normalized=' '.join(value.split()).strip()
                 if 3<=len(normalized)<=300 and normalized.casefold()!=query.casefold() and normalized not in queries:
                     queries.append(normalized)
-            tasks=[t for t in result.answer_tasks if t.request_quote in query]
+            from .scope import FOREIGN_REQUEST,LABOUR_REQUEST
+            tasks=[t for t in result.answer_tasks if t.request_quote in query
+                and not (analysis.scope_exclusions and FOREIGN_REQUEST.search(t.description)
+                         and not LABOUR_REQUEST.search(t.description))]
             if len({t.task_id for t in tasks})!=len(tasks): raise ValueError('duplicate task IDs')
             graph={t.task_id:t.depends_on for t in tasks}
             def visit(uid,path):

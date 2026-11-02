@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v15'
+TAXONOMY_VERSION = 'labor-subissues-v16'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -308,8 +308,13 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('WORKING_TIME.REST_BREAK')
     if has('chuyển ca','chuyển sang ca','ca làm việc khác','ca khác') and has('nghỉ','cách nhau'):
         add('WORKING_TIME.SHIFT_INTERVAL')
-    if (has('thời giờ làm việc bình thường','giờ làm việc bình thường')
-        or has('thời giờ bình thường','giờ bình thường')) and has('giới hạn','tối đa','bao nhiêu giờ','mấy giờ'):
+    stated_hours=bool(re.search(r'\b\d+\s*(?:giờ|tiếng)\s*(?:mỗi|một|trong (?:một|1)|/|1)\s*(?:ngày|tuần)',q))
+    weekly_arrangement=bool(re.search(r'(?:bố trí|tổ chức|sắp xếp|tính|theo)[^.;?!]{0,55}\btuần\b',q))
+    hours_assessment=has('vi phạm','hợp pháp','có đúng','đúng không','có vượt','quá giới hạn','khẳng định','kết luận')
+    if (((has('thời giờ làm việc bình thường','giờ làm việc bình thường')
+          or has('thời giờ bình thường','giờ bình thường')) and has('giới hạn','tối đa','bao nhiêu giờ','mấy giờ'))
+        or (weekly_arrangement and has('giờ','tiếng') and (stated_hours or hours_assessment))
+        or (stated_hours and hours_assessment and has('giờ làm việc bình thường','không có làm thêm','không làm thêm','không có thời gian làm thêm'))):
         add('WORKING_TIME.NORMAL_HOURS')
     if overtime and (has('tiền','lương','miễn trả','không nhận','trả','%','phần trăm') or night):
         add('WAGE.OVERTIME_PAY')
@@ -517,8 +522,8 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             if 'WAGE.OVERTIME_PAY' in analysis.legal_subissues:
                 require('night_overtime_pay',[loc('97' if historical else '98','3')])
         elif key=='WORKING_TIME.NORMAL_HOURS':
-            if not historical and re.search(r'(?:tính|theo)\s+tuần',analysis.query_text,re.I):
-                require('normal_working_hours',[loc('105','2')])
+            if re.search(r'(?:tính|theo)\s+tuần',analysis.query_text,re.I):
+                require('normal_working_hours',[loc('104' if historical else '105','2')])
             else:
                 require('normal_working_hours',[loc('105' if not historical else '104','1')])
         elif key=='CONTRACT.PARTY_DEFINITIONS':
