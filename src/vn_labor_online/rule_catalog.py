@@ -20,16 +20,28 @@ def extra_requirements(analysis):
     def points(slot,article,clause,values,documents=None):
         out[slot]=[[loc(article,clause,p,documents)] for p in values]
     def has(*terms): return any(term in q for term in terms)
+    from .topics import occupational_accident_context
+    employee_scope=(not has('hoc sinh','sinh vien') or has('hop dong lao dong','lam viec co tra cong'))
+    if employee_scope and occupational_accident_context(analysis.query_text) and (not analysis.query_date or analysis.query_date>='2016-07-01'):
+        aid=has('so cuu','cap cuu')
+        medical=has('chi phi y te','chi phi dieu tri','chi phi kham','chi phi chua benh') or (aid and has('thanh toan','chi phi') and not has('chi phi dieu tra'))
+        if aid:clauses('accident_first_aid',38,[1],['84/2015/QH13'])
+        if medical:clauses('accident_medical_costs',38,[2],['84/2015/QH13'])
     if has('giao ket','ung vien','tuyen dung') and has('cung cap','thong tin','thong bao') and not facts.get('termination_basis'):
         clauses('employer_information',19 if old else 16,[1])
-    expiry=has('hop dong het han','hop dong lao dong het han','hdld het han','het han hop dong','het han hdld')
-    renewal=has('hop dong thu ba','ba lan lien tiep','ky lai','tai ky','gia han hop dong','hdld xac dinh thoi han 24 thang ba lan') or (
-        expiry and has('tiep tuc lam viec','van di lam','van tiep tuc','ky tiep','hop dong moi','loai hop dong','thuoc loai nao','moc thoi gian'))
-    if renewal:
-        points('term_contract_renewal',22 if old else 20,2,['a','b','c'] if not old else [],docs)
-        if old: clauses('term_contract_renewal',22,[2])
-        else:
-            # Exception targets are part of the rule, not proof that they apply.
+    from .termination_context import contract_expiry_context,contract_continuation_facets
+    expiry=contract_expiry_context(q)
+    facets=contract_continuation_facets(q)
+    continuation=expiry and has('tiep tuc lam viec','van di lam','van lam','van tiep tuc','ky tiep','hop dong moi','ky moi','hop dong cu','loai hop dong','thuoc loai nao','moc thoi gian')
+    renewal='RENEWAL_COUNT' in facets
+    if continuation or renewal:
+        selected=[]
+        if 'RIGHTS' in facets or 'CONVERSION' in facets:selected.append('a')
+        if 'CONVERSION' in facets:selected.append('b')
+        if renewal:selected.append('c')
+        points('term_contract_renewal',22 if old else 20,2,selected if not old else [],docs)
+        if old:clauses('term_contract_renewal',22,[2])
+        elif renewal:
             out['renewal_exceptions']=[[loc(149,1)],[loc(151,2)],[loc(177,4)]]
     if expiry and has('mang thai','thai san','nuoi con'):
         out['expiry_rule']=[[loc(36 if old else 34,1)]]
@@ -45,6 +57,8 @@ def extra_requirements(analysis):
         out['minimum_wage_operative_rule']=[[loc(5 if instruments==['90/2019/NĐ-CP'] else 4,1,documents=instruments)]]
     if has('hinh thuc') and has('ky luat'):
         clauses('discipline_forms',125 if old else 124,[1,2,3] if old else [1,2,3,4])
+    if has('ky luat') and has('chung minh','loi cua nguoi lao dong','vo toi'):
+        points('disciplinary_proof_burden',123 if old else 122,1,['a'])
     if has('thu tuc','trinh tu','quy trinh','cuoc hop') and has('ky luat','sa thai'):
         out['discipline_procedure']=[[loc(123 if old else 122,1)]]
         if not old: out['discipline_implementing_procedure']=[[loc(70,documents=['145/2020/NĐ-CP'])]]
@@ -65,6 +79,10 @@ def extra_requirements(analysis):
             clauses('work_suspension_duration_advance',article,[2])
         if has('dieu kien','thu tuc','co duoc','co quyen','hop phap','dung khong') or not payment:
             clauses('work_suspension_prerequisites',article,[1])
+    if ('MINOR_WORKER' in getattr(analysis,'legal_issues',[]) or facts.get('minor') is True) and has('gio','thoi gio','lam them','ban dem','lam dem','tang ca'):
+        age=facts.get('age')
+        branches=[1] if isinstance(age,int) and age<15 else [2] if isinstance(age,int) and age<18 else [1,2]
+        clauses('minor_working_time',163 if old else 146,branches)
     if has('cao tuoi') and has('the nao','dinh nghia','khai niem','duoc hieu','la gi'):
         clauses('elderly_definition',166 if old else 148,[1])
         if not old: clauses('retirement_age_reference',169,[2])

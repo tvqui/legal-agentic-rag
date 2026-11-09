@@ -36,8 +36,8 @@ class AuditorHeuristicTests(unittest.TestCase):
         model=self.model();accepted,decisions,_=self.run_profile(item('35','1','b'),model,['TERMINATION'],{'actor':'EMPLOYEE','contract_type':'INDEFINITE'},'ASSESS_LEGALITY')
         self.assertFalse(accepted);self.assertEqual(decisions[0].audit_status,'FAIL')
         self.assertIn('CONTRACT_TYPE_MISMATCH',decisions[0].reasons);model.structured.assert_not_called()
-    def test_full_year_fact_contradiction_remains_hard(self):
-        model=self.model();accepted,decisions,_=self.run_profile(item(text='Người lao động làm đủ 12 tháng.'),model,['LEAVE'],{'worked_months':4})
+    def test_full_year_annual_leave_fact_contradiction_remains_hard(self):
+        model=self.model();accepted,decisions,_=self.run_profile(item('113','1',text='Người lao động làm đủ 12 tháng được nghỉ hằng năm theo mức cơ sở.'),model,['LEAVE'],{'worked_months':4})
         self.assertFalse(accepted);self.assertEqual(decisions[0].audit_status,'FAIL');model.structured.assert_not_called()
     def test_relevant_and_supporting_but_unknown_conditions_cannot_decide_case(self):
         model=self.model(conditions_status='UNKNOWN',exception_status='UNKNOWN')

@@ -25,7 +25,9 @@ def _source_penalty(item:Evidence)->int:
 def extend_plan_for_evidence(plan:EvidencePlan,items:list[Evidence],facts:dict,query_date:str|None)->EvidencePlan:
     """Add only evidence-driven mandatory slots before graph expansion."""
     mandatory=list(plan.mandatory_slots)
-    verified_text=' '.join(' '.join(y for y in (item.text,item.source_text) if y).lower() for item in items if item.verified)
+    required=[locator for slot in plan.mandatory_slots for group in plan.slot_requirements.get(slot,[]) for locator in group]
+    relevant=[item for item in items if item.verified and (not required or any(locator_matches(item,locator) for locator in required))]
+    verified_text=' '.join(' '.join(y for y in (item.text,item.source_text) if y).lower() for item in relevant)
     if any(phrase in verified_text for phrase in DELEGATION_PHRASES) and 'implementing_regulation' not in mandatory:
         mandatory.append('implementing_regulation')
     from .temporal import requires_transition_rule
@@ -34,7 +36,7 @@ def extend_plan_for_evidence(plan:EvidencePlan,items:list[Evidence],facts:dict,q
     from .exception_references import exception_locators
     requirements={key:list(groups) for key,groups in plan.slot_requirements.items()}
     for item in items:
-        if not item.verified: continue
+        if not item.verified:continue
         for locator in exception_locators(item):
             groups=requirements.setdefault('exceptions',[])
             if not any(locator in group for group in groups): groups.append([locator])
@@ -192,7 +194,7 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
 def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceState,items:list[Evidence],
                         decisions:list[ApplicabilityDecision]|None=None,requested_outcome:str='OTHER')->VerifiedEvidencePack:
     by_decision={x.evidence_id:x for x in decisions or []}
-    packed=[VerifiedEvidenceItem(evidence_id=x.unit_id,instrument_number=x.document_number,article=x.article_number,
+    packed=[VerifiedEvidenceItem(kind=x.kind,evidence_id=x.unit_id,instrument_number=x.document_number,article=x.article_number,
       document_type=document_type(x.document_number,x.document_title,x.document_type),document_title=x.document_title,issuer=x.issuer,
       norm_role=norm_role(x.document_number,x.document_title,' '.join((x.ancestor_context,x.source_text or x.text))),
       clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),

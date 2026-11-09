@@ -109,11 +109,19 @@ ALIASES={
 }
 TOPICS=[replace(topic,phrases=topic.phrases+ALIASES.get(topic.key,())) for topic in TOPICS]
 
+
+def occupational_accident_context(query):
+    text=fold(query)
+    injury=any(term in text for term in ('tai nan','bi thuong','chan thuong'))
+    workplace=any(term in text for term in ('trong gio lam viec','tai noi lam viec','khi dang lam viec',
+        'khi thuc hien cong viec','lam nhiem vu','trong ca lam','tai xuong','trong xuong','tai cong truong'))
+    return 'tai nan lao dong' in text or injury and workplace
+
+
 def detect_topics(query):
     text=fold(query)
     explicit_hours=bool(re.search(r'(?:lam(?: viec)?|thoi gio lam viec|thoi gian lam viec)[^.;?!]{0,35}(?:toi da|gioi han)[^.;?!]{0,25}(?:bao nhieu|may)\s+(?:gio|tieng)\b',text))
-    accident_context=('tai nan lao dong' in text or 'tai nan' in text and any(
-        phrase in text for phrase in ('trong gio lam viec','tai noi lam viec','khi dang lam viec','khi thuc hien cong viec')))
+    accident_context=occupational_accident_context(query)
     # Occurrence during working hours is context for investigating an accident,
     # not automatically a request about hour limits or proof of a legal accident.
     hours_text=re.sub(r'\btrong gio lam viec\b',' ',text) if accident_context else text

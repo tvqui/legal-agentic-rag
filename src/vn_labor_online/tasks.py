@@ -45,6 +45,13 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         if REQUEST.search(span): request_spans.append(span)
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
+        if topic.key=='wage_payment':
+            from .taxonomy import deferred_topic
+            mentions=[term for term in topic.phrases if term in query.lower()]
+            if mentions and all(deferred_topic(query,term) for term in mentions):continue
+        if topic.key=='termination_grounds' and 'LEAVE.UNUSED_LEAVE_PAYMENT' in subissues:
+            from .taxonomy import unused_leave_settlement_only
+            if unused_leave_settlement_only(query):continue
         if topic.key=='normal_hours' and 'WAGE.NIGHT_PAY' in subissues and outcome in {'EXPLAIN','LOOKUP'}:
             time_request=bool(re.search(r'(?:bao nhiêu|mấy)\s*(?:giờ|tiếng)|giới hạn\s+(?:giờ|thời gian)|tối đa[^.;?!]{0,25}giờ|nghỉ giữa giờ|thời giờ nghỉ|lịch làm việc',query,re.I))
             if not time_request:continue

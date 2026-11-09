@@ -76,7 +76,7 @@ def _service_duration(query):
         if years>=0: return years,match
     return None,None
 AGE=re.compile(r'(?<!\d)(\d{1,2})\s*tuổi',re.I)
-TRAVEL_DAYS=re.compile(r'(?:tổng\s+)?thời\s+gian\s+đi\s+và\s+về\s+(?:là\s+)?(\d+)\s*ngày',re.I)
+TRAVEL_DAYS=re.compile(r'(?:(?:tổng\s+)?thời\s+gian\s+|cả\s+)?đi\s+(?:và|lẫn)\s+về\s+(?:(?:là|hết|mất|tổng cộng)\s+)?(\d+)\s*ngày',re.I)
 NOTICE_DATE_DMY=re.compile(r'ngày\s*(0?[1-9]|[12]\d|3[01])[/\-](0?[1-9]|1[0-2])[/\-](20\d{2})[^.]{0,80}(?:gửi|nộp)\s+(?:thông báo|đơn)',re.I)
 TERMINATION_DATE_DMY=re.compile(r'(?:nghỉ|chấm dứt)(?:\s+việc|\s+chính thức|\s+hợp đồng)*\s*(?:vào|từ|là)?\s*(?:ngày\s*)?(0?[1-9]|[12]\d|3[01])[/\-](0?[1-9]|1[0-2])[/\-](20\d{2})',re.I)
 CONTRACT_START_YEAR=re.compile(r'(?:ký|giao kết|bắt đầu)\s+(?:hợp đồng[^.]{0,50}?|làm việc[^.]{0,30}?)(?:từ\s+)?năm\s*(20\d{2})',re.I)
@@ -178,9 +178,14 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     if (not explicit_date and not dated_events and len({(m.start,m.end) for m in valid_mentions})>1):
         query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
     issues=[name for name,words in ISSUES.items() if any(w in lower and not (name=='TERMINATION' and w=='nghỉ việc' and 'nghỉ việc riêng' in lower and not re.search(r'nghỉ việc(?!\s+riêng)',lower)) for w in words)] or ['GENERAL']
-    if 'nghỉ' in lower and re.search(r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',lower):
+    from .taxonomy import unpaid_leave_requested,unpaid_family_event
+    if unpaid_leave_requested(lower) or ('nghỉ' in lower and (unpaid_family_event(lower) or re.search(r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',lower))):
         issues=[key for key in issues if key!='GENERAL']+(['LEAVE'] if 'LEAVE' not in issues else [])
     topics=detect_topics(q)
+    minor_employment=(facts.get('minor') is True and bool(re.search(
+        r'người lao động|nhân viên|làm việc|bố trí làm|tuyển dụng|hợp đồng lao động|làm\s+\d+\s*giờ',lower)))
+    if minor_employment:
+        topics=list(dict.fromkeys(topics+detect_topics('lao động chưa thành niên')))
     issues=list(dict.fromkeys([item for item in issues if item!='GENERAL']+[topic.issue for topic in topics])) or ['GENERAL']
     if ('job_transfer' in {topic.key for topic in topics}
             and not any(term in lower for term in ('nghỉ việc','chấm dứt','đơn phương','xin nghỉ','sa thải'))):
@@ -223,6 +228,10 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
         outcome='COMPARE'
     if annual_leave_combination_only(lower): outcome='EXPLAIN'
     if unemployment_framework: outcome='EXPLAIN'
+    if _temporal_selection_only(lower):
+        outcome='EXPLAIN'
+        facts={**facts,'query_intent':'TEMPORAL_LAW_SELECTION'}
+        subissues=[];topics=[]
     historical=legal_regime_for(query_date)=='BLLD_2012' if query_date else False
     temporal='HISTORICAL' if historical else 'EXPLICIT_DATE' if query_date else 'CURRENT' if any(w in lower for w in ('hiện nay','bây giờ','mới nhất')) else 'NONE'
     # A date constraint alone does not make a lookup or a single-issue question complex.
@@ -252,11 +261,18 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     result.answer_tasks=deterministic_tasks(q,subissues,topics,SUBISSUES,route,outcome)
     return result
 
+
+def _temporal_selection_only(query):
+    selection=re.search(r'theo thời điểm nào|thời điểm nào[^.;?!]{0,60}áp dụng|áp dụng[^.;?!]{0,60}thời điểm nào|thời điểm ký[^.;?!]{0,60}hay[^.;?!]{0,40}chấm dứt|thời điểm áp dụng[^.;?!]{0,60}hay',query,re.I)
+    substantive=re.search(r'(?:nghỉ việc|chấm dứt|sa thải)[^.;?!]{0,80}(?:có (?:đúng|hợp pháp)|đúng hay sai)|tôi có (?:quyền|được)|(?:công ty|người sử dụng lao động) có (?:được )?(?:sa thải|chấm dứt)|báo trước\s+(?:bao lâu|bao nhiêu)|bồi thường|trợ cấp|hậu quả',query,re.I)
+    return bool(selection and not substantive)
+
+
 def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference])->bool:
     # The requested legal conclusion controls scope.  Incidental words such as
     # "công ty", "đồng nghiệp" or "giờ làm việc" must not turn a criminal or
     # land-law question into a labour-law question.
-    from .scope import mixed_scope_exclusions,LABOUR_REQUEST
+    from .scope import mixed_scope_exclusions,LABOUR_REQUEST,FOREIGN_REQUEST
     mixed=mixed_scope_exclusions(query)
     if any(term in query for term in LAND_QUESTION_TERMS) and not (mixed or LABOUR_REQUEST.search(query)): return True
     criminal_conclusion=bool(re.search(r'mức án|cấu thành tội|phạt\s+(?:(?:bao nhiêu|mấy)\s+năm\s+)?tù|(?:có(?:\s+(?:thể|bị|được|phải)){0,2}|thủ tục)\s+(?:khởi tố|truy cứu)',query))
@@ -267,6 +283,7 @@ def _clearly_out_of_scope(query:str,issues:list[str],refs:list[ExplicitReference
         'hợp đồng mua bán','hợp đồng thuê nhà','tranh chấp thừa kế','chia di sản',
         'quyền nuôi con','cấp dưỡng sau ly hôn','đăng ký kết hôn')
     private_property=bool(re.search(r'\b(?:mua|bán|cho thuê|chuyển nhượng|tặng cho)\b[^.;?!]{0,45}\b(?:căn hộ|chung cư|bất động sản|nhà ở|nhà riêng)\b',query))
+    if not specific_labour and not mixed and FOREIGN_REQUEST.search(query):return True
     if not specific_labour and private_property:return True
     if not specific_labour and any(term in query for term in private_transactions):return True
     if foreign_instrument and not specific_labour:return True
@@ -485,6 +502,15 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             missing.append('Công ty báo trước bao nhiêu ngày làm việc và đã thông báo thời hạn tạm chuyển chưa?')
         if not facts.get('transfer_pay') and not any(term in query for term in ('giữ nguyên lương','giữ nguyên mức lương','tiền lương công việc mới','lương công việc mới')):
             missing.append('Công việc mới có phù hợp sức khỏe và tiền lương khi tạm chuyển được bảo đảm thế nào?')
+    amount_request=bool(re.search(r'bao nhiêu\s+(?:tiền|đồng)|tính\s+(?:số\s+)?tiền|số tiền\s+(?:cụ thể|chính xác)',query,re.I))
+    formula_only=bool(re.search(r'cách tính|công thức|tỷ lệ|phần trăm',query,re.I)) and not re.search(r'bao nhiêu\s+(?:tiền|đồng)|chính xác|cụ thể',query,re.I)
+    if amount_request and not formula_only and {'WAGE.OVERTIME_PAY','WAGE.NIGHT_PAY'}.intersection(subissues):
+        hourly_base=bool(re.search(r'lương\s+(?:theo\s+)?giờ[^.;?!]{0,50}\d[\d.,]*\s*(?:nghìn|ngàn|đồng|vnd)|lương[^.;?!]{0,40}\d[\d.,]*\s*(?:nghìn|ngàn|đồng|vnd)\s*/\s*giờ',query,re.I))
+        if facts.get('salary_base_amount') is None and not hourly_base:
+            missing.append('Mức lương theo công việc dùng làm căn cứ tính tiền là bao nhiêu, theo giờ, ngày hay tháng? Nếu theo tháng, lịch giờ làm bình thường là gì?')
+        stated_hours=bool(re.search(r'\b(?:\d+(?:[.,]\d+)?|một|hai|ba|bốn|năm|sáu|bảy|tám)\s*(?:giờ|tiếng)\b',query,re.I))
+        if not stated_hours:
+            missing.append('Số giờ thực tế cần tính tiền là bao nhiêu; phần nào là giờ ban ngày, ban đêm hoặc làm thêm?')
     money=bool(re.search(r'\d[\d.,]*\s*(?:triệu|nghìn|đồng|vnd)',query,re.I))
     if personal and money and 'lương tối thiểu' in query:
         if not re.search(r'\bvùng\s*(?:IV|III|II|I|[1-4])\b',query,re.I) and not facts.get('wage_region'):
@@ -634,8 +660,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     questioned_age=bool(re.search(r'\bcó(?:\s+(?:phải|đủ|đã|là)){0,3}\s*$',age_prefix) and re.search(r'\bkhông\s*[?!.]',age_suffix))
     if age and not approximate_age and not questioned_age:
         facts['age']=int(age.group(1)); facts['minor']=int(age.group(1))<18
-    travel=TRAVEL_DAYS.search(q)
-    if travel: facts['travel_days']=int(travel.group(1))
+    travel_totals={int(match.group(1)) for match in TRAVEL_DAYS.finditer(q)}
+    if len(travel_totals)==1:facts['travel_days']=next(iter(travel_totals))
     contract_term=CONTRACT_TERM.search(q)
     if contract_term: facts['contract_duration_months']=int(contract_term.group('duration'))
     salary_base=parse_salary_base(q)
@@ -759,6 +785,9 @@ def plan_evidence(analysis:QueryAnalysis)->EvidencePlan:
         for slot,groups in plan.slot_requirements.items()}})
 
 def _legacy_plan_evidence(analysis:QueryAnalysis)->EvidencePlan:
+    if analysis.facts.get('query_intent')=='TEMPORAL_LAW_SELECTION':
+        return EvidencePlan(mandatory_slots=['governing_rule','official_source','applicable_version'],
+            conditional_slots=['amendment_history','transitional_rule','mandatory_reference'])
     mandatory=['governing_rule','official_source']
     conditional=['implementing_regulation','amendment_history','case_law']
     if analysis.query_date or analysis.temporal_intent=='CURRENT': mandatory.append('applicable_version')

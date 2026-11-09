@@ -281,18 +281,23 @@ Do not infer missing facts, choose a different law version, create evidence, or 
         subissues=classify_subissues(query,facts,issues)
         profile_groups={}
         for regime_date in ('2020-01-01','2026-01-01'):
-            for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,query_date=regime_date,facts=facts,query_text=query)).items():
+            for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,query_date=regime_date,facts=facts,query_text=query)).items():
                 profile_groups.setdefault(slot,[]).extend(groups)
         covered=profile_covers_issues(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,facts=facts,query_text=query))
         for item in items:
             matched=item.unit_id in accepted_ids or item.retrieval_method=='policy' or 'policy' in item.component_scores
             text=' '.join(x for x in (item.source_text,item.text) if x).lower(); folded=_fold(text)
             document=(item.document_number or '').upper(); article=str(item.article_number or '')
+            annual_duration_rule=(document in {'45/2019/QH14','18/VBHN-VPQH','10/2012/QH13'}
+                and article==('111' if document=='10/2012/QH13' else '113')
+                and ('nghi hang nam' in folded or 'nghi phep' in folded))
             employee_termination='TERMINATION' in issues and facts.get('actor')=='EMPLOYEE'
             unlawful_employee_exit=(facts.get('contract_type')=='INDEFINITE' and facts.get('notice_exception') is False
               and isinstance(facts.get('notice_days'),int) and facts['notice_days']<45)
             intent=facts.get('query_intent'); basis=facts.get('termination_basis')
             exclusion=taxonomy_exclusion(item,subissues,facts)
+            from .claim_validation import procedural_stage_mismatch
+            if procedural_stage_mismatch(item,query):exclusion='WRONG_PROCEDURAL_STAGE'
             proportional_base=('LEAVE.PRO_RATA_LEAVE' in subissues
               and 'leave_calculation_rule' in profile_groups
               and any(locator_matches(item,loc) for group in profile_groups.get('leave_base_rule',[]) for loc in group))
@@ -300,7 +305,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='FAIL',
                   reasons=[exclusion]+(['WRONG_ACTOR_EMPLOYER_TERMINATION_RULE'] if employee_termination and document in {'45/2019/QH14','18/VBHN-VPQH'} and article=='36' else []))
-            elif facts.get('worked_months') is not None and int(facts['worked_months'])>=12 and 'chua du 12 thang' in folded:
+            elif annual_duration_rule and facts.get('worked_months') is not None and int(facts['worked_months'])>=12 and 'chua du 12 thang' in folded:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_UNDER_12_MONTH_RULE'])
             elif proportional_base and facts.get('worked_months') is not None and int(facts['worked_months'])<12:
                 # The annual rate is an input to the pro-rata formula, not a
@@ -310,7 +315,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
                   conditions_status='NOT_APPLICABLE',exception_status='NOT_APPLICABLE',audit_status='PASS',
                   reasons=['DETERMINISTIC_PRO_RATA_BASE_PARAMETER'])
-            elif facts.get('worked_months') is not None and int(facts['worked_months'])<12 and 'du 12 thang' in folded and 'chua du 12 thang' not in folded:
+            elif annual_duration_rule and facts.get('worked_months') is not None and int(facts['worked_months'])<12 and 'du 12 thang' in folded and 'chua du 12 thang' not in folded:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='NOT_SATISFIED',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['FACT_CONTRADICTS_FULL_12_MONTH_RULE'])
             elif employee_termination and document=='145/2020/NĐ-CP' and article=='7' and facts.get('special_occupation') is not True:
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=False,supports_claim=False,conditions_status='UNKNOWN',exception_status='NOT_APPLICABLE',audit_status='FAIL',reasons=['SPECIAL_OCCUPATION_NOT_ESTABLISHED'])

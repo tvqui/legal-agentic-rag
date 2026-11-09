@@ -197,6 +197,7 @@ class ApplicabilityBatch(BaseModel):
     decisions:list[ApplicabilityDecision]
 
 class VerifiedEvidenceItem(BaseModel):
+    kind:str|None=None
     evidence_id:str; instrument_number:str|None=None; article:str|None=None; clause:str|None=None
     point:str|None=None; text:str; valid_from:str|None=None; valid_to:str|None=None
     full_text:str=''
@@ -220,6 +221,7 @@ class VerifiedEvidencePack(BaseModel):
     resolved_rule_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
     # Set only by the pipeline after an exact, complete scoped retrieval.
     lookup_reference:ExplicitReference|None=None
+    lookup_scope_complete:bool|None=None
 class AdjudicationDraft(BaseModel):
     model_config=ConfigDict(extra='forbid')
     answer_summary:str; claims:list[Claim]; applicable_law_versions:list[ApplicableLawVersion]

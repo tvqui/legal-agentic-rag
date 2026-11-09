@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v16'
+TAXONOMY_VERSION = 'labor-subissues-v17'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -131,10 +131,27 @@ def affirmative_phrase(query,terms):
         for match in re.finditer(re.escape(term),q):
             prefix=re.split(r'[.;!?]|\b(?:nhưng|tuy nhiên)\b',q[max(0,match.start()-70):match.start()])[-1]
             # Only a directly preceding negation belongs to this predicate.
-            if re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên|đã|đạt|bị|là|người|thuộc|nhóm|đối|tượng)){0,6}\s*$',prefix):
+            if re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|có|được|từng|phải|hai|bên|đã|đạt|bị|là|người|thuộc|nhóm|đối|tượng|trường|hợp)){0,6}\s*$',prefix):
                 continue
             return True
     return False
+
+
+
+def deferred_topic(query,term):
+    """An explicit deferred calculation is not an extra requested task.
+
+    Keep a later independent mention and do not treat an employer's contested
+    exclusion as the user's instruction to exclude that entitlement.
+    """
+    mentions=list(re.finditer(re.escape(term),query.lower()))
+    if not mentions:return False
+    for match in mentions:
+        prefix=re.split(r'[.;!?,:]|\b(?:nhưng|ngoài ra)\b',query.lower()[max(0,match.start()-100):match.start()])[-1]
+        deferred=re.search(r'\b(?:chưa\s+(?:tính|xét)|(?:không|chưa)\s+(?:hỏi|bàn|đánh giá)(?:\s+về)?)(?:\s+\w+){0,8}\s*$',prefix)
+        employer=re.search(r'\b(?:công ty|doanh nghiệp|người sử dụng lao động|nsdlđ)\b',prefix)
+        if not deferred or employer:return False
+    return True
 
 
 def covered_profile_parents(analysis) -> set[str]:
@@ -179,6 +196,16 @@ def probation_cancellation_only(query):
         'chi phí đào tạo','hợp đồng đào tạo','thiệt hại','làm hỏng tài sản','trợ cấp','bảo hiểm','bhxh','bhtn'))
     return active and not ordinary_or_independent
 
+
+def unpaid_leave_requested(query):
+    return bool(re.search(r'\bnghỉ[^.;?!,]{0,45}\bkhông (?:hưởng )?lương\b',query.lower()))
+
+def unpaid_family_event(query):
+    q=query.lower()
+    return bool(re.search(r'\b(?:ông|bà|anh|chị|em)(?:\s+(?:nội|ngoại|ruột|tôi|của)){0,4}\s+(?:chết|mất|qua đời)',q)
+        or re.search(r'\b(?:cha|mẹ|bố|anh|chị|em)(?:\s+(?:đẻ|nuôi|ruột|tôi|của)){0,4}\s+kết hôn',q))
+
+
 def unused_leave_settlement_only(query):
     """Termination may be a settled premise, rather than a requested legality assessment."""
     q=query.lower()
@@ -198,7 +225,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','người sử dụng lao động','nhân viên','nlđ','nsdlđ','công ty',
       'doanh nghiệp','hợp đồng dịch vụ','hợp đồng cộng tác viên','cộng tác viên')
     employment_contract=(has('hợp đồng lao động','hđlđ') or (
-        has('hợp đồng') and (has('làm việc','công việc','nhân viên') or 'CONTRACT' in issues)))
+        has('hợp đồng') and (has('làm việc','công việc','nhân viên','vẫn làm','vẫn đi làm','tiếp tục làm') or 'CONTRACT' in issues)))
     employment_contract=employment_contract and not has('viên chức','công chức','hợp đồng mua bán','hợp đồng thuê nhà')
     form_terms=has('hình thức hợp đồng','thỏa thuận miệng','hợp đồng miệng','bằng lời nói',
                   'phương tiện điện tử','thông điệp dữ liệu','hợp đồng điện tử',
@@ -208,8 +235,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         and 'thử việc' not in part for part in re.split(r'[.;?!]',q)))
     if employment_contract and form_terms and independent_form:
         add('CONTRACT.FORM')
-    continues=employment_contract and (has('hết hạn','hết thời hạn','hợp đồng thứ ba','lần thứ ba','lần thứ 3','ký 3 lần')
-        and has('tiếp tục','vẫn làm','ký tiếp','ký mới','ký lại','trở thành','trở loại','lần thứ ba','lần thứ 3'))
+    from .termination_context import contract_expiry_context,contract_continuation_facets
+    continues=employment_contract and (contract_expiry_context(q) or has('hợp đồng thứ ba','lần thứ ba','lần thứ 3','ký 3 lần','hai hợp đồng xác định thời hạn','hai hợp đồng lao động xác định thời hạn')) and has('tiếp tục','vẫn làm','vẫn đi làm','ký tiếp','ký mới','ký lại','trở thành','trở loại','lần thứ ba','lần thứ 3')
     if continues:
         add('CONTRACT.CONTINUATION')
     duration_scope=employment_contract and has('xác định thời hạn') and has('ký','giao kết','thời hạn tối đa')
@@ -271,7 +298,9 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         if (has('thấp hơn mức lương tối thiểu','thấp hơn mức tối thiểu')
                 and not re.search(r'\d|\b(?:triệu|nghìn|ngàn)\b',q)):
             add('WAGE.MINIMUM_FLOOR')
-        explicit_cycle=has('kỳ trả lương','kỳ hạn trả','kỳ hạn lương','nửa tháng',
+        half_cycle=(has('nửa tháng') and not re.search(r'nửa tháng\s+(?:tiền\s+)?lương',q)
+                    and has('trả','nhận','kỳ','mỗi','lần'))
+        explicit_cycle=half_cycle or has('kỳ trả lương','kỳ hạn trả','kỳ hạn lương',
                            'tháng một lần','tháng 1 lần','tháng hai lần')
         monthly_cycle=has('mỗi tháng') and has('trả','nhận','thanh toán') and 'CONTRACT.PROBATION_PAY' not in found
         if explicit_cycle or monthly_cycle:
@@ -290,6 +319,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
             add('WAGE.DOWNTIME')
     overtime=affirmative_phrase(q,('làm thêm','làm ngoài giờ','tăng ca'))
     night=has('ban đêm','làm đêm','ca đêm','giờ đêm')
+    holiday_work=any(affirmative_phrase(q,(m.group(),)) for m in re.finditer(
+        r'\b(?:đi\s+)?làm(?:\s+việc)?(?:\s+vào)?(?:\s+một)?(?:\s+ngày)?\s+(?:nghỉ\s+)?lễ\b',q))
     protective_purpose=bool(re.search(r'bảo vệ(?:\s+ngay)?\s+(?:tính mạng|tài sản)|cứu người|cứu nạn',q))
     emergency=overtime and (protective_purpose or has('quốc phòng','an ninh'))
     if emergency:add('WORKING_TIME.EMERGENCY_OVERTIME')
@@ -316,9 +347,11 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         or (weekly_arrangement and has('giờ','tiếng') and (stated_hours or hours_assessment))
         or (stated_hours and hours_assessment and has('giờ làm việc bình thường','không có làm thêm','không làm thêm','không có thời gian làm thêm'))):
         add('WORKING_TIME.NORMAL_HOURS')
-    if overtime and (has('tiền','lương','miễn trả','không nhận','trả','%','phần trăm') or night):
+    pay_context=any(term in q and not deferred_topic(q,term) for term in ('tiền','lương','miễn trả','không nhận','trả thêm','mức trả','phụ cấp','%','phần trăm'))
+    time_permission_only=(not pay_context and has('có được','cho phép','cấm','bố trí','giới hạn','mấy giờ','bao nhiêu giờ','tối đa','được làm'))
+    if not time_permission_only and (overtime or holiday_work) and (has('tiền','lương','miễn trả','không nhận','trả','%','phần trăm') or night):
         add('WAGE.OVERTIME_PAY')
-    if night and (has('tiền','lương','trả thêm','mức trả','phụ cấp','phần trăm','%') or overtime):
+    if not time_permission_only and night and (has('tiền','lương','trả thêm','mức trả','phụ cấp','phần trăm','%') or overtime):
         add('WAGE.NIGHT_PAY')
     quantity = bool(re.search(r'bao nhiêu ngày|số ngày|tính ngày|\b\d+\s+ngày\b',q))
     special_mechanism = False
@@ -374,7 +407,11 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         holiday = has('nghỉ lễ', 'ngày lễ', 'nghỉ tết', 'ngày tết', 'quốc khánh', 'giỗ tổ', 'tết nguyên đán')
         personal = has('nghỉ việc riêng', 'kết hôn', 'đám cưới', 'cha mất', 'mẹ mất', 'bố mất', 'tang lễ') or bool(re.search(
             r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',q))
-        unpaid = has('nghỉ không hưởng lương', 'nghỉ không lương')
+        unpaid = unpaid_leave_requested(q) or ('nghỉ' in q and unpaid_family_event(q))
+        if personal and unpaid_family_event(q):
+            # A sibling/parent wedding is not the worker's own wedding.
+            personal=bool(re.search(r'\b(?:tôi|mình|người lao động)\s+(?:sắp |vừa |sẽ )?kết hôn|\bcon(?:\s+(?:đẻ|nuôi|trai|gái|tôi|của)){0,4}\s+kết hôn',q)
+                or re.search(r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',q))
         annual = has('nghỉ hằng năm', 'nghỉ hàng năm', 'nghỉ phép', 'phép năm', 'ngày phép', 'thâm niên', 'ngày cơ bản') or bool(re.search(r'(?:12[^.]{0,25}14[^.]{0,25}16|12, 14 và 16)\s+ngày',q))
         annual=annual or bool(facts.get('service_years') and has('số ngày nghỉ','nghỉ tối thiểu','bao nhiêu ngày nghỉ'))
         payment = annual and has('chưa nghỉ', 'chưa sử dụng', 'còn dư') and has('thanh toán', 'trả tiền', 'tiền phép')
@@ -384,7 +421,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         schedule=annual and has('nghỉ gộp','gộp phép','gộp ngày','lịch nghỉ','chia thành nhiều lần')
         if schedule:add('LEAVE.ANNUAL_SCHEDULE')
         if annual and (not payment or quantity) and not travel_only and not bonus_only and not schedule: add('LEAVE.ANNUAL_LEAVE')
-        if has('thâm niên') or annual and int(facts.get('service_years') or 0) >= 5:
+        if (has('thâm niên') or annual and int(facts.get('service_years') or 0) >= 5) and not deferred_topic(q,'thâm niên'):
             add('LEAVE.SENIORITY_BONUS')
         if annual and (has('chưa đủ 12 tháng','chưa đủ mười hai tháng','chưa đủ một năm','chưa đủ 1 năm',
           'dưới một năm','dưới 1 năm','dưới 12 tháng','theo tỷ lệ') or isinstance(facts.get('worked_months'), int) and facts['worked_months'] < 12):
@@ -430,11 +467,11 @@ def probation_duration_clauses(analysis, historical):
     mapping={'COLLEGE':1,'INTERMEDIATE':2,'OTHER':3} if historical else {
       'MANAGER':1,'COLLEGE':2,'INTERMEDIATE':3,'OTHER':4}
     q=analysis.query_text.lower()
-    overview=any(term in q for term in ('so sánh','các nhóm','từng nhóm','mọi nhóm','tất cả','các trường hợp'))
-    mentioned=sum(affirmative_phrase(q,terms) for terms in (
-      ('quản lý doanh nghiệp',),('cao đẳng',),('trung cấp','công nhân kỹ thuật','nhân viên nghiệp vụ'),
-      ('công việc khác','không yêu cầu trình độ')))
-    if group in mapping and not overview and mentioned<=1: return (mapping[group],)
+    overview=affirmative_phrase(q,('so sánh','các nhóm','từng nhóm','mọi nhóm','tất cả','các trường hợp'))
+    # The fact parser already rejects contradictory/uncertain job categories.
+    # Incidental category words, especially inside a negated category, cannot
+    # broaden that confirmed category into every statutory branch.
+    if group in mapping and not overview:return (mapping[group],)
     return all_clauses
 
 
@@ -547,7 +584,16 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key=='CONTRACT.DURATION':
             require('contract_duration',[loc('22' if historical else '20','1','b')])
         elif key=='CONTRACT.CONTINUATION':
-            require('contract_continuation',[loc('22' if historical else '20','2')])
+            from .termination_context import contract_continuation_facets
+            facets=contract_continuation_facets(analysis.query_text)
+            if historical:
+                require('contract_continuation',[loc('22','2')])
+            else:
+                points=[]
+                if 'RIGHTS' in facets or 'CONVERSION' in facets:points.append('a')
+                if 'CONVERSION' in facets:points.append('b')
+                if 'RENEWAL_COUNT' in facets:points.append('c')
+                require('contract_continuation',*[[loc('20','2',point)] for point in (points or ['a','b','c'])])
         elif key=='CONTRACT.MULTIPLE_EMPLOYERS':
             insurance=any(term in analysis.query_text.lower() for term in ('bảo hiểm','bhxh','bhyt','bhtn'))
             require('multiple_employers',[loc('21' if historical else '19',None if insurance else '1')])
@@ -643,6 +689,17 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             else:
                 rule('employer_unilateral_rule', '36', '38')
                 rule('employer_protection_rule', '37', '39')
+                if not historical and 'báo trước' in q and analysis.facts.get('special_occupation') is False:
+                    # A requested notice period needs its own operative branch,
+                    # not merely an Article container about termination grounds.
+                    if 'tạm hoãn' in q and 'không có mặt' in q:
+                        require('employer_notice_exemption',[loc('36','3')])
+                    else:
+                        months=analysis.facts.get('contract_duration_months')
+                        point=('c' if affirmative_phrase(q,('ốm đau',)) and affirmative_phrase(q,('điều trị',)) else
+                            'a' if analysis.facts.get('contract_type')=='INDEFINITE' else
+                            ('b' if months>=12 else 'c') if isinstance(months,int) and 0<months<=36 else None)
+                        if point:require('employer_notice_requirement',[loc('36','2',point)])
         elif key=='TERMINATION.SETTLEMENT_DEADLINE':
             require('termination_settlement',[loc('47' if historical else '48','1' if not historical else '2')])
         elif key == 'TERMINATION.MUTUAL_AGREEMENT':
@@ -660,7 +717,18 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key == 'TERMINATION.ILLEGAL_TERMINATION': rule('legal_classification', '39', '41')
         elif key == 'TERMINATION.EMPLOYEE_LIABILITY':
             article = '43' if historical else '40'
-            require('legal_consequences', *[[loc(article, str(i))] for i in (1, 2, 3)])
+            clauses=(1,2,3)
+            q=analysis.query_text.lower()
+            broad=any(term in q for term in ('hậu quả','nghĩa vụ','trách nhiệm','tất cả','những khoản'))
+            if analysis.facts.get('query_intent')=='STIPULATED_EMPLOYEE_LIABILITY' and not broad:
+                requested=[]
+                if 'trợ cấp' in q:requested.append(1)
+                training='đào tạo' in q
+                compensation=any(term in q for term in ('nửa tháng','ngày không báo trước','ngày không báo','tiền báo trước'))
+                if compensation or 'bồi thường' in q and not training:requested.append(2)
+                if training:requested.append(3)
+                clauses=tuple(requested) or clauses
+            require('legal_consequences', *[[loc(article, str(i))] for i in clauses])
         elif key == 'TERMINATION.EMPLOYER_LIABILITY': rule('employer_legal_consequences', '41', '42')
         elif key == 'TERMINATION.SEVERANCE':
             require('severance_rule', *[[loc('48' if historical else '46', str(i))] for i in (1,2,3)])

@@ -89,7 +89,7 @@ class OnlinePipeline:
               'query_date':request.query_date or resolved.query_date})
             from .period_answers import rule_periods,combine_period_answers
             from .freshness import qualify_freshness
-            periods=rule_periods(effective,self.store)
+            periods=rule_periods(effective,self.store,retriever=getattr(self,'retriever',None))
             if periods:
                 period_responses=[]
                 for period in periods:
@@ -245,6 +245,7 @@ class OnlinePipeline:
         stage=time.perf_counter(); lists=[];task_report={};retrieval_queries=[]
         allow_fallback=self.cfg.provisional_mode and self.cfg.allow_document_temporal_fallback
         lookup_scope_complete=False
+        lookup_pre_removed=[]
         # In a reasoning question, "Article N" without an instrument is not a
         # request for Article N from every statute in the corpus. Scoped legal
         # profiles and ordinary retrieval can resolve the intended instrument;
@@ -253,9 +254,12 @@ class OnlinePipeline:
                            [ref for ref in analysis.explicit_references if ref.instrument_number])
         if scoped_references and self.cfg.retrieval.exact_lookup:
             exact=observed('exact',self.retriever.exact,scoped_references,summary=lambda v:evidence_summary(v,self.store))
+            # A future/expired root must not consume the descendant budget.
+            exact,lookup_pre_removed=temporal_filter(exact,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
             descendant_limit=max(0,self.cfg.max_verified_units-len(exact))
-            descendants=self.retriever.hierarchy_descendants(exact,descendant_limit)
-            lookup_scope_complete=bool(descendant_limit and len(descendants)<descendant_limit)
+            lookahead=self.retriever.hierarchy_descendants(exact,descendant_limit+1)
+            descendants=lookahead[:descendant_limit]
+            lookup_scope_complete=len(lookahead)<=descendant_limit
             lists.append(exact+descendants)
         exact_only=bool(analysis.route==Route.DIRECT and lists and lists[0])
         profile_only=False
@@ -339,6 +343,7 @@ class OnlinePipeline:
         trace.timings_ms['fusion']=round((time.perf_counter()-fusion_started)*1000,2)
         trace.seed_results=sum(len(x) for x in lists)
         items,removed=observed('temporal',temporal_filter,items,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end,summary=lambda r:{'giu_lai':len(r[0]),'loai':len(r[1]),'ngay_tra_cuu':analysis.query_date,'cho_fallback_cap_van_ban':allow_fallback})
+        removed+=lookup_pre_removed
         items,authority_removed=observed('authority',authority_filter,items,strict=not self.cfg.provisional_mode,summary=lambda r:{'giu_lai':len(r[0]),'loai':len(r[1]),'provisional':self.cfg.provisional_mode})
         if policy and not (exact_only or profile_only):
             anchors,_=temporal_filter(policy,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end)
@@ -523,6 +528,13 @@ class OnlinePipeline:
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
         pack=observed('pack',build_verified_pack,env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome,summary=lambda v:{'so_nguon':len(v.evidence),'so_ky_tu':sum(len(x.text) for x in v.evidence),'trang_thai_du_kien':status.value})
         pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'scope_exclusions':analysis.scope_exclusions,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
+        if exact_only:
+            scoped_ids={item.unit_id for item in lists[0]}
+            selected_ids={item.evidence_id for item in pack.evidence}
+            pack=pack.model_copy(update={'lookup_scope_complete':lookup_scope_complete and scoped_ids<=selected_ids})
+            trace.events.append({'event':'lookup_source_scope','retrieval_exhaustive':lookup_scope_complete,
+                'scoped_units':len(scoped_ids),'verified_units':len(scoped_ids&selected_ids),
+                'complete':pack.lookup_scope_complete})
         if (exact_only and lookup_scope_complete and len(analysis.explicit_references)==1
           and not conflicts and not analysis.facts and not analysis.legal_subissues
           and len(pack.evidence)==len(items)==len(selected)):
@@ -621,6 +633,9 @@ class OnlinePipeline:
                 pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
                   [x for x in decisions if x.evidence_id in {item.unit_id for item in selected}],analysis.requested_outcome)
                 pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'scope_exclusions':analysis.scope_exclusions,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
+                if exact_only:
+                    pack=pack.model_copy(update={'lookup_scope_complete':lookup_scope_complete and
+                        {item.unit_id for item in lists[0]}<={item.evidence_id for item in pack.evidence}})
                 sufficient=bool(selected) and not state.gaps
                 actionable_final=_actionable_gaps(state.gaps,selected,self.cfg.provisional_mode)
                 partial=bool(selected) and not sufficient and not actionable_final and state.coverage>=self.cfg.minimum_coverage and self.cfg.allow_partial
@@ -639,6 +654,15 @@ class OnlinePipeline:
             answer='Không thể tạo câu trả lời có trích dẫn được xác minh.'; refs=[]; status=Stop.INSUFFICIENT_EVIDENCE; warnings+=problems
             state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['reference_audit']))})
             draft=draft.model_copy(update={'claims':[],'applicable_law_versions':[],'limitations':state.gaps})
+        if exact_only and pack.lookup_scope_complete is False and draft.claims:
+            if self.cfg.allow_partial:
+                status=Stop.PARTIAL_ALLOWED
+                answer+='\nPhần trích xuất chưa bao phủ toàn bộ Điều/Khoản/Điểm được yêu cầu; chưa thể xem đây là nội dung đầy đủ.'
+            else:
+                status=Stop.INSUFFICIENT_EVIDENCE;answer='Chưa có đủ căn cứ để trình bày đầy đủ nội dung được yêu cầu.'
+                refs=[];draft=draft.model_copy(update={'claims':[],'applicable_law_versions':[]})
+            warnings.append('LOOKUP_SOURCE_SCOPE_INCOMPLETE')
+            state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+['lookup_source_scope']))})
         trace.timings_ms['reference_audit']=round((time.perf_counter()-reference_audit_started)*1000,2)
         public_evidence_ids={citation.evidence_id for citation in refs}
         temporal_fallback_ids=[

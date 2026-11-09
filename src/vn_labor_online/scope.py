@@ -6,7 +6,7 @@ LABOUR_REQUEST=re.compile(r'\b(?:tiền lương|trả lương|khấu trừ lươ
     r'hợp đồng lao động|công đoàn|tai nạn lao động|bảo hiểm xã hội|bảo hiểm thất nghiệp|'
     r'thai sản|quấy rối tại nơi làm việc|giữ (?:bằng|bản chính|căn cước)|làm thêm giờ)\b',re.I)
 FOREIGN_REQUEST=re.compile(r'\b(?:ly hôn|quyền nuôi con|chia di sản|tranh chấp đất|thửa đất|'
-    r'quyền sử dụng đất|cấp hộ chiếu|đổi hộ chiếu|mua bán nhà|chuyển nhượng căn hộ|'
+    r'quyền sử dụng đất|(?:cấp|xin|đổi|gia hạn)(?: lại)? hộ chiếu|mua bán nhà|chuyển nhượng căn hộ|'
     r'thuế chuyển nhượng|mức án|phạt tù|cấu thành tội)\b',re.I)
 
 

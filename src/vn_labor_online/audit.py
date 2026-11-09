@@ -14,7 +14,7 @@ def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|
         # Reject unreadable source context before model calls. Keep raw bytes
         # and metadata unchanged; a clean alternative edition may still pass.
         readable='\n'.join(x for x in (item.ancestor_context,item.source_text or item.text) if x)
-        severe={'EMPTY_OR_DECORATIVE_TEXT','CORRUPTED_CHARACTERS','SUSPECT_OCR_WORD','SUSPECT_LEGAL_LOCATOR'}
+        severe={'EMPTY_OR_DECORATIVE_TEXT','CORRUPTED_CHARACTERS','SUSPECT_OCR_WORD','SUSPECT_LEGAL_LOCATOR','SUSPECT_LEGAL_TERM'}
         issues+=['SOURCE_TEXT_QUALITY:'+code for code in language_issues(readable,allow_admin=True) if code in severe]
         if not source: issues.append('UNKNOWN_UNIT_ID')
         if item.document_id and item.document_id not in store.nodes_by_id: issues.append('UNKNOWN_DOCUMENT_NODE')

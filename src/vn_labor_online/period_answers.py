@@ -19,7 +19,7 @@ class RulePeriod:
     question: str
 
 
-def rule_periods(request,store,max_periods=4):
+def rule_periods(request,store,max_periods=4,*,retriever=None):
     if request.query_date or request.facts or request.conversation_turns or request.conversation_context:return []
     query=request.question
     from .analysis import analyze,intake
@@ -38,7 +38,25 @@ def rule_periods(request,store,max_periods=4):
     start,end=date.fromisoformat(first.start),date.fromisoformat(last.start)
     if start>=end:return []
     bounds={start,end+timedelta(days=1)}
-    for unit in getattr(store,'units',[]):
+    units=getattr(store,'units',[])
+    if retriever is not None:
+        from .analysis import plan_evidence
+        from .taxonomy import profile_covers_issues
+        # Scoped, closed request plans can use the existing indexed statutory
+        # anchors at both regimes. Unknown requests retain the conservative
+        # corpus-wide fallback rather than guessing their relevant instruments.
+        probes=[];closed=True
+        undated=query[:prefix.start()]+query[last.char_end:]
+        for point in (start.isoformat(),end.isoformat()):
+            probe=analyze(intake(undated,[],point),point)
+            if not profile_covers_issues(probe):closed=False;break
+            anchors=retriever.policy_anchor(probe.legal_issues,probe.facts,plan_evidence(probe))
+            if not anchors:closed=False;break
+            probes.extend(anchors)
+        if closed:
+            ids={item.unit_id for item in probes}
+            units=[store.units_by_id[uid] for uid in ids if uid in store.units_by_id]
+    for unit in units:
         for key in ('valid_from','valid_to','promulgated_date','consolidation_as_of'):
             value=unit.get(key)
             if not value:continue

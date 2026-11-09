@@ -29,16 +29,87 @@ def invalid_clause_locator(text):
     return False
 
 
+def _renewal_base_shift(claim,source):
+    from .durations import _NUMBER,_integer
+    if not re.search(r'hop dong(?: lao dong)? moi',source):return False
+    if not ('sau do' in source and 'khong xac dinh thoi han' in source):return False
+    # An explicit attached exception can defeat the ordinary repetition cap;
+    # its factual applicability remains for the independent auditor.
+    if re.search(r'nhieu lan[^.;]{0,100}hop dong|hop dong[^.;]{0,100}nhieu lan',source):return False
+    limits=[_integer(m.group(1)) for m in re.finditer(rf'\bchi duoc ky them ({_NUMBER})\s+lan\b',source)]
+    limits=[value for value in limits if value is not None]
+    if len(set(limits))!=1:return False
+    prior=re.search(rf'\bsau(?: khi)?\s+({_NUMBER})\s+hop dong\b',claim)
+    if not prior:return False
+    prior_count=_integer(prior.group(1))
+    if prior_count is None:return False
+    for addition in re.finditer(rf'\b(?:duoc|co the) ky them ({_NUMBER})\s+lan\b',claim):
+        prefix=claim[max(0,addition.start()-35):addition.start()]
+        if re.search(r'\b(?:khong|chua)(?:\s+(?:the|co|phai)){0,3}\s*$',prefix):continue
+        extra=_integer(addition.group(1))
+        if extra is not None and prior_count+extra>1+limits[0]:return True
+    return False
+
+
+
+
+def procedural_stage_mismatch(item,query):
+    """A court-party procedure is not an employer's internal process.
+
+    Case analogies and explicitly requested judicial comparisons retain their
+    channel. This is a scope exclusion, never a proof of a substantive answer.
+    """
+    if getattr(item,'kind',None)=='CASE':return False
+    q=fold(query)
+    workplace=bool(re.search(r'xu ly ky luat|ky luat lao dong|cuoc hop ky luat',q))
+    if not workplace or re.search(r'toa an|khoi kien|to tung|nguyen don|bi don|khang cao|khang nghi|vu an',q):return False
+    source=fold(' '.join(str(v or '') for v in (getattr(item,'ancestor_context',None),
+        getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text)))
+    return bool(re.search(r'duong su[^.;]{0,140}toa an|nguyen don[^.;]{0,80}nghia vu[^.;]{0,30}chung minh|co quan tien hanh to tung',source))
+
+
+def _money_values(text):
+    from decimal import Decimal,InvalidOperation
+    values=set()
+    for match in re.finditer(r'\b(\d[\d.,]*)(?:\s+(nghin|trieu|ty))?\s+dong\b',text):
+        raw=match.group(1)
+        if re.fullmatch(r'\d{1,3}(?:[.,]\d{3})+',raw):raw=raw.replace('.','').replace(',','')
+        else:raw=raw.replace(',','.')
+        try:values.add(Decimal(raw)*{'nghin':1000,'trieu':1000000,'ty':1000000000,None:1}[match.group(2)])
+        except InvalidOperation:pass
+    return values
+
+
+def _reported_prohibited_fine(claim,source,query):
+    """Case facts can contain money without asserting a statutory fine rate."""
+    stated=_money_values(claim)
+    if not stated or not stated<=_money_values(fold(query)):return False
+    if not ('phat tien' in source and re.search(r'nghiem cam|bi cam|khong duoc',source)):return False
+    negative_act=(re.search(r'(?:viec|hanh vi)[^.;!?]{0,160}phat tien[^.;!?]{0,160}(?:la|bi coi la)\s+(?:trai phap luat|khong hop phap|hanh vi bi cam)',claim)
+        or re.search(r'(?:khong duoc phep|bi nghiem cam)[^.;!?]{0,120}phat tien',claim))
+    if not negative_act:return False
+    # A case amount must never become a legal sanction against another actor.
+    return not re.search(r'xu phat|vi pham hanh chinh|phai nop phat|muc xu phat|phai chiu phat',claim)
+
+
 def semantic_issues(text, items, *, context_query=''):
     q=fold(text); problems=[]
     if invalid_clause_locator(text): problems.append('CLAIM_CLAUSE_POINT_CONFUSION')
-    invalidity=re.search(r'khong co gia tri phap ly|\bvo hieu\b|khong phat sinh quyen',q)
-    form_source=' '.join(fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text) for item in items)
+    invalidity_pattern=r'khong co gia tri phap ly|\bvo hieu\b|khong phat sinh quyen|khong co hieu luc|chi co hieu luc (?:neu|khi|trong truong hop|doi voi)'
+    invalidity=re.search(invalidity_pattern,q)
+    form_source=' '.join(fold(' '.join((str(getattr(item,'ancestor_context','') or ''),
+        str(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text)))) for item in items)
+    if _renewal_base_shift(q,form_source):problems.append('CLAIM_RENEWAL_COUNT_BASE_SHIFT')
+    no_change=re.search(r'\bkhong (?:co (?:bat ky |bat cu )?(?:quy dinh )?)?(?:thay doi|sua doi|bo sung)',q)
+    interval_scope=re.search(r'trong (?:suot|khoang)|tu \d[^.;]{0,30}den \d',q)
+    if no_change and interval_scope and q not in form_source:
+        problems.append('CLAIM_UNPROVED_CHANGE_ABSENCE')
     penalty=re.search(r'(?:bi\s+phat\s+tien|muc\s+phat\s+tien|phat\s+tien\s+(?:tu|bang))',q)
     money=r'\d[\d.,]*(?:\s+(?:nghin|trieu|ty))?\s+dong\b'
     if penalty and re.search(money,q):
         negated=re.search(r'(?:khong|chua)(?:\s+(?:co|du|the|phai|duoc|can|cu|xac|dinh|ket|luan|khang)){0,8}\s*$',q[max(0,penalty.start()-55):penalty.start()])
-        if not negated and not ('phat tien' in form_source and re.search(money,form_source)):
+        if (not negated and not ('phat tien' in form_source and re.search(money,form_source))
+                and not _reported_prohibited_fine(q,form_source,context_query)):
             problems.append('CLAIM_MONETARY_PENALTY_WITHOUT_SANCTION_SOURCE')
     unknown=re.search(r'chua (?:duoc )?xac nhan|chua xac minh|chua ro|chua biet|khong biet|khong ro',q)
     if unknown:
@@ -53,22 +124,47 @@ def semantic_issues(text, items, *, context_query=''):
     if absolute and not re.search(universal,form_source):
         qualified=re.search(r'(?:khong the (?:ket luan|khang dinh)|chua the khang dinh|khong dong nghia)[^.;]{0,100}$',q[:absolute.start()])
         if not qualified:problems.append('CLAIM_UNSUPPORTED_UNIVERSAL_SCOPE')
-    if invalidity and 'bang van ban' in form_source:
-        qualified=re.search(r'khong (?:dong nghia|co nghia|the coi|duoc coi)[^.;]{0,50}$',q[:invalidity.start()])
-        explicit=any(term in form_source for term in ('vo hieu','khong co gia tri phap ly','khong phat sinh quyen'))
+    form_context=any(term in form_source for term in ('bang van ban','bang loi noi','thoa thuan mieng','hinh thuc','thong diep du lieu','hop dong dien tu'))
+    if invalidity and form_context:
+        qualified=re.search(r'(?:khong (?:dong nghia|co nghia|the coi|duoc coi)|(?:khong|chua) the (?:ket luan|khang dinh))[^.;]{0,80}$',q[:invalidity.start()])
+        explicit=bool(re.search(invalidity_pattern,form_source))
         if not qualified and not explicit:problems.append('CLAIM_FORM_VIOLATION_AS_INVALIDITY')
+    # A duty triggered at an event does not establish an earlier deadline.
+    # Compare the event itself, not an article number or a canned legal rule.
+    for advance in re.finditer(r'\btruoc khi ([^.;,!]{3,100})',q):
+        prefix=q[max(0,advance.start()-120):advance.start()]
+        caution=re.search(r'(?:chua|khong) (?:co|du) can cu|khong the (?:ket luan|khang dinh)',prefix)
+        if caution:continue
+        stop={'thoi','gian','viec','nay','do','mot','cac','da','duoc','phai'}
+        event=set(re.findall(r'\w+',advance.group(1)))-stop
+        triggered=[set(re.findall(r'\w+',m.group(1)))-stop for m in re.finditer(r'\bkhi ((?:da )?(?:ket thuc|hoan thanh|het thoi han|cham dut)[^,.;]{3,140})[,.;]',form_source)]
+        prior=[set(re.findall(r'\w+',m.group(1)))-stop for m in re.finditer(r'\btruoc khi ([^,.;]{3,140})',form_source)]
+        advance_rule=bool(re.search(r'(?<!khong )(?<!khong can )\bbao truoc\b',form_source))
+        if (len(event)>=2 and any(event<=condition for condition in triggered)
+                and not any(event<=condition for condition in prior) and not advance_rule):
+            problems.append('CLAIM_UNSUPPORTED_ADVANCE_DEADLINE')
     absence=re.search(r'\bkhong (?:phai(?: duoc quy dinh)?|duoc quy dinh|co quy dinh|nam) (?:trong|tai) (?:bo luat|luat|nghi dinh|thong tu)\b',q)
     if absence and not any(q in fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text) for item in items):
         # A positive finding in one statute cannot prove absence from another.
         # Prefer a supported positive answer to an ungrounded universal negative.
         problems.append('CLAIM_STATUTORY_ABSENCE_NOT_GROUNDED')
     for item in items:
+        if procedural_stage_mismatch(item,context_query):problems.append('CLAIM_WRONG_PROCEDURAL_STAGE')
         number=getattr(item,'document_number',None) or getattr(item,'instrument_number',None)
         title=getattr(item,'document_title',None)
         typ=document_type(number,title,getattr(item,'document_type',None))
         source=fold(getattr(item,'source_text',None) or item.text)
         full_source=fold(' '.join((str(getattr(item,'ancestor_context','') or ''),
             str(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text))))
+        # A subgroup in an instrument's application scope is not a universal
+        # definition of the employment relationship or contract category.
+        scoped_population=('doi tuong ap dung' in full_source and any(term in full_source
+            for term in ('lam cong viec sau','thuoc cac doi tuong','thuoc cac truong hop','cac nganh nghe sau')))
+        general_contract=bool(re.search(r'\bhop dong(?: lao dong)? xac dinh thoi han\s+(?:la|co thoi han|co thoi gian)',q))
+        explicit_definition='la hop dong ma' in full_source or 'duoc hieu la' in full_source
+        scoped_claim=any(term in q for term in ('doi tuong ap dung','thuoc pham vi','trong pham vi','doi voi nhom','lam cong viec sau'))
+        if scoped_population and general_contract and not explicit_definition and not scoped_claim:
+            problems.append('CLAIM_SPECIAL_POPULATION_AS_GENERAL_DEFINITION')
         # Judicial review of a decision is a different procedural phase from
         # exercising the underlying workplace right. A lexical match on the
         # right's name cannot turn appeal procedure into its precondition.
