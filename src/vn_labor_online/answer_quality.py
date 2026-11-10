@@ -214,7 +214,9 @@ The normal reference audit still runs on every accepted edit afterwards.
 
 
 def render_claims(draft: AdjudicationDraft, partial: bool) -> AdjudicationDraft:
-    lines = ['Các quy định liên quan tìm được:']
+    # Paragraph boundaries belong to presentation, while source markers remain
+    # inline with the exact reviewed proposition they support.
+    lines = []
     for claim in draft.claims:
         markers = ' '.join(f'[{evidence_id}]' for evidence_id in claim.evidence_ids)
         lines.append(f'- {claim.text} {markers}')
@@ -225,4 +227,4 @@ def render_claims(draft: AdjudicationDraft, partial: bool) -> AdjudicationDraft:
             lines.append('Kết quả còn giới hạn vì nguồn hoặc hiệu lực chưa được duyệt đầy đủ.')
         else:
             lines.append('Kết quả còn giới hạn vì một số bằng chứng bắt buộc chưa đầy đủ.')
-    return draft.model_copy(update={'answer_summary': '\n'.join(lines)})
+    return draft.model_copy(update={'answer_summary': '\n\n'.join(lines)})

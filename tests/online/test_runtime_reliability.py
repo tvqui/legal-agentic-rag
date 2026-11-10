@@ -189,8 +189,9 @@ class InterpretationTests(unittest.TestCase):
             engine=LegalAdjudicator(AdjudicationConfig(mode='ollama',review_provider='gemini',review_model='test-gemini'))
         engine.provider=Mock(); engine._generate_with_layout=Mock(return_value=(draft,[]))
         checked=draft.model_copy(update={'semantic_review':{'status':'PASS'}})
-        with patch('vn_labor_online.answer_review.review_answer',return_value=(checked,[])) as audit:
+        with patch('vn_labor_online.answer_review.compose_answer',return_value=draft) as compose, patch('vn_labor_online.answer_review.review_answer',return_value=(checked,[])) as audit:
             engine.generate(pack,False)
+        self.assertIs(compose.call_args.args[0],reviewer)
         self.assertIs(audit.call_args.args[0],reviewer)
         self.assertIsNot(engine.review_provider,engine.provider)
 

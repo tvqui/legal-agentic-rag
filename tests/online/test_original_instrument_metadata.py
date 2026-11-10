@@ -53,5 +53,19 @@ class OriginalInstrumentMetadataTests(unittest.TestCase):
         self.assertEqual({e.unit_id for e in original_hits},{'edition','original'})
         self.assertEqual(len(original_hits),2)
 
+    def test_parenthetical_amendment_year_is_not_inferred_from_consolidation(self):
+        item=self.item(version_role='CONSOLIDATED',consolidation_as_of='2026-02-12')
+        for name in ('Luật Quản lý hồ sơ (sửa đổi, bổ sung năm 2026)',
+                     'Luật Quản lý hồ sơ (sửa đổi, bổ sung) năm 2026',
+                     'Luật Quản lý hồ sơ sửa đổi và bổ sung năm 2026'):
+            with self.subTest(name=name):
+                self.assertIn('CLAIM_INSTRUMENT_YEAR_MISMATCH',semantic_issues(name+' quy định về hồ sơ.',[item]))
+
+    def test_explicit_source_amendment_is_not_mistaken_for_a_new_original_law(self):
+        item=self.item().model_copy(update={'full_text':
+            'Luật này được sửa đổi, bổ sung bởi Luật số 29/2024/QH15. Bên nhận phải lập danh mục hồ sơ.'})
+        self.assertNotIn('CLAIM_INSTRUMENT_YEAR_MISMATCH',semantic_issues(
+            'Luật Quản lý hồ sơ (sửa đổi, bổ sung năm 2024) yêu cầu bên nhận lập danh mục hồ sơ.',[item]))
+
 
 if __name__=='__main__':unittest.main()

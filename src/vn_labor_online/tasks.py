@@ -45,6 +45,15 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         if REQUEST.search(span): request_spans.append(span)
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
+        if topic.key=='occupational_accident' and any(key.startswith('SAFETY.ACCIDENT_') for key in subissues):continue
+        if topic.key=='night_work' and (any(key.startswith('WORKING_TIME.') for key in subissues)
+                or any(t.key=='minor_workers' for t in topics) and re.search(r'có được|được không|bố trí|giới hạn|cấm',query,re.I)):
+            # Night work can be a factual qualifier of a rest entitlement,
+            # without asking for wages or the statutory night-time window.
+            from .taxonomy import deferred_topic
+            pay_requested=any(term in query.lower() and not deferred_topic(query.lower(),term)
+                for term in ('tiền lương','trả lương','trả thêm','phụ cấp','mức lương','tính lương'))
+            if not pay_requested and 'WORKING_TIME.NIGHT_DEFINITION' not in subissues:continue
         if topic.key in {'discipline','termination_grounds'}:
             from .dispute_context import mediation_only
             if mediation_only(query):continue

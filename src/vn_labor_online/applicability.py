@@ -281,7 +281,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
         subissues=classify_subissues(query,facts,issues)
         profile_groups={}
         for regime_date in ('2020-01-01','2026-01-01'):
-            for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,query_date=regime_date,facts=facts,query_text=query)).items():
+            for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,query_date=regime_date,facts=facts,query_text=query,requested_outcome=requested_outcome)).items():
                 profile_groups.setdefault(slot,[]).extend(groups)
         covered=profile_covers_issues(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,facts=facts,query_text=query))
         for item in items:

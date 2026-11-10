@@ -7,6 +7,18 @@ import re
 from .models import LegalLocator
 from .claim_validation import fold
 
+def accident_facets(query):
+    """Requested duties only; an injury narrative does not prove entitlement."""
+    from .topics import occupational_accident_context
+    q=fold(query)
+    if (any(t in q for t in ('hoc sinh','sinh vien')) and not any(t in q for t in ('hop dong lao dong','lam viec co tra cong'))
+            or not occupational_accident_context(query)):
+        return False,False
+    aid=any(t in q for t in ('so cuu','cap cuu'))
+    medical=any(t in q for t in ('chi phi y te','chi phi dieu tri','chi phi kham','chi phi chua benh')) or (
+        aid and any(t in q for t in ('thanh toan','chi phi')) and 'chi phi dieu tra' not in q)
+    return aid,medical
+
 def extra_requirements(analysis):
     q=fold(analysis.query_text); facts=analysis.facts
     old=bool(analysis.query_date and analysis.query_date<'2021-01-01')
@@ -42,8 +54,7 @@ def extra_requirements(analysis):
     from .topics import occupational_accident_context
     employee_scope=(not has('hoc sinh','sinh vien') or has('hop dong lao dong','lam viec co tra cong'))
     if employee_scope and occupational_accident_context(analysis.query_text) and (not analysis.query_date or analysis.query_date>='2016-07-01'):
-        aid=has('so cuu','cap cuu')
-        medical=has('chi phi y te','chi phi dieu tri','chi phi kham','chi phi chua benh') or (aid and has('thanh toan','chi phi') and not has('chi phi dieu tra'))
+        aid,medical=accident_facets(analysis.query_text)
         if aid:clauses('accident_first_aid',38,[1],['84/2015/QH13'])
         if medical:clauses('accident_medical_costs',38,[2],['84/2015/QH13'])
     if has('giao ket','ung vien','tuyen dung') and has('cung cap','thong tin','thong bao') and not facts.get('termination_basis'):

@@ -114,11 +114,22 @@ def _instrument_year_mismatch(text,items):
                 if issued and re.match(r'^(?:19|20)\d{2}-',issued):entry['edition'].add(issued[:4])
     content=fold(text)
     for title,years in names.items():
-        for mention in re.finditer(r'\b'+re.escape(title)+r'\s*(?:\(\s*)?(?:nam\s+)?((?:19|20)\d{2})\b',content):
+        for mention in re.finditer(r'\b'+re.escape(title)+r'\s*(?:\(\s*)?'
+                r'(?:(sua doi(?:\s*[,;]?\s*(?:va\s+)?bo sung)?|bo sung)\s*(?:\)\s*)?)?'
+                r'(?:nam\s+)?((?:19|20)\d{2})\b',content):
             prefix=content[max(0,mention.start()-35):mention.start()]
             edition=bool(re.search(r'(?:van ban hop nhat|vbhn)\s*$',prefix))
             allowed=years['edition'] if edition else years['original']
-            if allowed and mention.group(1) not in allowed:return True
+            year=mention.group(2)
+            if mention.group(1) and not edition:
+                # A consolidated edition's date does not establish an
+                # amendment in that year. Require an actual amendment citation
+                # in the supplied source instead of borrowing its issue year.
+                source=' '.join(fold(getattr(item,'full_text',None) or getattr(item,'source_text',None)
+                    or getattr(item,'text','')) for item in items)
+                amendment=re.search(r'(?:sua doi|bo sung)[^.;]{0,180}\b\d+/'+year+r'/qh\d+\b',source)
+                if amendment:continue
+            if allowed and year not in allowed:return True
     return False
 
 
@@ -131,6 +142,10 @@ def _conditional_consequence_lost(claim,source,query):
     stop=set('nguoi lao dong su dung ben cac mot nhung thi neu truong hop cua duoc phai co la khi tu tro len den du it nhat trong theo quy dinh gio ngay thang nam bang ve tai'.split())
     pairs=[match.groups() for match in re.finditer(
         r'\b(?:truong hop|neu)\s+([^.;]{8,220}?)\s+thi\s+([^.;]{8,220})',source)]
+    # A statutory subject can carry the condition without the word "nếu":
+    # "Người ... [qualified category] thì Y" still does not grant Y to all.
+    pairs.extend(match.groups() for match in re.finditer(
+        r'\b((?:nguoi lao dong|nguoi su dung lao dong|cac ben)\s+[^.;]{8,180}?)\s+thi\s+([^.;]{8,220})',source))
     # Restrictive scope can follow the consequence rather than precede it:
     # "Y applies to cases X" is not an unconditional entitlement to Y.
     for match in re.finditer(r'(?:^|[.;])\s*([^.;]{14,220}?)\s+doi voi truong hop\s+'
@@ -139,7 +154,12 @@ def _conditional_consequence_lost(claim,source,query):
         if re.search(r'\b(?:duoc|phai|co quyen)\b',consequence):pairs.append((condition,consequence))
     for condition,consequence in pairs:
         consequence=consequence.strip(' ,:')
-        if len(consequence.split())<7 or consequence not in claim:continue
+        # Omitting the nominal prefix "thời gian" does not turn a conditional
+        # time entitlement into an unconditional one. This comparison only
+        # detects omitted scope; it never rewrites the published/source text.
+        consequence_form=re.sub(r'\bthoi gian\s+','',consequence)
+        claim_form=re.sub(r'\bthoi gian\s+','',claim)
+        if len(consequence.split())<7 or consequence_form not in claim_form:continue
         # Citation boilerplate is a locator, not an additional case fact.
         # Likewise, a paraphrase can state the agreement without repeating the
         # grammatical subject "hai bên". Keep the actual agreement predicate.

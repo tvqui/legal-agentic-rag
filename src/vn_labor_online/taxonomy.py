@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v18'
+TAXONOMY_VERSION = 'labor-subissues-v19'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -43,6 +43,8 @@ def annual_leave_combination_only(query):
 
 # Mechanisms and remedies deliberately coexist rather than being exclusive siblings.
 SUBISSUES = {
+    'SAFETY.ACCIDENT_FIRST_AID':'Trách nhiệm sơ cứu, cấp cứu khi xảy ra tai nạn lao động',
+    'SAFETY.ACCIDENT_MEDICAL_COSTS':'Trách nhiệm thanh toán chi phí y tế do tai nạn lao động',
     'CONTRACT.PARTY_DEFINITIONS':'Định nghĩa người lao động và người sử dụng lao động',
     'CONTRACT.RELATIONSHIP_QUALIFICATION':'Xác định quan hệ lao động theo nội dung thực tế',
     'CONTRACT.EMPLOYER_INFORMATION':'Nghĩa vụ cung cấp thông tin khi giao kết',
@@ -239,6 +241,10 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     def add(label):
         if label not in found: found.append(label)
     has = lambda *terms: any(term in q for term in terms)
+    from .rule_catalog import accident_facets
+    aid,medical=accident_facets(query)
+    if aid:add('SAFETY.ACCIDENT_FIRST_AID')
+    if medical:add('SAFETY.ACCIDENT_MEDICAL_COSTS')
     intent = facts.get('query_intent')
     employment=has('hợp đồng lao động','hđlđ','tuyển dụng','ứng viên','thực tập','người lao động','người sử dụng lao động','nhân viên','nlđ','nsdlđ','công ty',
       'doanh nghiệp','hợp đồng dịch vụ','hợp đồng cộng tác viên','cộng tác viên')
@@ -827,6 +833,13 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             require('unused_leave_payment_rule', [loc('114' if historical else '113', '1' if historical else '3')])
     from .rule_catalog import extra_requirements
     requirements.update(extra_requirements(analysis))
+    # A task-scoped analysis retains the original user question for evidence
+    # context. Do not reattach the other independent accident duty to that task.
+    accident_keys={key for key in analysis.legal_subissues if key.startswith('SAFETY.ACCIDENT_')}
+    if accident_keys:
+        for key,slot in (('SAFETY.ACCIDENT_FIRST_AID','accident_first_aid'),
+                         ('SAFETY.ACCIDENT_MEDICAL_COSTS','accident_medical_costs')):
+            if key not in accident_keys:requirements.pop(slot,None)
     age=analysis.facts.get('age')
     underage_scope=('minor_working_time' in requirements and isinstance(age,int) and age<15
         and analysis.requested_outcome!='COMPARE'

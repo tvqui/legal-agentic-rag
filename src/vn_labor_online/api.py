@@ -272,6 +272,8 @@ def create_app(config_path:str|Path|None=None):
             'public_claim_scope':'reviewed-task-coverage-v1','request_context_scope':'operative-facets-v1',
             'application_coverage':'public-claim-application-v1','original_instrument_identity':'source-metadata-v1',
             'graph_requirement_routing':'planned-slots-v1','adjudication_recovery':'bounded-distinct-provider-v1',
+            'answer_composition':'gemini-grounded-before-review-v1',
+            'literal_gemini_review':'required-when-configured-v1',
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'literal_source_lookup':'verified-excerpt-v1',
             'assessment_fact_gate':'critical-facts-v1','probation_scope':'dated-job-group-v1',

@@ -60,5 +60,12 @@ class ConditionalConsequenceGroundingTests(unittest.TestCase):
         claim='Nếu thỏa thuận sử dụng hồ sơ bản chính có nội dung thể hiện việc bàn giao thì thời gian kiểm đếm được tính vào thời gian bàn giao.'
         self.assertNotIn('CLAIM_CONDITIONAL_ANTECEDENT_LOST',semantic_issues(claim,[item]))
 
+    def test_time_subject_shortening_does_not_erase_its_qualification(self):
+        item=VerifiedEvidenceItem(evidence_id='r',text='Thời gian nghỉ giữa giờ được tính vào giờ làm việc đối với trường hợp làm việc theo ca liên tục quy định tại khoản 3 Điều 63 Nghị định này ít nhất 30 phút.')
+        self.assertIn('CLAIM_CONDITIONAL_ANTECEDENT_LOST',semantic_issues(
+            'Nghỉ giữa giờ được tính vào giờ làm việc theo Điều 64.',[item],context_query='Tôi làm ban đêm 7 giờ.'))
+        self.assertNotIn('CLAIM_CONDITIONAL_ANTECEDENT_LOST',semantic_issues(
+            'Đối với trường hợp làm việc theo ca liên tục, thời gian nghỉ giữa giờ được tính vào giờ làm việc.',[item]))
+
 
 if __name__=='__main__':unittest.main()

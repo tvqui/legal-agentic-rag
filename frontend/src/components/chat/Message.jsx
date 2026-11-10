@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 import { EvidenceIndicator } from './EvidenceIndicator'
 import { ExecutionLog } from './ExecutionLog'
 import { IconButton } from '../ui/IconButton'
+import { answerBlocks, noticeGroups } from '../../services/answerPresentation'
 
 function formatTime(value) {
   return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
 function RichContent({ content, citations = [], onCitation }) {
-  const segments = content.split(/(\[\d+\])/g)
-  return <div className="message-text">{segments.map((segment, index) => {
+  const inline = (text) => text.split(/(\[\d+\])/g).map((segment, index) => {
     const match = segment.match(/^\[(\d+)\]$/)
     if (match) {
       const citation = citations[Number(match[1]) - 1]
@@ -18,10 +18,12 @@ function RichContent({ content, citations = [], onCitation }) {
         ? <button className="citation" onClick={() => onCitation(citation)} key={index} aria-label={`Mở nguồn ${match[1]}`}>{segment}</button>
         : <span key={index}>{segment}</span>
     }
-    return segment.split('\n').map((line, lineIndex) => line
-      ? <p key={`${index}-${lineIndex}`}>{line}</p>
-      : <br key={`${index}-${lineIndex}`} />)
-  })}</div>
+    return <span key={index}>{segment}</span>
+  })
+  return <div className="message-text">{answerBlocks(content).map((block, index) =>
+    block.kind === 'list'
+      ? <ul key={index}>{block.items.map((item, itemIndex) => <li key={itemIndex}>{inline(item)}</li>)}</ul>
+      : <p key={index}>{inline(block.text)}</p>)}</div>
 }
 
 function ErrorState({ message, onRetry }) {
@@ -39,12 +41,18 @@ function ErrorState({ message, onRetry }) {
 }
 
 function ReviewNotice({ message }) {
-  const notices = [...new Set([...(message.limitations || []), ...(message.warnings || [])])]
-  if (!notices.length && !message.questions?.length) return null
+  const { important, details } = noticeGroups(message)
+  if (!important.length && !details.length && !message.questions?.length) return null
   return <div className="response-notice">
     <AlertTriangle size={15} />
     <div>
-      {notices.length > 0 && <p><strong>Giới hạn/cảnh báo:</strong> {notices.join(' · ')}</p>}
+      {important.length > 0 && <details open={important.some(text => /chưa.*căn cứ|thiếu.*nội dung|cần bổ sung/i.test(text))}>
+        <summary>Giới hạn cần lưu ý ({important.length})</summary>
+        <ul>{important.map(text => <li key={text}>{text}</li>)}</ul>
+      </details>}
+      {details.length > 0 && <details><summary>Chẩn đoán kỹ thuật ({details.length})</summary>
+        <ul>{details.map(text => <li key={text}>{text}</li>)}</ul>
+      </details>}
       {message.questions?.map((question) => <p key={question}><strong>Cần bổ sung:</strong> {question}</p>)}
     </div>
   </div>

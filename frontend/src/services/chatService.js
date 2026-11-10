@@ -73,6 +73,7 @@ const NOTICE_LABELS = {
   answer_coverage: 'Một số phần của câu hỏi chưa có đủ căn cứ để trả lời.',
   pending_facts: 'Cần bổ sung dữ kiện để kết luận cho trường hợp cụ thể.',
   semantic_verification: 'Hệ thống chưa hoàn tất kiểm tra kết luận với nguồn.',
+  FRESHNESS_UNVERIFIED: 'Chưa xác minh đầy đủ thay đổi pháp luật sau ngày chốt dữ liệu.',
   ANSWER_SEMANTIC_REVIEW_INCOMPLETE: 'Chỉ trình bày phần đã kiểm được; câu hỏi còn phần chưa đủ căn cứ.',
   ANSWER_WITH_UNCONFIRMED_FACTS: 'Phần giải thích có điều kiện; chưa kết luận khi dữ kiện còn thiếu.',
   SOURCE_CLAUSE_BOUNDARY_NEEDS_REVIEW: 'Nguồn có đoạn đang gộp nhiều khoản; cần đối chiếu ranh giới khoản trong bản gốc.',
@@ -101,7 +102,7 @@ function humanizeNotice(value) {
 }
 
 function humanizeNotices(values = []) {
-  return [...new Set(values.filter(value => !['ANSWER_LAYOUT_CLEANED', 'ANSWER_LANGUAGE_REPAIRED'].includes(value)).map(humanizeNotice))]
+  return [...new Set(values.filter(value => !['ANSWER_LAYOUT_CLEANED', 'ANSWER_LANGUAGE_REPAIRED', 'ANSWER_COMPOSED_FOR_REVIEW'].includes(value)).map(humanizeNotice))]
 }
 
 export async function parseResponse(response) {

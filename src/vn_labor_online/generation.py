@@ -546,19 +546,51 @@ class LegalAdjudicator:
         literal=literal_lookup_draft(pack,partial,assumptions)
         if literal is not None:
             skip_step('answer_quality','Luồng trích nguyên văn có kiểm tra literal riêng')
-            skip_step('semantic_review','LITERAL_SOURCE_MATCH: không yêu cầu reviewer LLM')
-            return literal,['LITERAL_SOURCE_QUOTATION']
-        draft,warnings=self._generate_with_layout(pack,partial,assumptions)
+            if self._review_provider is None:
+                skip_step('semantic_review','LITERAL_SOURCE_MATCH: không cấu hình Gemini reviewer')
+                return literal,['LITERAL_SOURCE_QUOTATION']
+            # Gemini checks even literal answers when configured. Keep source
+            # text immutable; no model rewriting is needed to format a quote.
+            draft,warnings=literal,['LITERAL_SOURCE_QUOTATION']
+        else:
+            draft,warnings=self._generate_with_layout(pack,partial,assumptions)
         if self.cfg.semantic_review and self.cfg.mode!='deterministic' and self.provider and draft.claims and 'ANSWER_QUALITY_BLOCKED' not in warnings:
-            from .answer_review import review_answer
-            draft,review_warnings=observed('semantic_review',review_answer,self.review_provider,draft,pack,self.cfg.semantic_repair_attempts,
+            from .answer_review import review_answer,compose_answer,review_error_code
+            if self._review_provider is not None and literal is None and 'ADJUDICATION_ALTERNATE_DRAFT_USED' not in warnings:
+                try:
+                    from .runtime import operation_budget,OperationBudgetExceeded
+                    # Composition is another untrusted draft. Reserve enough
+                    # of the root request budget for its independent review.
+                    with operation_budget('answer_composition',self.cfg.review_timeout_seconds,
+                            self.cfg.review_timeout_seconds,self.cfg.review_reserve_seconds):
+                        draft=observed('answer_quality',compose_answer,self.review_provider,draft,pack,
+                            technology='Gemini · soạn câu trả lời gắn với nguồn',summary=lambda d:{'so_luan_diem':len(d.claims)})
+                    warnings.append('ANSWER_COMPOSED_FOR_REVIEW')
+                except OperationBudgetExceeded:
+                    # A local budget limit is not a Gemini service failure.
+                    # Use the remaining time to audit the unchanged candidate;
+                    # it still cannot be published without that Gemini audit.
+                    warnings.append('ANSWER_COMPOSITION_SKIPPED_FOR_REVIEW_BUDGET')
+                except StructuredOutputError:
+                    # A malformed or locally rejected edit is never published.
+                    # The unchanged draft still needs the independent Gemini
+                    # audit/repair below; this is not a permissive fallback.
+                    warnings.append('ANSWER_COMPOSITION_REJECTED_FOR_REVIEW')
+                except (ProviderRateLimited,RequestStopped):
+                    raise
+                except Exception as exc:
+                    return draft.model_copy(update={'claims':[],'answer_summary':'Chưa hoàn tất biên tập và kiểm tra câu trả lời với nguồn.',
+                        'applicable_law_versions':[],'semantic_review':{'status':'ERROR',
+                        'error_code':review_error_code(exc),'stage':'ANSWER_COMPOSITION'}}),[
+                        *warnings,'ANSWER_SEMANTIC_REVIEW_ERROR:'+type(exc).__name__,'ANSWER_QUALITY_BLOCKED']
+            draft,review_warnings=observed('semantic_review',review_answer,self.review_provider,draft,pack,0 if literal is not None else self.cfg.semantic_repair_attempts,
               technology='Reviewer '+self.cfg.review_provider+' · xem lượt provider/model thực tế',summary=draft_summary,
               status=lambda r:'DONE' if r[0].semantic_review.get('status')=='PASS' else 'ERROR' if r[0].semantic_review.get('status')=='ERROR' else 'WARNING')
             warnings+=review_warnings
             if draft.claims:
                 draft=render_claims(draft,partial or draft.semantic_review.get('status')!='PASS')
                 missing=draft.semantic_review.get('missing',[])
-                if missing: draft=draft.model_copy(update={'answer_summary':draft.answer_summary+'\nChưa có đủ căn cứ để trả lời toàn bộ các phần của câu hỏi; phần còn thiếu được ghi trong limitations.'})
+                if missing: draft=draft.model_copy(update={'answer_summary':draft.answer_summary+'\n\nPhần chưa trả lời được: '+'; '.join(dict.fromkeys(missing))})
                 used={uid for c in draft.claims for uid in c.evidence_ids}
                 draft=draft.model_copy(update={'applicable_law_versions':_versions([e for e in pack.evidence if e.evidence_id in used])})
             else:
