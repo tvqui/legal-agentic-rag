@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v19'
+TAXONOMY_VERSION = 'labor-subissues-v20'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -163,6 +163,11 @@ def covered_profile_parents(analysis) -> set[str]:
     if keys: covered.add('CONTRACT')
     if analysis.facts.get('termination_basis'): covered.update({'WAGE','HARASSMENT'})
     if 'CONTRACT.PROBATION_PAY' in keys: covered.add('WAGE')
+    if any(key.startswith('LEAVE.') for key in keys):
+        # "Hưởng nguyên lương" qualifies a leave entitlement. It is not by
+        # itself an independent request about wages, bonuses or salary bases.
+        remaining=re.sub(r'\b(?:hưởng\s+(?:(?:nguyên|đủ|toàn bộ)\s+)?lương|có\s+(?:hưởng\s+)?lương)\b',' ',q)
+        if remaining!=q and not re.search(r'\blương\b|\bthưởng\b|tiền công|thu nhập',remaining):covered.add('WAGE')
     if 'CONTRACT.PROBATION_CANCELLATION' in keys and probation_cancellation_only(q):
         covered.add('TERMINATION')
     if 'LEAVE.UNUSED_LEAVE_PAYMENT' in keys and unused_leave_settlement_only(q):

@@ -555,7 +555,7 @@ class LegalAdjudicator:
         else:
             draft,warnings=self._generate_with_layout(pack,partial,assumptions)
         if self.cfg.semantic_review and self.cfg.mode!='deterministic' and self.provider and draft.claims and 'ANSWER_QUALITY_BLOCKED' not in warnings:
-            from .answer_review import review_answer,compose_answer,review_error_code
+            from .answer_review import review_answer,compose_answer,review_error_code,review_error_details
             if self._review_provider is not None and literal is None and 'ADJUDICATION_ALTERNATE_DRAFT_USED' not in warnings:
                 try:
                     from .runtime import operation_budget,OperationBudgetExceeded
@@ -581,7 +581,7 @@ class LegalAdjudicator:
                 except Exception as exc:
                     return draft.model_copy(update={'claims':[],'answer_summary':'Chưa hoàn tất biên tập và kiểm tra câu trả lời với nguồn.',
                         'applicable_law_versions':[],'semantic_review':{'status':'ERROR',
-                        'error_code':review_error_code(exc),'stage':'ANSWER_COMPOSITION'}}),[
+                        'error_code':review_error_code(exc),'stage':'ANSWER_COMPOSITION',**review_error_details(exc)}}),[
                         *warnings,'ANSWER_SEMANTIC_REVIEW_ERROR:'+type(exc).__name__,'ANSWER_QUALITY_BLOCKED']
             draft,review_warnings=observed('semantic_review',review_answer,self.review_provider,draft,pack,0 if literal is not None else self.cfg.semantic_repair_attempts,
               technology='Reviewer '+self.cfg.review_provider+' · xem lượt provider/model thực tế',summary=draft_summary,

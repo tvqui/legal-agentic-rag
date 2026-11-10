@@ -5,6 +5,7 @@ import re
 
 
 HINTS = {
+    'DEADLINE_TOO_SHORT': 'Gemini requires at least 10 seconds for a manually set deadline; reserve time within the caller budget rather than extending it.',
     'API_KEY_REJECTED': 'Check the Kaggle GEMINI_API_KEY secret and its project restrictions.',
     'REGION_UNSUPPORTED': 'Check Gemini API availability for the Kaggle runtime region.',
     'BILLING_REQUIRED': 'Check project billing and model access in Google AI Studio.',
@@ -73,6 +74,8 @@ def classify_error(error):
         reason = 'SCHEMA_REJECTED'
     elif fields:
         reason = 'PARAMETER_REJECTED'
+    elif re.search(r'deadline.{0,120}(?:too short|minimum)|minimum allowed deadline',text):
+        reason = 'DEADLINE_TOO_SHORT'
     elif status == 'FAILED_PRECONDITION':
         reason = 'FAILED_PRECONDITION'
     elif status == 'INVALID_ARGUMENT':

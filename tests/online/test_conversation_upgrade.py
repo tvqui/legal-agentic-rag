@@ -228,10 +228,13 @@ class RuntimeTests(TestCase):
         self.assertEqual(config.response_mime_type,'application/json')
         sdk=Mock(); sdk.__enter__=Mock(return_value=sdk); sdk.__exit__=Mock(return_value=False)
         sdk.models.generate_content.return_value=SimpleNamespace(text='{"legal_issues":[]}')
-        with patch('google.genai.Client',return_value=sdk) as factory,request_budget(2):
+        # A sub-10s scoped budget is rejected locally (tested separately),
+        # because the real Gemini endpoint rejects such server deadlines.
+        with patch('google.genai.Client',return_value=sdk) as factory,request_budget(15):
             result=GeminiProvider('evaluated-model','test-key',30).structured('system','user',{'type':'object'})
         self.assertEqual(result,{'legal_issues':[]})
-        self.assertLessEqual(factory.call_args.kwargs['http_options'].timeout,2000)
+        self.assertLessEqual(factory.call_args.kwargs['http_options'].timeout,15000)
+        self.assertGreaterEqual(factory.call_args.kwargs['http_options'].timeout,10000)
 
 
 class RequestApiTests(TestCase):

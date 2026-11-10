@@ -92,6 +92,10 @@ class LegalResearcher:
         if unpublished_change_prediction(analysis.query_text,analysis.query_date):return 'SKIPPED_FUTURE_PREDICTION'
         if self.cfg.adaptive:
             if analysis.missing_facts: return 'SKIPPED_FACT_GATE'
+            if analysis.facts.get('query_intent')=='TEMPORAL_LAW_SELECTION':
+                # Intake already confirmed that this asks which dated regime
+                # governs, rather than assessing termination grounds/notice.
+                return 'SKIPPED_KNOWN_PROFILE'
             if analysis.route==Route.DIRECT and analysis.requested_outcome=='LOOKUP': return 'SKIPPED_EXACT_LOOKUP'
             comparison=(analysis.facts.get('query_intent')=='UNLAWFUL_DEFINITION_CONSEQUENCES' or
               relationship_comparison(analysis.query_text))

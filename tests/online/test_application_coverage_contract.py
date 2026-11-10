@@ -18,6 +18,8 @@ class ApplicationCoverageContractTests(unittest.TestCase):
 
     def test_verbatim_rule_alone_does_not_complete_case_application(self):
         for text in ('Người nhận hồ sơ phải gửi xác nhận trong thời hạn 07 ngày làm việc.',
+                     'Theo Khoản 1 Điều 9 Luật Quản lý hồ sơ, người nhận hồ sơ phải gửi xác nhận trong thời hạn 07 ngày làm việc.',
+                     'Căn cứ Điều 9, khoản 1: Người nhận hồ sơ phải gửi xác nhận trong thời hạn 07 ngày làm việc.',
                      'TEST/2024 Điều 9: Người nhận hồ sơ phải gửi xác nhận trong thời hạn 07 ngày làm việc.'):
             pack,draft,review,tasks=self.fixture(text)
             validate_review(review,draft,pack,tasks)

@@ -56,7 +56,14 @@ def extra_requirements(analysis):
     if employee_scope and occupational_accident_context(analysis.query_text) and (not analysis.query_date or analysis.query_date>='2016-07-01'):
         aid,medical=accident_facets(analysis.query_text)
         if aid:clauses('accident_first_aid',38,[1],['84/2015/QH13'])
-        if medical:clauses('accident_medical_costs',38,[2],['84/2015/QH13'])
+        if medical:
+            clauses('accident_medical_costs',38,[2],['84/2015/QH13'])
+            # A request for the complete cost list needs the branches, not just
+            # an introductory clause. A narrow payer question must not acquire
+            # an unrelated requirement to enumerate every insurance category.
+            complete_list=bool(re.search(r'(?:cac|nhung|toan bo|moi)[^.;?!]{0,40}chi phi|chi phi[^.;?!]{0,25}(?:nao|bao gom|gom|nhung gi)',q))
+            if complete_list:
+                out['accident_medical_costs'] += [[loc(38,2,point,['84/2015/QH13'],exact=True)] for point in ('a','b','c')]
     if has('giao ket','ung vien','tuyen dung') and has('cung cap','thong tin','thong bao') and not facts.get('termination_basis'):
         clauses('employer_information',19 if old else 16,[1])
     from .termination_context import contract_expiry_context,contract_continuation_facets

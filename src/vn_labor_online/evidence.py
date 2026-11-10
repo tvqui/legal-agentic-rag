@@ -35,7 +35,11 @@ def extend_plan_for_evidence(plan:EvidencePlan,items:list[Evidence],facts:dict,q
         mandatory.append('transitional_rule')
     from .exception_references import exception_locators
     requirements={key:list(groups) for key,groups in plan.slot_requirements.items()}
-    for item in items:
+    # A retrieved side passage must not invent a mandatory exception for the
+    # requested rule. Unprofiled independent tasks keep their audited sources
+    # available; otherwise follow references only from the actual rule chain.
+    dependency_sources=items if plan.task_queries else relevant
+    for item in dependency_sources:
         if not item.verified:continue
         for locator in exception_locators(item):
             groups=requirements.setdefault('exceptions',[])

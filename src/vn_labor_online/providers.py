@@ -285,7 +285,16 @@ class GeminiProvider(BaseProvider):
         wait_remaining=self.rate_policy.max_wait_seconds
         for attempt in range(self.rate_policy.max_retries+1):
             checkpoint()
+            if request_timeout(self.timeout)<10:
+                # Gemini rejects a manually supplied deadline below 10s with
+                # HTTP 400. Never enlarge the caller's remaining allowance to
+                # hide this: let the component retain its downstream reserve.
+                raise OperationBudgetExceeded('GEMINI_MINIMUM_DEADLINE_BUDGET')
             wait_remaining=max(0,wait_remaining-self.rate_limiter.acquire(wait_remaining))
+            timeout_seconds=request_timeout(self.timeout)
+            if timeout_seconds<10:
+                # Pacing/retry waits can exhaust the useful inference window.
+                raise OperationBudgetExceeded('GEMINI_MINIMUM_DEADLINE_BUDGET')
             try:
                 from google import genai
                 from google.genai import types
@@ -293,7 +302,7 @@ class GeminiProvider(BaseProvider):
                 # Exactly one SDK attempt: all actual retries must reacquire a
                 # shared project/model slot and respect the request deadline.
                 with genai.Client(api_key=self.api_key, http_options=types.HttpOptions(
-                        timeout=max(1, int(request_timeout(self.timeout)*1000)),
+                        timeout=int(timeout_seconds*1000),
                         retry_options=types.HttpRetryOptions(attempts=1))) as client:
                     response=client.models.generate_content(model=self.model, contents=user,
                         config=types.GenerateContentConfig(system_instruction=system+gemini_array_limits(schema), temperature=0,

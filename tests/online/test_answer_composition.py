@@ -166,9 +166,13 @@ class CompleteExecutionRegressionTests(unittest.TestCase):
             verified=True,official_source=True,authority_rank=100,binding=True,
             source_url='https://vbpl.vn/official',valid_from='2016-07-01',
             provision_temporal_verified=True,temporal_verified=True)
-        plan,ids=independent_partial_plan(a,[medical],True)
+        points=[medical.model_copy(update={'unit_id':f'medical_{point}',
+            'provision_version_id':f'medical_{point}','point_number':point,
+            'text':f'{point}) Trách nhiệm thanh toán chi phí y tế theo nhóm điều kiện tương ứng.'}) for point in ('a','b','c')]
+        self.assertIsNone(independent_partial_plan(a,[medical],True)[0])
+        plan,ids=independent_partial_plan(a,[medical]+points,True)
         self.assertIsNotNone(plan)
-        self.assertEqual(ids,['medical'])
+        self.assertEqual(set(ids),{'medical','medical_a','medical_b','medical_c'})
         self.assertIn('accident_medical_costs',plan.slot_requirements)
         self.assertNotIn('accident_first_aid',plan.slot_requirements)
 

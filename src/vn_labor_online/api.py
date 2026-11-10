@@ -273,6 +273,8 @@ def create_app(config_path:str|Path|None=None):
             'application_coverage':'public-claim-application-v1','original_instrument_identity':'source-metadata-v1',
             'graph_requirement_routing':'planned-slots-v1','adjudication_recovery':'bounded-distinct-provider-v1',
             'answer_composition':'gemini-grounded-before-review-v1',
+            'dependency_scope':'requested-rule-chain-v1',
+            'gemini_deadline_guard':'minimum10s-within-request-budget-v1',
             'literal_gemini_review':'required-when-configured-v1',
             'routing_topics':TOPIC_REGISTRY_VERSION,'task_completeness':'evidence-and-answer-v1',
             'literal_source_lookup':'verified-excerpt-v1',
