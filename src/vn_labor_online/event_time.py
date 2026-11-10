@@ -7,6 +7,7 @@ DATES=re.compile(r'\b(?:(?P<y>(?:19|20|21)\d{2})[-/.](?P<m>\d{1,2})[-/.](?P<d>\d
 MARKERS=[
     ('BIRTH_DATE',r'\bsinh(?: vào| ngày)?\b'),
     ('CONTRACT_SIGNED_AT',r'(?:ký|giao kết|bắt đầu)[^,;.!?]{0,45}hợp đồng|hợp đồng[^,;.!?]{0,35}(?:ký|giao kết|bắt đầu)'),
+    ('EMPLOYMENT_STARTED_AT',r'bắt đầu làm việc|làm việc từ(?: ngày)?|vào làm(?: việc)?|nhận việc'),
     ('LAW_APPLICABLE_AT',r'(?:quy định|pháp luật|luật)[^,;.!?]{0,25}(?:áp dụng|hiệu lực|tại ngày)|(?:áp dụng|tra cứu|tính đến|xét theo luật tại)'),
     ('DECISION_ISSUED_AT',r'(?:ban hành|ra|ký|nhận)[^,;.!?]{0,30}quyết định'),
     ('SOURCE_PROMULGATED_AT',r'(?:luật|nghị định|thông tư)[^,;.!?]{0,50}ban hành'),

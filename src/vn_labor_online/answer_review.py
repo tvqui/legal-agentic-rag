@@ -76,7 +76,11 @@ independent cumulative duties or additions using the supplied text and its
 structure, and disclose genuine ambiguity. Check whether EVERY requested
 part of the original question is answered substantively, not just cited. Check
 complete lists, both sides of comparisons, counterconditions, consequences,
-calculation steps and requested references. Repeated claims count once. Use
+calculation steps and requested references. For an assessment of a stated case,
+quoting the governing rule alone is not a completed application: the PUBLIC
+claims must explicitly answer how it applies to the reported facts. Reasoning
+written only in your private verdict reason is not part of the user's answer.
+Repeated claims count once. Use
 IRRELEVANT for a restatement that adds no operative content needed for this
 question, or a standalone heading/definition unrelated to the requested answer.
 Keep distinct rule and case-application claims, conditions, exceptions, quantities
@@ -225,6 +229,15 @@ def validate_review(review, draft, pack, tasks):
     # complete while its prerequisite is missing or only partially answered.
     by_task={item.task_id:item for item in review.coverage}
     task_by_id={task.task_id:task for task in tasks}
+    if getattr(pack,'requested_outcome',None)=='ASSESS_LEGALITY':
+        for coverage in review.coverage:
+            if coverage.status!='ANSWERED':continue
+            assigned=[by_claim[uid] for uid in coverage.claim_ids]
+            if assigned and all(_source_quotation_only(claim,by_evidence) for claim in assigned):
+                coverage.status='PARTIAL'
+                coverage.missing='Mới trình bày quy định; chưa có kết luận áp dụng cho tình huống đã nêu.'
+                review.question_fully_addressed=False
+                review.missing_requirements=list(dict.fromkeys(review.missing_requirements+[coverage.missing]))
     for coverage in review.coverage:
         if coverage.status!='ANSWERED': continue
         required=_probation_amount_requirement(task_by_id[coverage.task_id],pack)
@@ -271,8 +284,27 @@ def validate_review(review, draft, pack, tasks):
         raise StructuredOutputError('false completion verdict')
     return supported
 
+
+def _source_quotation_only(claim,by_evidence):
+    """Exact excerpt detection, never a lexical guess that a conclusion is true."""
+    normalized=lambda value:' '.join(str(value).split()).strip(' \"“”').casefold()
+    content=normalized(claim.text)
+    for uid in claim.evidence_ids:
+        item=by_evidence.get(uid)
+        if item is None:continue
+        for value in texts(item):
+            source=normalized(value)
+            if content and content in source:return True
+            prefix=' '.join(str(part) for part in (item.instrument_number,
+                'Điều '+item.article if item.article else None,
+                'Khoản '+item.clause if item.clause else None,
+                'Điểm '+item.point if item.point else None) if part)
+            if prefix and content==normalized(prefix+': '+value):return True
+    return False
+
 def source_payload(item):
     return {'evidence_id':item.evidence_id, 'kind':item.kind,'binding':item.binding, 'instrument':item.instrument_number,
+        'original_instrument':item.original_instrument_number,
         'article':item.article,'clause':item.clause,'point':item.point,
         'full_text':item.full_text or item.text,'norm_role':item.norm_role,
         'valid_from':item.valid_from,'valid_to':item.valid_to,

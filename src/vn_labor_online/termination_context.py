@@ -2,10 +2,27 @@
 import re
 
 
+def action_negated(query, start):
+    """Exclude an absent event, while retaining questions about legal bans."""
+    prefix=re.split(r'[.;!?]|\b(?:nhưng|tuy nhiên)\b',query[max(0,start-90):start])[-1]
+    return bool(re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|từng|thực sự|tiến hành)){0,2}\s*$',prefix,re.I))
+
+
+def employer_action_match(query):
+    for direct in re.finditer(r'\b(?:công ty|doanh nghiệp|người sử dụng lao động)\s+'
+        r'(?:(?:có|được|thể|muốn|sẽ|quyền|phép|đã|không|chưa|chẳng|hề|từng|chủ động)\s+){0,7}'
+        r'(?P<action>đơn phương|chấm dứt|sa thải|cho\s+(?:(?:tôi|người lao động|nhân viên)\s+)?(?:thôi việc|nghỉ))',query,re.I):
+        if not action_negated(query,direct.start('action')):return direct
+    # A notification and the following termination share the same explicit
+    # subject. The recipient "tôi" must not become the person resigning.
+    return re.search(r'\b(?:công ty|doanh nghiệp|người sử dụng lao động)\s+'
+        r'(?:(?:đã|chỉ|sẽ)\s+){0,2}(?:thông\s+)?báo\s+trước'
+        r'(?:\s+cho\s+(?:tôi|người lao động|nhân viên))?\s+\d+\s+ngày'
+        r'\s+(?:rồi|sau đó)\s+(?:cho\s+(?:(?:tôi|người lao động|nhân viên)\s+)?nghỉ(?:\s+việc)?|chấm dứt(?:\s+hợp đồng)?)',query,re.I)
+
+
 def explicit_employer_action(query):
-    return bool(re.search(r'\b(?:công ty|doanh nghiệp|người sử dụng lao động)\s+'
-        r'(?:(?:có|được|thể|muốn|sẽ|quyền|phép|đã|không|chủ động)\s+){0,7}'
-        r'(?:đơn phương|chấm dứt|cho thôi việc|cho nghỉ)',query.lower()))
+    return employer_action_match(query) is not None
 
 
 def protection_clause(query,facts):
@@ -45,6 +62,7 @@ def contract_expiry_context(query):
     q=fold(query)
     return bool(re.search(r'\b(?:het (?:han|thoi han) (?:hop dong|hdld)|'
         r'(?:hop dong(?: lao dong)?|hdld)(?:\s+(?:co|xac dinh))?\s*(?:thoi han)?'
+        r'(?:\s+\d+\s+(?:thang|nam|ngay))?'
         r'(?:\s+(?:cua toi|nay|do)){0,2}\s+(?:(?:vua|da|sap)\s+)?het(?:\s+(?:han|thoi han))?)\b',q))
 
 

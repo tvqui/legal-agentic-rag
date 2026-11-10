@@ -19,6 +19,8 @@ def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|
         if not source: issues.append('UNKNOWN_UNIT_ID')
         if item.document_id and item.document_id not in store.nodes_by_id: issues.append('UNKNOWN_DOCUMENT_NODE')
         if source and item.source_url!=(source.get('source_url') or None): issues.append('SOURCE_URL_NOT_FROM_UNIT')
+        if source and item.original_instrument_number is not None and item.original_instrument_number!=(source.get('instrument_number') or source.get('document_number')):
+            issues.append('UNIT_FIELD_MISMATCH:original_instrument_number')
         if item.kind in {'PROVISION','CASE'} and not item.source_url: issues.append('MISSING_SOURCE_URL')
         for field in ('document_id','document_number','article_number','clause_number','point_number','valid_from','valid_to','promulgated_date','consolidation_as_of','version_role'):
             if source and str(getattr(item,field) or '')!=str(source.get(field) or ''): issues.append('UNIT_FIELD_MISMATCH:'+field)

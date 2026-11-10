@@ -115,6 +115,7 @@ class QueryAnalysis(BaseModel):
     retrieval_queries:list[str]=Field(default_factory=list,max_length=4)
     ontology_features:LaborOntologyFeatures=Field(default_factory=LaborOntologyFeatures)
     fact_candidates:list[FactCandidate]=Field(default_factory=list,max_length=40)
+    uncertain_fact_fields:list[str]=Field(default_factory=list,max_length=40)
     legal_subissues:list[str]=Field(default_factory=list)
     in_scope:bool=True
     query_text:str=''
@@ -148,6 +149,7 @@ class EvidencePlan(BaseModel):
     slot_requirements:dict[str,list[list[LegalLocator]]]=Field(default_factory=dict)
     task_queries:dict[str,str]=Field(default_factory=dict)
 class Evidence(BaseModel):
+    original_instrument_number:str|None=None
     unit_id:str; score:float=0; retrieval_method:str; rank:int=0; component_scores:dict[str,float]=Field(default_factory=dict)
     document_id:str|None=None; instrument_id:str|None=None; provision_identity_id:str|None=None
     provision_version_id:str|None=None; document_number:str|None=None; document_title:str|None=None
@@ -197,6 +199,7 @@ class ApplicabilityBatch(BaseModel):
     decisions:list[ApplicabilityDecision]
 
 class VerifiedEvidenceItem(BaseModel):
+    original_instrument_number:str|None=None
     kind:str|None=None
     evidence_id:str; instrument_number:str|None=None; article:str|None=None; clause:str|None=None
     point:str|None=None; text:str; valid_from:str|None=None; valid_to:str|None=None

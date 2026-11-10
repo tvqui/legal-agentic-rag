@@ -20,6 +20,25 @@ def extra_requirements(analysis):
     def points(slot,article,clause,values,documents=None):
         out[slot]=[[loc(article,clause,p,documents)] for p in values]
     def has(*terms): return any(term in q for term in terms)
+    temporal_selection=facts.get('query_intent')=='TEMPORAL_LAW_SELECTION'
+    if temporal_selection:
+        clauses('labour_code_effectiveness',240 if old else 220,[1])
+        if has('hop dong','thoa uoc','thoa thuan'):
+            clauses('labour_contract_transition',240 if old else 220,[2])
+        return out
+    from .dispute_context import individual_mediation_requested,mediation_only
+    if individual_mediation_requested(analysis.query_text):
+        selected=[]
+        if has('sa thai','don phuong cham dut'):selected.append('a')
+        overseas=has('lam viec o nuoc ngoai','di lam viec o nuoc ngoai') and has('boi thuong','thiet hai')
+        if overseas:selected.append('đ')
+        elif has('boi thuong','tro cap thoi viec','tro cap mat viec'):selected.append('b')
+        if has('giup viec gia dinh'):selected.append('c')
+        if has('bao hiem xa hoi','bao hiem y te','bao hiem that nghiep','bhxh','bhyt'):selected.append('d')
+        if not old and has('lao dong thue lai','nguoi lao dong thue lai'):selected.append('e')
+        article=201 if old else 188
+        if selected:points('individual_mediation_rule',article,1,list(dict.fromkeys(selected)))
+        else:out['individual_mediation_rule']=[[loc(article,1)]]
     from .topics import occupational_accident_context
     employee_scope=(not has('hoc sinh','sinh vien') or has('hop dong lao dong','lam viec co tra cong'))
     if employee_scope and occupational_accident_context(analysis.query_text) and (not analysis.query_date or analysis.query_date>='2016-07-01'):
@@ -59,7 +78,7 @@ def extra_requirements(analysis):
         clauses('discipline_forms',125 if old else 124,[1,2,3] if old else [1,2,3,4])
     if has('ky luat') and has('chung minh','loi cua nguoi lao dong','vo toi'):
         points('disciplinary_proof_burden',123 if old else 122,1,['a'])
-    if has('thu tuc','trinh tu','quy trinh','cuoc hop') and has('ky luat','sa thai'):
+    if has('thu tuc','trinh tu','quy trinh','cuoc hop') and has('ky luat','sa thai') and not mediation_only(analysis.query_text):
         out['discipline_procedure']=[[loc(123 if old else 122,1)]]
         if not old: out['discipline_implementing_procedure']=[[loc(70,documents=['145/2020/NĐ-CP'])]]
     if has('ky luat','cuoc hop ky luat') and has('danh','bao luc','xam pham','nhuc ma','xuc pham','hanh hung'):
@@ -81,7 +100,14 @@ def extra_requirements(analysis):
             clauses('work_suspension_prerequisites',article,[1])
     if ('MINOR_WORKER' in getattr(analysis,'legal_issues',[]) or facts.get('minor') is True) and has('gio','thoi gio','lam them','ban dem','lam dem','tang ca'):
         age=facts.get('age')
-        branches=[1] if isinstance(age,int) and age<15 else [2] if isinstance(age,int) and age<18 else [1,2]
+        if old:
+            # The 2012 code groups both working-hour age bands in clause 2;
+            # clause 3 separately covers permitted overtime/night occupations.
+            branches=[2]
+            if (not isinstance(age,int) or age>=15) and has('lam them','ban dem','lam dem','tang ca'):
+                branches.append(3)
+        else:
+            branches=[1] if isinstance(age,int) and age<15 else [2] if isinstance(age,int) and age<18 else [1,2]
         clauses('minor_working_time',163 if old else 146,branches)
     if has('cao tuoi') and has('the nao','dinh nghia','khai niem','duoc hieu','la gi'):
         clauses('elderly_definition',166 if old else 148,[1])
@@ -128,7 +154,7 @@ def extra_requirements(analysis):
             out['employee_data_processing']=[[loc(25,documents=['91/2025/QH15'])]]
             out['data_processing_lawful_basis']=[[loc(19,documents=['91/2025/QH15'])]]
         else: out['data_processing_lawful_basis']=[[loc(11,documents=['13/2023/NĐ-CP'])]]
-    if has('phien ban luat','phien ban phap luat','citation cu','hieu luc phap ly','van ban cu') and has('thoi diem','nam','hieu luc','van ban moi','chon'):
+    if not temporal_selection and has('phien ban luat','phien ban phap luat','citation cu','hieu luc phap ly','van ban cu') and has('thoi diem','nam','hieu luc','van ban moi','chon'):
         out['application_of_normative_documents']=[[loc(58,documents=['64/2025/QH15'])]]
     # False positives are hints, never conclusions; the semantic review still
     # checks question relevance and conditions against the actual source text.

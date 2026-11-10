@@ -62,13 +62,15 @@ class OnlinePipeline:
             checkpoint('understanding')
             if resolved.clarification:
                 fact_conflict=resolved.clarification_reason=='MATERIAL_FACT_CONFLICT'
-                reason='Mâu thuẫn dữ kiện quan trọng trong cùng vụ việc' if fact_conflict else 'Chưa rõ chủ đề hỏi nối tiếp'
+                unconfirmed=resolved.clarification_reason=='UNCONFIRMED_USER_FACT'
+                reason='Mâu thuẫn dữ kiện quan trọng trong cùng vụ việc' if fact_conflict else 'Dữ kiện chưa được xác nhận' if unconfirmed else 'Chưa rõ chủ đề hỏi nối tiếp'
                 answer=(
                     'Dữ kiện quan trọng trong cùng vụ việc đang mâu thuẫn. Vui lòng xác nhận thông tin được hỏi bên dưới trước khi tiếp tục tra cứu.'
                     if fact_conflict else
+                    'Cần xác nhận dữ kiện chưa rõ trước khi áp dụng quy định cho tình huống của bạn.' if unconfirmed else
                     'Cần xác định chủ đề của câu hỏi nối tiếp trước khi tra cứu.'
                 )
-                warning='CONVERSATION_CONTEXT_CONFLICT' if fact_conflict else 'CONVERSATION_CONTEXT_AMBIGUOUS'
+                warning='CONVERSATION_CONTEXT_CONFLICT' if fact_conflict else 'CONVERSATION_FACT_UNCONFIRMED' if unconfirmed else 'CONVERSATION_CONTEXT_AMBIGUOUS'
                 Step('scope_gate').finish({'ket_qua':'NEED_MORE_FACTS','ly_do':reason},'WARNING')
                 skip_after_gate(reason)
                 env=intake(request.question,request.conversation_context,request.query_date,request.facts)
@@ -374,6 +376,22 @@ class OnlinePipeline:
         trace.timings_ms['seed_retrieval']=round((time.perf_counter()-stage)*1000,2)
         audit_started=time.perf_counter()
         audited=observed('source_audit',deterministic_audit,self.store,items,analysis.query_date,allow_fallback,analysis.query_date_end,summary=lambda v:{'vuot_kiem_tra_may':sum(x.verified for x in v),'co_loi_cung':sum(not x.verified for x in v),'so_nguon_co_canh_bao':sum(bool(x.audit_warnings) for x in v)},status=lambda v:'WARNING' if any(x.audit_warnings or not x.verified for x in v) else 'DONE')
+        from .taxonomy import locator_matches
+        usable_sources=[item for item in audited if item.verified]
+        uncovered_groups={slot:[group for group in groups if not any(
+            any(locator_matches(item,loc) for loc in group) for item in usable_sources)]
+            for slot,groups in plan.slot_requirements.items() if slot in plan.mandatory_slots}
+        rejected_sources=[]
+        for item in audited:
+            if item.verified:continue
+            slots=[slot for slot,groups in plan.slot_requirements.items()
+                if slot in plan.mandatory_slots and any(locator_matches(item,loc) for group in groups for loc in group)]
+            rejected_sources.append({'evidence_id':item.unit_id,'codes':item.audit_issues,'matched_required_slots':slots})
+            warnings.extend('MANDATORY_SOURCE_UNUSABLE:'+slot for slot in slots if any(
+                any(locator_matches(item,loc) for loc in group) for group in uncovered_groups.get(slot,[])))
+        if rejected_sources:
+            trace.events.append({'event':'source_audit_rejections','stage':'seed',
+                'sources':rejected_sources[:128],'total':len(rejected_sources)})
         trace.timings_ms['deterministic_audit']=round((time.perf_counter()-audit_started)*1000,2)
         applicability_started=time.perf_counter()
         checkpoint('applicability')
@@ -455,6 +473,7 @@ class OnlinePipeline:
                 remaining_ms=self.cfg.graph.wall_clock_ms-(time.monotonic()-graph_started)*1000
                 expanded,frontier,round_stats=observed('graph_round',self.graph.expand_round,frontier,gaps,env.normalized_query,visited,paths,
                   self.cfg.graph.max_nodes-len(visited),self.cfg.graph.max_edges-graph_stats['edges_visited'],relation_paths,direction_paths,remaining_ms,
+                  requirement_slots=plan.slot_requirements,
                   summary=lambda r:graph_summary(r,self.store,round_no))
                 graph_stats['edges_visited']+=round_stats['edges_visited']; graph_stats['rounds']=round_no
                 graph_stats['critical_edges_followed']+=round_stats['critical_edges_followed']

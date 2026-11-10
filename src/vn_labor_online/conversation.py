@@ -102,6 +102,17 @@ def _topic(analysis):
     return TOPIC_LABELS.get(issues[0]) if len(issues) == 1 else None
 
 
+def _short_contract_reply(text,analysis):
+    """Recognize a standalone fact answer, without creating a legal request.
+
+    It is consumed only when a related prior case exists; the ordinary topic
+    checks and material-conflict handling still decide whether to inherit it.
+    """
+    return bool(analysis.facts.get('contract_type') in {'INDEFINITE','FIXED_TERM'} and re.fullmatch(
+        r'\s*(?:(?:hợp đồng(?: lao động)?|loại hợp đồng)(?: của tôi)?(?: là)?\s+)?'
+        r'(?:không xác định thời hạn|(?:có thời hạn|xác định thời hạn)(?:\s+\d+\s+tháng)?|\d+\s+tháng)\s*[.!]?\s*',text,re.I))
+
+
 def _provenance_record(turn_id, text, candidate, status='USER_REPORTED'):
     pattern=r'\s+'.join(re.escape(word) for word in candidate.source_quote.split())
     matches=list(re.finditer(pattern,text)) if pattern else []
@@ -154,7 +165,8 @@ def resolve_context(request):
         if topic:
             active.append((turn_id, text, analysis))
     current_topic = _topic(current)
-    continuation = bool(FOLLOWUP.search(request.question.strip()) or FACT_REPLY.search(request.question.strip()) or correction
+    short_reply=_short_contract_reply(request.question,current)
+    continuation = bool(FOLLOWUP.search(request.question.strip()) or FACT_REPLY.search(request.question.strip()) or short_reply or correction or current.uncertain_fact_fields
         or SAME_CASE.search(request.question))
     deictic_only=re.fullmatch(
         r'(?:(?:vậy|thế|thì|vậy thì|thế thì)\s+)?(?:việc (?:đó|này)\s+)?'
@@ -295,11 +307,21 @@ def resolve_context(request):
     if not continuation:
         return ResolvedContext(request.question,facts=dict(current.facts),
           provenance=current_records,query_date=current.query_date)
+    if current.uncertain_fact_fields:
+        for field in current.uncertain_fact_fields:
+            result.facts.pop(field,None)
+            for record in result.provenance:
+                if record['field']==field and record.get('status')=='USER_REPORTED':
+                    record['status']='UNCONFIRMED'
+        labels=', '.join(FACT_LABELS.get(field,field) for field in current.uncertain_fact_fields)
+        result.clarification=f'Thông tin về {labels} chưa được xác định rõ. Bạn xác nhận giá trị thực tế trước khi áp dụng quy định được không?'
+        result.clarification_reason='UNCONFIRMED_USER_FACT'
+        return result
     resolved_topic=topic if related_subtopic else current_topic or topic
     result.query = f'Về {resolved_topic}: {request.question}'
     # A factual reply resumes the prior requested tasks, not every old question
     # or its outdated numbers. Labels come from the versioned taxonomy.
-    fact_reply=FACT_REPLY.search(request.question.strip())
+    fact_reply=FACT_REPLY.search(request.question.strip()) or short_reply
     if fact_reply and not re.search(r'\?|bao lâu|bao nhiêu|có đúng|quy định gì|thì sao',request.question,re.I):
         previous=next((a for _,_,a in reversed(active) if a.legal_subissues),None)
         if previous:

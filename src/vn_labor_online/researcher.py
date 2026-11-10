@@ -64,7 +64,7 @@ def _verified_candidate(candidate:FactCandidate,query:str)->FactCandidate|None:
         from .analysis import _contract_type_fact
         interpreted,span=_contract_type_fact(query)
         if span is None or interpreted!=candidate.value:return None
-    if candidate.field in {'special_occupation','protected_status','training_costs','actor'}:
+    if candidate.field in {'special_occupation','protected_status','training_costs','actor','notice_days','worked_months'}:
         from .analysis import _extract_facts
         if _extract_facts(query.lower(),None,None).get(candidate.field)!=candidate.value:return None
     return candidate.model_copy(update={'char_start':start,'char_end':end,'origin':'RESEARCHER','verified':True})
@@ -145,7 +145,8 @@ The result improves retrieval recall and never counts as legal evidence. Return 
                 if uid not in graph or uid in path: raise ValueError('invalid task dependency')
                 for parent in graph[uid]: visit(parent,path|{uid})
             for uid in graph: visit(uid,set())
-            tasks=merge_tasks(analysis.answer_tasks,tasks)
+            tasks=(analysis.answer_tasks if facts.get('query_intent')=='TEMPORAL_LAW_SELECTION'
+                else merge_tasks(analysis.answer_tasks,tasks))
             queries=list(dict.fromkeys(queries+[t.retrieval_query for t in tasks]))
             subissues=classify_subissues(query,facts,issues)
             issues=parent_issues(issues,subissues)

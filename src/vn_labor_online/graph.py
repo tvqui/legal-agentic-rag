@@ -37,6 +37,19 @@ PROFILE_SLOT_NAMES={
 for slot in PROFILE_SLOT_NAMES:
     GAP_RELATIONS.setdefault(slot,{'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'IMPLEMENTS':{'IN'}})
 
+
+def preferred_relations(gaps,requirement_slots=()):
+    preferred={}
+    for gap in gaps:
+        relations=GAP_RELATIONS.get(gap)
+        if relations is None and gap in requirement_slots:
+            # A new source-backed requirement should not need a second manual
+            # registry entry just to traverse legal references and hierarchy.
+            relations={'REFERENCES':{'OUT'},'PART_OF':{'IN','OUT'},'IMPLEMENTS':{'IN'}}
+        for relation,directions in (relations or {}).items():
+            preferred.setdefault(relation,set()).update(directions)
+    return preferred
+
 def search_seeds(accepted,source_audited,decisions,limit):
     """Unresolved applicability can seed a search, never a legal answer.
 
@@ -62,15 +75,13 @@ class GraphExplorer:
         self._node_features={}
     def expand_round(self,frontier_ids:list[str],gaps:list[str],query:str,visited:set[str],paths:dict[str,list[str]],
                      remaining_nodes:int,remaining_edges:int,relation_paths:dict[str,list[str]]|None=None,
-                     direction_paths:dict[str,list[str]]|None=None,wall_clock_ms:float|None=None):
+                     direction_paths:dict[str,list[str]]|None=None,wall_clock_ms:float|None=None,*,requirement_slots=()):
         started=time.monotonic(); queue=[]; serial=0
         time_limit=min(float(self.cfg.wall_clock_ms),float(wall_clock_ms)) if wall_clock_ms is not None else float(self.cfg.wall_clock_ms)
         relation_paths=relation_paths if relation_paths is not None else {}
         direction_paths=direction_paths if direction_paths is not None else {}
         fixed=self.cfg.mode=='fixed'
-        preferred={}
-        for gap in gaps:
-            for relation,directions in GAP_RELATIONS.get(gap,{}).items(): preferred.setdefault(relation,set()).update(directions)
+        preferred=preferred_relations(gaps,requirement_slots)
         query_terms=_terms(query)
         from .runtime import checkpoint
         preparation_expired=False

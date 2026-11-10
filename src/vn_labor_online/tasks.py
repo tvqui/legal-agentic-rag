@@ -45,6 +45,12 @@ def deterministic_tasks(query,subissues,topics,labels,route,outcome='EXPLAIN'):
         if REQUEST.search(span): request_spans.append(span)
     explicit_topics={t.key for span in request_spans for t in detect_topics(span)}
     for topic in topics:
+        if topic.key in {'discipline','termination_grounds'}:
+            from .dispute_context import mediation_only
+            if mediation_only(query):continue
+        if topic.key=='normal_hours' and 'WAGE.OVERTIME_PAY' in subissues:
+            from .taxonomy import independent_rest_request
+            if not independent_rest_request(query) and not any(key.startswith('WORKING_TIME.') for key in subissues):continue
         if topic.key=='wage_payment':
             from .taxonomy import deferred_topic
             mentions=[term for term in topic.phrases if term in query.lower()]

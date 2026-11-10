@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v17'
+TAXONOMY_VERSION = 'labor-subissues-v18'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -206,6 +206,23 @@ def unpaid_family_event(query):
         or re.search(r'\b(?:cha|mẹ|bố|anh|chị|em)(?:\s+(?:đẻ|nuôi|ruột|tôi|của)){0,4}\s+kết hôn',q))
 
 
+def independent_rest_request(query):
+    return bool(re.search(r'nghỉ (?:bao nhiêu|bao lâu)|(?:số|mấy) (?:ngày|giờ) nghỉ|lịch nghỉ|nghỉ bù|'
+        r'được nghỉ|quyền nghỉ|phải (?:cho|bố trí) nghỉ|nghỉ giữa giờ|thời giờ nghỉ',query,re.I))
+
+
+def overtime_day_points(query):
+    q=query.lower()
+    if any(term in q for term in ('các loại ngày','mọi loại ngày','tất cả các ngày','so sánh các mức')):
+        return ('a','b','c')
+    found=[]
+    for point,terms in (('a',('ngày thường','ngày làm việc bình thường','ngày làm việc thông thường')),
+                        ('b',('ngày nghỉ hằng tuần','ngày nghỉ hàng tuần','ngày nghỉ tuần')),
+                        ('c',('ngày lễ','ngày nghỉ lễ','ngày tết'))):
+        if any(affirmative_phrase(q,(term,)) for term in terms):found.append(point)
+    return tuple(found) or ('a','b','c')
+
+
 def unused_leave_settlement_only(query):
     """Termination may be a settled premise, rather than a requested legality assessment."""
     q=query.lower()
@@ -216,6 +233,7 @@ def unused_leave_settlement_only(query):
 
 
 def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
+    if facts.get('query_intent')=='TEMPORAL_LAW_SELECTION':return []
     q = ' '.join(query.lower().split())
     found = []
     def add(label):
@@ -230,6 +248,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     form_terms=has('hình thức hợp đồng','thỏa thuận miệng','hợp đồng miệng','bằng lời nói',
                   'phương tiện điện tử','thông điệp dữ liệu','hợp đồng điện tử',
                   'giữ một bản','giữ 1 bản','mỗi bên giữ','lập thành hai bản','lập thành 2 bản')
+    form_terms=form_terms or bool(re.search(r'hợp đồng(?: lao động)? (?:điện tử|miệng)',q))
     independent_form=(not has('thử việc') or has('hợp đồng lao động','hđlđ') or any(
         'hợp đồng' in part and any(term in part for term in ('bằng lời nói','hợp đồng miệng','hợp đồng điện tử','hình thức hợp đồng'))
         and 'thử việc' not in part for part in re.split(r'[.;?!]',q)))
@@ -326,7 +345,9 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     if emergency:add('WORKING_TIME.EMERGENCY_OVERTIME')
     if overtime and has('đồng ý','chấp thuận','từ chối') and not emergency:
         add('WORKING_TIME.OVERTIME_CONSENT')
-    if overtime and has('giới hạn','tối đa','bao nhiêu giờ') and (not emergency or has('so sánh','phân biệt')):
+    stated_overtime=bool(re.search(r'(?:làm thêm|tăng ca)(?:\s+giờ)?[^.;?!]{0,55}\b\d+\s*giờ\b',q))
+    permission_for_quantity=stated_overtime and has('cho phép','có được','được không','có đúng','hợp pháp','vượt')
+    if overtime and (has('giới hạn','tối đa','bao nhiêu giờ') or permission_for_quantity) and (not emergency or has('so sánh','phân biệt')):
         add('WORKING_TIME.OVERTIME_LIMITS')
     if has('khuyến khích') and has('tuần làm việc'):
         add('WORKING_TIME.WEEKLY_POLICY')
@@ -353,6 +374,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('WAGE.OVERTIME_PAY')
     if not time_permission_only and night and (has('tiền','lương','trả thêm','mức trả','phụ cấp','phần trăm','%') or overtime):
         add('WAGE.NIGHT_PAY')
+    if 'WAGE.OVERTIME_PAY' in found and not independent_rest_request(q):
+        found=[key for key in found if key!='WORKING_TIME.WEEKLY_REST']
     quantity = bool(re.search(r'bao nhiêu ngày|số ngày|tính ngày|\b\d+\s+ngày\b',q))
     special_mechanism = False
     for label, terms in (
@@ -363,6 +386,9 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         ('ENTERPRISE_TRANSFER', ('sáp nhập', 'chia tách doanh nghiệp', 'chuyển quyền sở hữu doanh nghiệp')),
     ):
         mechanism=(facts.get('mutual_termination_agreement') is not False and affirmative_phrase(q,terms)) if label=='MUTUAL_AGREEMENT' else has(*terms)
+        if label=='DISMISSAL':
+            from .termination_context import action_negated
+            mechanism=any(not action_negated(q,m.start()) for m in re.finditer('sa thải',q))
         if mechanism or label == 'MUTUAL_AGREEMENT' and intent == 'MUTUAL_TERMINATION':
             add('TERMINATION.' + label); special_mechanism = True
     if intent == 'WITHDRAW_TERMINATION' or has('hủy bỏ việc đơn phương', 'huỷ bỏ việc đơn phương'):
@@ -447,6 +473,9 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         actor='EMPLOYEE' if intent=='STIPULATED_EMPLOYEE_LIABILITY' else 'EMPLOYER'
         found=[key for key in found if key not in {'TERMINATION.EMPLOYEE_UNILATERAL','TERMINATION.EMPLOYER_UNILATERAL','TERMINATION.ILLEGAL_TERMINATION'}]
         if not repayment_only:add('TERMINATION.'+actor+'_LIABILITY')
+    from .dispute_context import mediation_only
+    if mediation_only(query):
+        found=[key for key in found if not key.startswith('TERMINATION.')]
     return found
 
 
@@ -483,6 +512,7 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
     """
     historical = legal_regime_for(analysis.query_date) == 'BLLD_2012'
     docs = OLD_CODE if historical else CURRENT_CODE
+    q=analysis.query_text.lower()
     def loc(article, clause=None, point=None, documents=None, exact=False, contains=None):
         return LegalLocator(documents=documents or docs, article=str(article), clause=clause, point=point,
           exact_level=exact,text_contains=contains or [])
@@ -546,9 +576,7 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
                 require('overtime_extended_conditions', *[[loc('107','3',p)] for p in ('a','b','c','d','đ')])
         elif key=='WAGE.OVERTIME_PAY':
             q=analysis.query_text.lower()
-            holiday_only=('WAGE.NIGHT_PAY' in analysis.legal_subissues and any(term in q for term in ('ngày lễ','nghỉ lễ','ngày tết'))
-              and not any(term in q for term in ('ngày thường','nghỉ hằng tuần','các loại ngày','mọi loại ngày')))
-            pay_points=('c',) if holiday_only else ('a','b','c')
+            pay_points=overtime_day_points(q)
             require('overtime_pay',[loc('97' if historical else '98','1',exact=True)],
               *[[loc('97' if historical else '98','1',p)] for p in pay_points])
             if not historical and 'WAGE.NIGHT_PAY' in analysis.legal_subissues:
@@ -578,9 +606,14 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key=='CONTRACT.CONTRACT_TYPES':
             require('contract_types',*[[loc('22' if historical else '20','1',point)] for point in (('a','b','c') if historical else ('a','b'))])
         elif key=='CONTRACT.FORM':
-            # Retrieve the complete form rule and its exceptions; no answer or
-            # user-specific legal status is encoded in this location guide.
-            require('contract_form',[loc('16' if historical else '14')])
+            # A question about electronic form or retaining a written copy
+            # does not require the separate oral-form exception to be cited.
+            # Oral eligibility and overviews still retrieve the whole rule.
+            oral=any(term in q for term in ('bằng lời nói','thỏa thuận miệng','hợp đồng miệng','bằng miệng'))
+            narrow=any(term in q for term in ('điện tử','thông điệp dữ liệu','giữ một bản','giữ 1 bản','mỗi bên giữ','lập thành hai bản','lập thành 2 bản'))
+            overview=any(term in q for term in ('so sánh','các hình thức','tất cả hình thức','mọi hình thức'))
+            require('contract_form',[loc('14','1')] if not historical and narrow and not oral and not overview
+                else [loc('16' if historical else '14')])
         elif key=='CONTRACT.DURATION':
             require('contract_duration',[loc('22' if historical else '20','1','b')])
         elif key=='CONTRACT.CONTINUATION':
@@ -794,6 +827,17 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             require('unused_leave_payment_rule', [loc('114' if historical else '113', '1' if historical else '3')])
     from .rule_catalog import extra_requirements
     requirements.update(extra_requirements(analysis))
+    age=analysis.facts.get('age')
+    underage_scope=('minor_working_time' in requirements and isinstance(age,int) and age<15
+        and analysis.requested_outcome!='COMPARE'
+        and not re.search(r'người (?:lớn|thành niên|trưởng thành)|từ đủ 18|18 tuổi trở lên|so sánh|phân biệt',q)
+        and len(set(re.findall(r'\b(\d+)\s*tuổi\b',q)))<=1)
+    if underage_scope:
+        # These general permission/cap provisions cannot override a special
+        # population prohibition. The dated minor rule still needs retrieval,
+        # authority, applicability and semantic checking; age alone is no proof.
+        requirements.pop('overtime_limits',None)
+        requirements.pop('overtime_extended_conditions',None)
     return requirements
 
 
@@ -825,6 +869,15 @@ def plan_with_profiles(analysis: QueryAnalysis, legacy_plan):
         return legacy_plan
     requirements = profile_requirements(analysis)
     mandatory = list(legacy_plan.mandatory_slots)
+    from .dispute_context import mediation_only
+    if 'individual_mediation_rule' in requirements and mediation_only(analysis.query_text):
+        mandatory=[s for s in mandatory if s not in {'conditions','exceptions','mandatory_reference',
+            'termination_conditions','notice_requirement'}]
+    if ('minor_working_time' in requirements
+            and set(analysis.legal_issues)<={'MINOR_WORKER','WORKING_TIME','GENERAL'}):
+        # Real dependencies found in source text are added later. Generic word
+        # slots must not demand irrelevant exceptions to a fully scoped rule.
+        mandatory=[s for s in mandatory if s not in {'conditions','exceptions','mandatory_reference'}]
     covered=profile_covers_issues(analysis)
     mapped_exit=('TERMINATION.EMPLOYER_UNILATERAL' not in analysis.legal_subissues and
       ('TERMINATION.EMPLOYEE_UNILATERAL' not in analysis.legal_subissues or

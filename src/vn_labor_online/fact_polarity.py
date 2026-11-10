@@ -4,9 +4,10 @@ import re
 def assertion_uncertain(query,start,end):
     prefix=re.split(r'[.;!?,]|\b(?:nhưng|tuy nhiên)\b',query[max(0,start-100):start])[-1]
     suffix=query[end:end+55]
-    if re.search(r'(?:không\s+(?:biết|rõ|chắc)|chưa\s+(?:biết|rõ|chắc|được xác nhận)|chưa xác định)[^.;?!]*$',prefix,re.I):
+    if re.search(r'(?:không\s+(?:biết|rõ|chắc|nhớ)|chưa\s+(?:biết|rõ|chắc|nhớ|được xác nhận)|chưa xác định)[^.;?!]*$',prefix,re.I):
         return True
-    if re.match(r'\s*(?:hay|hoặc)\s+không\b',suffix,re.I):return True
+    if re.match(r'\s*[,;]?\s*(?:hay|hoặc)\s+(?:không|chưa|\d+)\b',suffix,re.I):return True
+    if re.search(r'\bnếu\s+(?:tôi\s+)?nhớ\s+(?:đúng|không nhầm)\b',suffix,re.I):return True
     return bool(re.search(r'\b(?:có|liệu|phải chăng)[^.;?!]{0,50}$',prefix,re.I)
                 and re.search(r'\bkhông\s*[?!.]',suffix,re.I))
 

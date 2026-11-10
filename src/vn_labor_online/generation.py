@@ -5,7 +5,7 @@ from fractions import Fraction
 from .config import AdjudicationConfig
 from .claim_validation import semantic_issues
 from .answer_quality import clean_draft,clean_source_excerpt,draft_issues,guarded_language_edit,language_issues,render_claims
-from .errors import StructuredOutputError
+from .errors import StructuredOutputError,ProviderRateLimited
 from .runtime import RequestStopped
 from .models import AdjudicationDraft,ApplicableLawVersion,Claim,VerifiedEvidencePack,ProviderClaims
 from .taxonomy import classify_subissues,original_documents,profile_covers_issues,annual_leave_points,annual_leave_combination_only
@@ -262,7 +262,7 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
                         f'được nghỉ hằng năm hưởng nguyên lương theo hợp đồng lao động; mức nghỉ cơ sở là {base} ngày làm việc.')
             if seniority:
                 conclusion+=f' Với {service_years} năm làm việc cho cùng người sử dụng lao động, tăng thêm {bonus} ngày theo từng chu kỳ đủ 05 năm. Tổng tối thiểu là {result} ngày làm việc.'
-        if pack.facts.get('minor') or pack.facts.get('disabled') or category in {'HEAVY','SPECIAL_HEAVY'}:
+        if len(annual_leave_points(pack.facts))>1:
             conclusion='Mức nghỉ cơ sở được xác định theo nhóm áp dụng tại khoản 1 Điều 113; không cộng chồng các mức nghỉ vì tuổi, khuyết tật và điều kiện công việc. '+conclusion
         if point=='a' and any(pack.facts.get(field) is not False for field in ('minor','disabled')):
             conclusion=('Nếu người lao động không thuộc nhóm chưa thành niên hoặc người khuyết tật: '+conclusion)
@@ -307,6 +307,37 @@ def _annual_leave_answer(pack:VerifiedEvidencePack,partial:bool,assumptions:list
     return AdjudicationDraft(answer_summary='\n'.join(lines),claims=claims,applicable_law_versions=versions,
       assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
 
+def _nonredundant_quote_items(items):
+    """Suppress a quotation only when its entire text is retained verbatim.
+
+    This affects display, not the evidence pack, retrieval or legal coverage.
+    Different editions, siblings and parent-only qualifications remain intact.
+    """
+    def normalized(text):return ' '.join(text.split())
+    def version(item):
+        return (item.instrument_number,item.original_instrument_number,item.valid_from,item.valid_to,
+                item.promulgated_date,item.consolidation_as_of,item.version_role,item.official_url)
+    kept=[]
+    for index,item in enumerate(items):
+        text=normalized(item.text)
+        redundant=False
+        if item.kind=='PROVISION' and item.instrument_number and item.article and text:
+            for other_index,other in enumerate(items):
+                if index==other_index or other.kind!='PROVISION' or version(item)!=version(other):continue
+                if item.article!=other.article:continue
+                if item.clause and item.clause!=other.clause:continue
+                if item.point and item.point!=other.point:continue
+                other_text=normalized(other.text)
+                if not other_text.startswith(text):continue
+                # Different claims at the same locator are not a hierarchy
+                # repetition, even if one happens to contain the other's words.
+                if text!=other_text and item.clause==other.clause and item.point==other.point:continue
+                if len(other_text)>len(text) or (len(other_text)==len(text) and other_index<index):
+                    redundant=True;break
+        if not redundant:kept.append(item)
+    return kept
+
+
 def adjudicate(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->AdjudicationDraft:
     if not pack.evidence:
         return AdjudicationDraft(answer_summary='Không đủ bằng chứng trong corpus để trả lời câu hỏi này.',claims=[],applicable_law_versions=[],limitations=pack.coverage_state.gaps)
@@ -319,7 +350,7 @@ def adjudicate(pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None
     annual_leave=_annual_leave_answer(pack,partial,assumptions)
     if annual_leave: return annual_leave
     lines=['Các quy định liên quan tìm được:']; claims=[]
-    for index,e in enumerate(pack.evidence,1):
+    for index,e in enumerate(_nonredundant_quote_items(pack.evidence),1):
         location=' '.join(x for x in (e.instrument_number,f'Điều {e.article}' if e.article else None,
           f'Khoản {e.clause}' if e.clause else None,f'Điểm {e.point}' if e.point else None) if x)
         claim_text=f'{location}: {e.text}' if location else e.text
@@ -366,7 +397,7 @@ def _contract_rule_answer(pack,partial,assumptions):
         indefinite=_find(pack,'20','1','a'); fixed=_find(pack,'20','1','b')
         if not indefinite or not fixed or 'khong xac dinh thoi han' not in _fold(indefinite.text) or '36' not in fixed.text: return None
         add(indefinite,'Điểm a khoản 1 Điều 20: hợp đồng lao động không xác định thời hạn là hợp đồng không xác định thời hạn và thời điểm chấm dứt hiệu lực.')
-        add(fixed,'Điểm b khoản 1 Điều 20: hợp đồng lao động xác định thời hạn có thời hạn không quá 36 tháng kể từ thời điểm có hiệu lực. Đây là loại thứ hai; thử việc không phải một loại hợp đồng lao động thứ ba trong khoản này.')
+        add(fixed,'Điểm b khoản 1 Điều 20: hợp đồng lao động xác định thời hạn có thời hạn không quá 36 tháng kể từ thời điểm có hiệu lực.')
     elif key=='CONTRACT.RELATIONSHIP_QUALIFICATION':
         rule=_find(pack,'13','1')
         if not rule or not all(term in _fold(rule.text) for term in ('tien luong','quan ly')): return None
@@ -399,7 +430,7 @@ def _contract_rule_answer(pack,partial,assumptions):
             add(_find(pack,'17','1'),'Việc người sử dụng lao động giữ bản chính giấy tờ tùy thân, văn bằng, chứng chỉ để ràng buộc người lao động là hành vi bị cấm tại khoản 1 Điều 17; cần phân biệt với việc xuất trình để đối chiếu rồi trả lại.')
         if key=='CONTRACT.PROHIBITED_ACTS' and '2' in relevant_clauses:
             rule=_find(pack,'17','2')
-            add(rule,'Nếu khoản tiền hoặc tài sản thực chất là biện pháp bảo đảm cho việc thực hiện hợp đồng lao động thì thuộc hành vi bị cấm tại khoản 2 Điều 17. Đổi tên thành “phí bảo đảm uy tín” không làm thay đổi bản chất; cần kiểm tra mục đích và điều kiện nộp, hoàn trả thực tế.')
+            add(rule,'Nếu khoản tiền hoặc tài sản thực chất là biện pháp bảo đảm cho việc thực hiện hợp đồng lao động thì thuộc hành vi bị cấm tại khoản 2 Điều 17; cần kiểm tra mục đích và điều kiện nộp, hoàn trả thực tế.')
     draft=AdjudicationDraft(answer_summary='',claims=claims,applicable_law_versions=_versions(used),
       assumptions=assumptions or [],limitations=pack.coverage_state.gaps)
     return render_claims(draft,partial)
@@ -476,6 +507,35 @@ class LegalAdjudicator:
                 self.cfg.primary_budget_seconds,reserve):
             return self.provider.structured(system,user,schema)
 
+    def _generation_structured(self,system,user,schema):
+        """Recover a failed draft call, never bypass the independent review.
+
+        Only an already configured distinct review provider can supply the
+        alternate draft. It receives the identical source-limited request and
+        its output goes through the existing schema, locator and claim checks.
+        Quota/configuration errors and cancellation are never hidden by retries.
+        """
+        from .errors import LLMProviderError
+        from .runtime import operation_budget,OperationBudgetExceeded
+        try:
+            return self._primary_structured(system,user,schema),[]
+        except (RequestStopped,ProviderRateLimited):
+            raise
+        except (LLMProviderError,OperationBudgetExceeded,StructuredOutputError) as exc:
+            code=getattr(exc,'safe_code',None) or type(exc).__name__
+            recoverable=(isinstance(exc,(OperationBudgetExceeded,StructuredOutputError)) or bool(re.fullmatch(
+                r'(?:OLLAMA|HTTP_JSON)_(?:HTTP_5\d{2}|TIMEOUT|CONNECTION_ERROR)',str(code))))
+            alternate=self._review_provider
+            if (not recoverable or not self.cfg.semantic_review or not alternate
+                    or alternate is self.provider or self.cfg.recovery_budget_seconds<=0):
+                raise
+            with operation_budget('adjudication_recovery',self.cfg.recovery_budget_seconds,
+                    self.cfg.recovery_budget_seconds,self.cfg.review_reserve_seconds):
+                raw=alternate.structured(system,user,schema)
+            warning=('ADJUDICATION_PRIMARY_INVALID_OUTPUT' if isinstance(exc,StructuredOutputError)
+                else 'ADJUDICATION_PRIMARY_UNAVAILABLE:'+str(code))
+            return raw,[warning,'ADJUDICATION_ALTERNATE_DRAFT_USED']
+
     @property
     def review_provider(self):
         return self._review_provider if self._review_provider is not None else self.provider
@@ -546,7 +606,7 @@ class LegalAdjudicator:
                 if draft_issues(repaired,pack.query):
                     raise StructuredOutputError('language repair has invalid public rendering')
                 return repaired,warnings+['ANSWER_LANGUAGE_REPAIRED']
-            except RequestStopped:
+            except (RequestStopped,ProviderRateLimited):
                 raise
             except Exception as exc:
                 warnings.append('ANSWER_LANGUAGE_REPAIR_REJECTED:'+type(exc).__name__)
@@ -607,6 +667,7 @@ class LegalAdjudicator:
           'Use only facts and evidence in the pack. Every legal claim must contain one or more supplied evidence_ids. '
           'Distinguish case narratives and holdings from statutory provisions; use cases as analogies without inventing general binding force. '
           'Do not invent an instrument, article, clause, point, date, URL, fact, assumption, or limitation. '
+          'Use the supplied document title and identifier. Keep the original enactment year distinct from its effective date and consolidation date; never name a law by a different year merely because it took effect then. '
           'Return only claims with text and evidence_ids. The application supplies IDs, versions, limitations and rendering. '
           'Use clear Vietnamese sentences. Answer each requested issue; preserve conditions and exceptions. '
           'Keep the antecedent attached to its own legal consequence; do not generalize a conditional benefit from a sentence that also contains another general entitlement. Preserve the temporal trigger: at an event is not before that event. '
@@ -625,7 +686,7 @@ class LegalAdjudicator:
           'corpus_snapshot_as_of':pack.corpus_snapshot_as_of,'freshness_status':pack.freshness_status,
           'answer_tasks':[task.model_dump(mode='json') for task in pack.answer_tasks],
           'requested_outcome':pack.requested_outcome,'evidence':[{'evidence_id':item.evidence_id,'kind':item.kind,'binding':item.binding,
-          'instrument':item.instrument_number,'article':item.article,'clause':item.clause,'point':item.point,
+          'instrument':item.instrument_number,'original_instrument':item.original_instrument_number,'article':item.article,'clause':item.clause,'point':item.point,
           'document_type':item.document_type,'document_title':item.document_title,'issuer':item.issuer,
           'norm_role':item.norm_role,'valid_from':item.valid_from,'valid_to':item.valid_to,
           'promulgated_date':item.promulgated_date,'consolidation_as_of':item.consolidation_as_of,'version_role':item.version_role,'text':item.text} for item in pack.evidence]}
@@ -652,7 +713,7 @@ class LegalAdjudicator:
         system+=' If freshness_status is UNVERIFIED_AFTER_SNAPSHOT, conclusions are conditional on the supplied dated corpus; never assert these are exhaustively the current laws or that no later amendment exists.'
         schema['$defs']['ProviderClaim']['properties']['evidence_ids']['items']={'type':'string','enum':sorted(allowed_ids)}
         try:
-            raw=self._primary_structured(system,json.dumps(payload,ensure_ascii=False),schema)
+            raw,recovery_warnings=self._generation_structured(system,json.dumps(payload,ensure_ascii=False),schema)
             output=ProviderClaims.model_validate(raw)
             if simple and (len(output.claims)>4 or any(len(c.text)>1000 for c in output.claims)):
                 raise StructuredOutputError('ADAPTIVE_CLAIM_LIMIT_EXCEEDED')
@@ -686,8 +747,8 @@ class LegalAdjudicator:
                 lines.append(f'- {claim.text} {markers}')
             if partial: lines.append('Kết quả chỉ là một phần vì còn thiếu bằng chứng bắt buộc được nêu trong limitations.')
             canonical='\n'.join(lines) if draft.claims else 'Không đủ bằng chứng đã xác minh để kết luận.'
-            return draft.model_copy(update={'answer_summary':canonical}),list(dict.fromkeys(locator_warnings))
-        except RequestStopped:
+            return draft.model_copy(update={'answer_summary':canonical}),list(dict.fromkeys(locator_warnings+recovery_warnings))
+        except (RequestStopped,ProviderRateLimited):
             raise
         except Exception as exc:
             if not self.cfg.fail_closed: raise

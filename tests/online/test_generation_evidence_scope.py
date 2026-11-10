@@ -16,8 +16,15 @@ class GenerationEvidenceScopeTests(unittest.TestCase):
         pack=self.pack();self.assertEqual([e.evidence_id for e in generation_evidence(pack)],['r'])
         self.assertEqual(len(pack.evidence),2)
     def test_fines_are_preserved_when_requested(self):
-        for q in ['Công ty bị phạt bao nhiêu?','Nêu chế tài và hậu quả của hành vi.']:
+        for q in ['Công ty bị phạt bao nhiêu?','Nêu chế tài và hậu quả của hành vi.',
+                  'Công ty có bị xử phạt không?', 'Mức xử phạt đối với công ty là gì?',
+                  'Nghị định nào quy định xử phạt hành vi này?']:
             with self.subTest(q=q):self.assertEqual(len(generation_evidence(self.pack(q))),2)
+    def test_reported_private_fine_does_not_request_administrative_sanctions(self):
+        for q in ['Cửa hàng phạt nhân viên 750.000 đồng vì đi trễ. Cách phạt này có được phép không?',
+                  'Công ty có được phạt tiền tôi thay cho xử lý kỷ luật không?']:
+            with self.subTest(q=q):
+                self.assertEqual([e.evidence_id for e in generation_evidence(self.pack(q))],['r'])
     def test_required_sanction_dependency_is_not_removed(self):
         pack=self.pack();pack.evidence_plan=EvidencePlan(mandatory_slots=['remedy'],
             slot_requirements={'remedy':[[LegalLocator(documents=['TEST-FINE'],article='9',clause='2')]]})
@@ -40,4 +47,14 @@ class GenerationEvidenceScopeTests(unittest.TestCase):
         supplied=engine._generate.call_args.args[0]
         self.assertEqual([e.evidence_id for e in supplied.evidence],['r'])
         self.assertEqual([e.evidence_id for e in pack.evidence],['r','f'])
+    def test_deposit_explanation_does_not_invent_a_fee_name(self):
+        from vn_labor_online.generation import _contract_rule_answer
+        item=VerifiedEvidenceItem(evidence_id='deposit',instrument_number='45/2019/QH14',
+            article='17',clause='2',text='Yêu cầu người lao động phải thực hiện biện pháp bảo đảm bằng tiền hoặc tài sản khác cho việc thực hiện hợp đồng lao động.')
+        p=VerifiedEvidencePack(query='Công ty có được yêu cầu người lao động nộp tiền đặt cọc để bảo đảm thực hiện hợp đồng không?',
+            evidence=[item],coverage_state=EvidenceState(slots={},gaps=[],coverage=1))
+        draft=_contract_rule_answer(p,False,[])
+        self.assertIsNotNone(draft)
+        self.assertNotIn('uy tín',draft.answer_summary)
+        self.assertTrue(all(c.evidence_ids==['deposit'] for c in draft.claims))
 if __name__=='__main__':unittest.main()

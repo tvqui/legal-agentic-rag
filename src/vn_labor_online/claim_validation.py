@@ -92,13 +92,98 @@ def _reported_prohibited_fine(claim,source,query):
     return not re.search(r'xu phat|vi pham hanh chinh|phai nop phat|muc xu phat|phai chiu phat',claim)
 
 
+def _instrument_year_mismatch(text,items):
+    """Compare an explicit law-name year with cited enactment metadata.
+
+    No year is inferred from effectiveness or from a consolidation identifier.
+    Multiple cited editions may legitimately name different enactment years.
+    """
+    names={}
+    for item in items:
+        number=(getattr(item,'original_instrument_number',None) or
+                getattr(item,'document_number',None) or getattr(item,'instrument_number',None) or '')
+        year=re.search(r'/((?:19|20)\d{2})/(?:QH|UBTVQH)',number,re.I)
+        title=fold(getattr(item,'document_title',None))
+        title=re.sub(r'^van ban hop nhat\s+','',title)
+        title=re.sub(r'\s+(?:nam\s+)?(?:19|20)\d{2}\b.*$','',title).strip()
+        if year and re.match(r'^(?:bo luat|luat)\s+',title):
+            entry=names.setdefault(title,{'original':set(),'edition':set()})
+            entry['original'].add(year.group(1))
+            if str(getattr(item,'version_role','')).upper()=='CONSOLIDATED':
+                issued=getattr(item,'consolidation_as_of',None) or getattr(item,'promulgated_date',None)
+                if issued and re.match(r'^(?:19|20)\d{2}-',issued):entry['edition'].add(issued[:4])
+    content=fold(text)
+    for title,years in names.items():
+        for mention in re.finditer(r'\b'+re.escape(title)+r'\s*(?:\(\s*)?(?:nam\s+)?((?:19|20)\d{2})\b',content):
+            prefix=content[max(0,mention.start()-35):mention.start()]
+            edition=bool(re.search(r'(?:van ban hop nhat|vbhn)\s*$',prefix))
+            allowed=years['edition'] if edition else years['original']
+            if allowed and mention.group(1) not in allowed:return True
+    return False
+
+
+def _conditional_consequence_lost(claim,source,query):
+    """Reject an exact statutory consequence stripped of its antecedent.
+
+    This deliberately checks a narrow source-text relationship, not general
+    entailment. Numeric-only conditions and free paraphrases stay for review.
+    """
+    stop=set('nguoi lao dong su dung ben cac mot nhung thi neu truong hop cua duoc phai co la khi tu tro len den du it nhat trong theo quy dinh gio ngay thang nam bang ve tai'.split())
+    pairs=[match.groups() for match in re.finditer(
+        r'\b(?:truong hop|neu)\s+([^.;]{8,220}?)\s+thi\s+([^.;]{8,220})',source)]
+    # Restrictive scope can follow the consequence rather than precede it:
+    # "Y applies to cases X" is not an unconditional entitlement to Y.
+    for match in re.finditer(r'(?:^|[.;])\s*([^.;]{14,220}?)\s+doi voi truong hop\s+'
+            r'([^.;,]{8,180}?)(?=\s+quy dinh tai|\s+it nhat|[,.;]|$)',source):
+        consequence,condition=match.groups()
+        if re.search(r'\b(?:duoc|phai|co quyen)\b',consequence):pairs.append((condition,consequence))
+    for condition,consequence in pairs:
+        consequence=consequence.strip(' ,:')
+        if len(consequence.split())<7 or consequence not in claim:continue
+        # Citation boilerplate is a locator, not an additional case fact.
+        # Likewise, a paraphrase can state the agreement without repeating the
+        # grammatical subject "hai bên". Keep the actual agreement predicate.
+        condition=re.sub(r'\b(?:quy dinh tai|theo)\s+(?:(?:diem\s+[a-z]\b|(?:khoan|dieu)\s+\d+\b)[\s,]*(?:va\s+)?)+(?:cua\s+(?:bo luat|luat|nghi dinh|thong tu)\s+nay)?',' ',condition)
+        condition=re.sub(r'^hai ben\s+','',condition)
+        anchors=set(re.findall(r'[a-z]+',condition))-stop
+        if len(anchors)<3:continue
+        claim_words=set(re.findall(r'[a-z]+',claim))
+        if anchors<=claim_words:continue
+        if re.search(r'(?:neu|khi)\s+(?:dap ung|thoa man|du)\s+(?:day du\s+)?(?:cac\s+)?dieu kien',claim):continue
+        # A stated personal case can establish the antecedent; a negated or
+        # uncertain statement cannot. Do not infer it from a heading or title.
+        context_ok=any(anchors<=set(re.findall(r'[a-z]+',sentence))
+            and not re.search(r'\b(?:khong|chua|chang|khong ro|khong biet|chua ro)\b',sentence)
+            for sentence in re.split(r'[.;?!]',query))
+        if not context_ok:return True
+    return False
+
+
 def semantic_issues(text, items, *, context_query=''):
     q=fold(text); problems=[]
+    if _instrument_year_mismatch(text,items):problems.append('CLAIM_INSTRUMENT_YEAR_MISMATCH')
     if invalid_clause_locator(text): problems.append('CLAIM_CLAUSE_POINT_CONFUSION')
     invalidity_pattern=r'khong co gia tri phap ly|\bvo hieu\b|khong phat sinh quyen|khong co hieu luc|chi co hieu luc (?:neu|khi|trong truong hop|doi voi)'
     invalidity=re.search(invalidity_pattern,q)
     form_source=' '.join(fold(' '.join((str(getattr(item,'ancestor_context','') or ''),
         str(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text)))) for item in items)
+    notice_only=re.search(r'\b(?:chi\s+(?:xet|danh gia|hoi)|rieng)\s+(?:ve\s+)?(?:thoi han|so ngay)[^.;?!]{0,25}bao truoc',fold(context_query))
+    global_exit=re.search(r'\b(?:viec|hanh vi|quyet dinh)\s+(?:don phuong\s+)?(?:cham dut|nghi viec)[^.;?!]{0,70}\b(?:la|van|deu)\s+(?:hop phap|trai phap luat|dung phap luat)',q)
+    bounded=re.search(r'\b(?:chi\s+(?:xet|ve)|rieng\s+(?:ve|xet)|xet rieng)[^.;?!]{0,50}bao truoc|(?:khong|chua) the (?:ket luan|khang dinh)',q)
+    if notice_only and global_exit and not bounded:
+        problems.append('CLAIM_LIMITED_FACET_AS_OVERALL_LEGALITY')
+    legal_absence=re.search(r'\bkhong co(?:\s+bat ky)?(?:\s+dieu kien dac biet hoac)?\s+ngoai le\b[^.;?!]{0,110}\b(?:phap luat|bo luat|luat|nghi dinh)\b',q)
+    if legal_absence and q not in form_source and not re.search(r'(?:khong|chua) the (?:ket luan|khang dinh)',q):
+        problems.append('CLAIM_STATUTORY_ABSENCE_NOT_GROUNDED')
+    if _conditional_consequence_lost(q,form_source,fold(context_query)):
+        problems.append('CLAIM_CONDITIONAL_ANTECEDENT_LOST')
+    # A duty to notify does not itself prove an advance-notification deadline.
+    notification=re.search(r'\b(?:phai|can|co nghia vu)[^.;?!]{0,60}\bthong bao\b[^.;?!]{0,90}\btruoc khi\b',q)
+    if notification and 'thong bao' in form_source:
+        prefix=q[max(0,notification.start()-70):notification.start()]
+        caution=re.search(r'(?:chua|khong) (?:co|du) can cu|khong the (?:ket luan|khang dinh)|\b(?:khong|chua)(?:\s+bat buoc)?\s*$',prefix)
+        explicit_advance=re.search(r'thong bao truoc|bao truoc|truoc khi|truoc (?:it nhat|toi thieu|cham nhat)|truoc\s+\d+\s+ngay',form_source)
+        if not caution and not explicit_advance:problems.append('CLAIM_NOTIFICATION_ADVANCE_NOT_GROUNDED')
     if _renewal_base_shift(q,form_source):problems.append('CLAIM_RENEWAL_COUNT_BASE_SHIFT')
     no_change=re.search(r'\bkhong (?:co (?:bat ky |bat cu )?(?:quy dinh )?)?(?:thay doi|sua doi|bo sung)',q)
     interval_scope=re.search(r'trong (?:suot|khoang)|tu \d[^.;]{0,30}den \d',q)

@@ -27,7 +27,9 @@ class SuiteTests(unittest.TestCase):
             self.assertEqual(cfg.reranker.enabled,name!='without_reranker')
             self.assertEqual(cfg.adjudication.semantic_review,name!='without_review')
             self.assertFalse(cfg.retrieval.profile_fast_path)
+            self.assertEqual(cfg.adjudication.recovery_budget_seconds,0)
         self.assertTrue(base.retrieval.profile_fast_path)
+        self.assertGreater(base.adjudication.recovery_budget_seconds,0)
 
     def test_disabled_auditor_does_not_forge_verified_decisions(self):
         items=[NS(unit_id='source')]

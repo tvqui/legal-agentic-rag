@@ -39,6 +39,7 @@ class AnnualLeaveUnknownCategoryTests(unittest.TestCase):
         draft=self.draft(work_category='NORMAL',disabled=True)
         self.assertIn('15 ngày',draft.claims[0].text)
         self.assertEqual(set(draft.claims[0].evidence_ids),{'heavy','seniority'})
+        self.assertNotIn('không cộng chồng',draft.claims[0].text)
 
     def test_special_heavy_group_is_not_reduced_by_disability(self):
         draft=self.draft(work_category='SPECIAL_HEAVY',disabled=True)

@@ -128,12 +128,36 @@ def detect_topics(query):
     # Personal leave is an absence, not termination. Keep separately stated
     # termination clauses available instead of excluding the entire question.
     termination_text=re.sub(r'(?<!\w)(?:toi muon |xin )?nghi viec rieng(?!\w)',' ',text)
-    return [topic for topic in TOPICS if (topic.key=='occupational_accident' and accident_context)
+    matched=[topic for topic in TOPICS if (topic.key=='occupational_accident' and accident_context)
       or (topic.key=='normal_hours' and explicit_hours) or any(
       re.search(r'(?<!\w)'+re.escape(fold(phrase))+r'(?!\w)',
       termination_text if topic.issue=='TERMINATION' else hours_text if topic.key=='normal_hours' else text)
       and _surface_phrase_matches(query,phrase)
       for phrase in topic.phrases)]
+    return [topic for topic in matched if _category_topic_relevant(topic,text)]
+
+
+_CATEGORY_TOPICS={'older_workers','minor_workers','disabled_workers','domestic_workers','foreign_workers'}
+
+
+def _category_topic_relevant(topic,text):
+    if topic.key not in _CATEGORY_TOPICS:return True
+    found=False
+    for phrase in topic.phrases:
+        for match in re.finditer(r'(?<!\w)'+re.escape(fold(phrase))+r'(?!\w)',text):
+            found=True
+            prefix=re.split(r'[.;!?,]|\b(?:nhung|tuy nhien)\b',text[max(0,match.start()-90):match.start()])[-1]
+            negative=re.search(r'\b(?:khong|chang)(?:\s+(?:he|phai|la|nguoi|thuoc|nhom|doi|tuong|lam|cong|viec)){0,9}\s*$',prefix)
+            if not negative:return True
+    return not found
+
+
+def excluded_category_issues(query,topics):
+    """Negative case attributes must not create independent specialist tasks."""
+    text=fold(query)
+    excluded={topic.issue for topic in TOPICS if topic.key in _CATEGORY_TOPICS
+              and not _category_topic_relevant(topic,text)}
+    return excluded-{topic.issue for topic in topics}
 
 
 _TONES={'\u0300','\u0301','\u0303','\u0309','\u0323'}

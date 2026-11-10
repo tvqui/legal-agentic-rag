@@ -54,6 +54,7 @@ def request_cached_retrieval(fn):
 def as_evidence(unit:dict,score:float,method:str,rank:int,components=None)->Evidence:
     keys={'ancestor_context','unit_id','document_id','instrument_id','provision_identity_id','provision_version_id','document_number','document_title','article_number','clause_number','point_number','source_url','breadcrumb','text','source_text','valid_from','valid_to','authority_rank','binding','temporal_verified','provision_temporal_verified','provenance','provenance_span','kind','level','issuer','official_source','source_catalog_status','promulgated_date','consolidation_as_of','version_role'}
     data={k:unit.get(k) for k in keys}; data.update(score=float(score),retrieval_method=method,rank=rank,component_scores=components or {})
+    data['original_instrument_number']=unit.get('instrument_number') or unit.get('document_number')
     data['ancestor_context']=str(data.get('ancestor_context') or '')
     data['authority_rank']=int(data.get('authority_rank') or 0)
     for key in ('binding','temporal_verified','provision_temporal_verified','official_source'): data[key]=bool(data.get(key))
@@ -81,9 +82,9 @@ class Retriever:
             self._profile_units[(unit.get('document_number'),str(unit.get('article_number') or ''))].append(unit)
             if unit.get('unit_id'):self._units_by_id[unit['unit_id']]=unit
             article=_norm(unit.get('article_number'))
-            instrument=_norm(unit.get('instrument_number') or unit.get('document_number'))
+            instruments={_norm(value) for value in (unit.get('instrument_number'),unit.get('document_number')) if value}
             if article:self._units_by_article[article].append(unit)
-            if instrument:self._units_by_instrument[instrument].append(unit)
+            for instrument in instruments:self._units_by_instrument[instrument].append(unit)
             if unit.get('kind')=='CASE':self._case_units.append(unit)
         self._indexed_unit_count=len(self.store.units)
         new_nodes=getattr(self.store,'nodes',[])[self._indexed_node_count:]
@@ -158,8 +159,8 @@ class Retriever:
             else:
                 units=self.store.units
             for u in units:
-                number=u.get('instrument_number') or u.get('document_number')
-                if ref.instrument_number and _norm(number)!=_norm(ref.instrument_number): continue
+                numbers={_norm(value) for value in (u.get('instrument_number'),u.get('document_number')) if value}
+                if ref.instrument_number and _norm(ref.instrument_number) not in numbers: continue
                 if ref.article and _norm(u.get('article_number'))!=_norm(ref.article): continue
                 if ref.clause and _norm(u.get('clause_number'))!=_norm(ref.clause): continue
                 if ref.point and _norm(u.get('point_number'))!=_norm(ref.point): continue

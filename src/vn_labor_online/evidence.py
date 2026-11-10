@@ -194,7 +194,8 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
 def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceState,items:list[Evidence],
                         decisions:list[ApplicabilityDecision]|None=None,requested_outcome:str='OTHER')->VerifiedEvidencePack:
     by_decision={x.evidence_id:x for x in decisions or []}
-    packed=[VerifiedEvidenceItem(kind=x.kind,evidence_id=x.unit_id,instrument_number=x.document_number,article=x.article_number,
+    packed=[VerifiedEvidenceItem(kind=x.kind,evidence_id=x.unit_id,instrument_number=x.document_number,
+      original_instrument_number=x.original_instrument_number,article=x.article_number,
       document_type=document_type(x.document_number,x.document_title,x.document_type),document_title=x.document_title,issuer=x.issuer,
       norm_role=norm_role(x.document_number,x.document_title,' '.join((x.ancestor_context,x.source_text or x.text))),
       clause=x.clause_number,point=x.point_number,text=compress_evidence(x,query),

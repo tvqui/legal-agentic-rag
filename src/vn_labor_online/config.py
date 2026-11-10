@@ -71,6 +71,7 @@ class ApplicabilityConfig(StrictModel):
 class AdjudicationConfig(StrictModel):
     primary_budget_seconds:float=Field(45,ge=1,le=300)
     review_reserve_seconds:float=Field(45,ge=0,le=180)
+    recovery_budget_seconds:float=Field(30,ge=0,le=120)
     tokenizer_path:str|None=None; tokenizer_model:str|None=None
     review_provider:Literal['same','gemini']='same'
     review_model:str|None=None

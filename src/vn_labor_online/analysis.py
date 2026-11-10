@@ -47,7 +47,7 @@ NOTICE_DAYS=re.compile(
     r'(?:(?:báo|thông báo)\s*trước(?:\s+cho\s+(?:tôi|người lao động))?|(?:muốn|dự định|sẽ)?\s*nghỉ(?:\s+\w+){0,2}\s+sau)\s*(\d+)\s*ngày',
     re.I)
 CONTRACT_TERM=re.compile(r'\bhợp đồng(?:\s+lao động)?[^.;?!]{0,80}?(?P<duration>\d+)\s*tháng\b',re.I)
-NO_NOTICE=re.compile(r'\b(?:không|chưa)\s+(?:hề\s+)?(?:báo|thông báo)\s*trước(?:\s+\d+\s*ngày)?|\bnghỉ\s+ngay\b',re.I)
+NO_NOTICE=re.compile(r'\b(?:không|chưa)\s+(?:hề\s+)?(?:báo|thông báo)\s*trước(?!\s*\d)|\bnghỉ\s+ngay\b',re.I)
 MONTH_NUMBER_WORDS={'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10,'mười một':11,'mười hai':12}
 WORKED_MONTHS=re.compile(r'làm(?:\s+việc)?[^.;?!]{0,50}?(\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín)\s*tháng',re.I)
 _YEAR_NUMBER=r'\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín'
@@ -126,6 +126,11 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     facts=dict(supplied_facts or {})
     # Facts explicitly stated in the current turn override older confirmed state.
     extracted_facts=_extract_facts(lower,query_date,imprecise_date)
+    uncertain_fields=[]
+    for field,pattern in (('notice_days',NOTICE_DAYS),('worked_months',WORKED_MONTHS)):
+        if pattern.search(q) and field not in extracted_facts:
+            uncertain_fields.append(field)
+            facts.pop(field,None)
     for field in ('notice_date','termination_date'):
         value=extracted_facts.get(field)
         if value:
@@ -151,6 +156,13 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
         query_date=facts['termination_date']; query_date_end=query_date; precision='DAY'
     from .event_time import resolve_event_dates
     dated_events,event_date,event_ambiguous=resolve_event_dates(q,explicit_date)
+    background_roles={event['role'] for event in dated_events}
+    if (event_ambiguous and dated_events
+            and background_roles<={'CONTRACT_SIGNED_AT','EMPLOYMENT_STARTED_AT'}
+            and (len(relative)==1 or re.search(r'muốn nghỉ|dự định nghỉ|sắp nghỉ',lower))):
+        # Several background milestones do not make an explicitly current or
+        # proposed resignation ambiguous. Multiple operative dates still do.
+        event_ambiguous=False
     signed_events=[event for event in dated_events if event['role']=='CONTRACT_SIGNED_AT']
     signed_years={int(event['date'][:4]) for event in signed_events}
     if len(signed_years)==1:
@@ -164,10 +176,20 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
         query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
     elif not explicit_date and event_date:
         query_date=query_date_end=event_date;precision='DAY'
-    elif not explicit_date and dated_events and all(e['role']=='CONTRACT_SIGNED_AT' for e in dated_events):
-        if re.search(r'muốn nghỉ|dự định nghỉ|sắp nghỉ|bây giờ|hiện nay',lower):
+    elif not explicit_date and dated_events and all(e['role'] in {'CONTRACT_SIGNED_AT','EMPLOYMENT_STARTED_AT'} for e in dated_events):
+        if len(relative)==1 and relative[0][:2]==(today_vietnam(env.received_at).isoformat(),)*2:
+            # Let the pipeline apply its ordinary request-day default; a
+            # background signature/start date is not the operative date.
+            query_date=query_date_end=None;precision='NONE'
+        elif len(relative)==1:
+            query_date,query_date_end,precision=relative[0]
+        elif len(relative)>1:
+            query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
+        elif re.search(r'muốn nghỉ|dự định nghỉ|sắp nghỉ|bây giờ|hiện nay',lower):
             query_date=query_date_end=None;precision='NONE'
         elif re.search(r'sa thải|đơn phương chấm dứt|đã nghỉ việc',lower):
+            query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
+        elif 'EMPLOYMENT_STARTED_AT' in {e['role'] for e in dated_events} and re.search(r'bị[^.;?!]{0,45}cho nghỉ|đã[^.;?!]{0,45}nghỉ việc',lower):
             query_date=query_date_end=None;precision='NONE';temporal_ambiguous=True
     elif not explicit_date and dated_events and all(e['role'] in {'BIRTH_DATE','SOURCE_PROMULGATED_AT'} for e in dated_events):
         query_date=query_date_end=None;precision='NONE'
@@ -182,6 +204,9 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     if unpaid_leave_requested(lower) or ('nghỉ' in lower and (unpaid_family_event(lower) or re.search(r'\b(?:cha|mẹ|bố|vợ|chồng|con)(?:\s+(?:đẻ|nuôi|ruột|tôi|của|vợ|chồng)){0,4}\s+(?:chết|mất|qua đời)',lower))):
         issues=[key for key in issues if key!='GENERAL']+(['LEAVE'] if 'LEAVE' not in issues else [])
     topics=detect_topics(q)
+    from .topics import excluded_category_issues
+    excluded_categories=excluded_category_issues(q,topics)
+    issues=[issue for issue in issues if issue not in excluded_categories]
     minor_employment=(facts.get('minor') is True and bool(re.search(
         r'người lao động|nhân viên|làm việc|bố trí làm|tuyển dụng|hợp đồng lao động|làm\s+\d+\s*giờ',lower)))
     if minor_employment:
@@ -250,6 +275,7 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     result=QueryAnalysis(query_text=env.normalized_query,legal_issues=issues,legal_subissues=subissues,facts=facts,explicit_references=refs,event_dates=dates+month_dates+years,query_date=query_date,query_date_end=query_date_end,
       requested_outcome=outcome,temporal_intent=temporal,missing_facts=sorted(set(missing)),route=route,
       route_reason='explicit legal citation' if route==Route.DIRECT else 'multi-issue/change query' if route==Route.COMPLEX else 'single-issue query',query_date_precision=precision,fact_candidates=fact_candidates,
+      uncertain_fact_fields=uncertain_fields,
       in_scope=not _clearly_out_of_scope(lower,issues,refs),
       temporal_resolution='AMBIGUOUS' if temporal_ambiguous else 'RESOLVED' if query_date else 'UNSPECIFIED')
     from .taxonomy import SUBISSUES
@@ -448,7 +474,17 @@ def _deterministic_fact_candidates(query:str,facts:dict)->list[FactCandidate]:
             extracted,match=_probation_group_fact(query)
             if extracted!=value:match=None
         elif field=='notice_days':
-            match=NO_NOTICE.search(query) if value==0 else NOTICE_DAYS.search(query)
+            extracted,match=_notice_days_fact(query)
+            if extracted!=value:match=None
+        elif field=='worked_months':
+            extracted,match=_worked_months_fact(query)
+            if extracted!=value:match=None
+        elif field=='work_category':
+            extracted,match=_work_category_fact(query)
+            if extracted!=value:match=None
+        elif field=='actor' and value=='EMPLOYER':
+            from .termination_context import employer_action_match
+            match=employer_action_match(query) or _needle_match(query,needles['actor'])
         elif field=='special_occupation':
             extracted,match=_special_occupation_fact(query)
             if extracted is not value: match=None
@@ -635,21 +671,77 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
                 if not _fact_present(field,query,query_date,facts): missing.append(prompt)
     return sorted(set(missing))
 
+def _notice_days_fact(query):
+    from .fact_polarity import assertion_uncertain
+    values={};uncertain=False
+    for pattern in (NO_NOTICE,NOTICE_DAYS):
+        for match in pattern.finditer(query):
+            if assertion_uncertain(query,match.start(),match.end()):
+                uncertain=True;continue
+            if pattern is NO_NOTICE and match.group().lower().startswith('nghỉ'):
+                prefix=re.split(r'[.;!?,]',query[max(0,match.start()-55):match.start()])[-1]
+                if re.search(r'\b(?:không|chưa|chẳng)(?:\s+(?:hề|có|ý|định|muốn|sẽ)){0,5}\s*$',prefix,re.I):continue
+            if pattern is NOTICE_DAYS:
+                prefix=query[max(0,match.start()-35):match.start()]
+                if re.search(r'\b(?:không|chưa)(?:\s+(?:hề|có|phải)){0,3}\s*$',prefix,re.I):continue
+            value=0 if pattern is NO_NOTICE else int(match.group(1))
+            values.setdefault(value,match)
+    if len(values)==1 and not uncertain:
+        value=next(iter(values));return value,values[value]
+    return None,None
+
+
+def _worked_months_fact(query):
+    from .fact_polarity import assertion_uncertain
+    values={};uncertain=False
+    for match in WORKED_MONTHS.finditer(query):
+        prefix=query[match.start():match.start(1)]
+        approximate=bool(re.search(r'(?:chưa\s+(?:đủ|tới)|dưới|hơn|trên|khoảng|gần|ít\s+nhất|tối\s+đa)\s*$',prefix,re.I))
+        if approximate or assertion_uncertain(query,match.start(),match.end()):
+            uncertain=True;continue
+        number=match.group(1).lower()
+        value=int(number) if number.isdigit() else MONTH_NUMBER_WORDS[number]
+        values.setdefault(value,match)
+    if len(values)==1 and not uncertain:
+        value=next(iter(values));return value,values[value]
+    return None,None
+
+
+def _work_category_fact(query):
+    """A category needs an affirmative, unambiguous user statement and span.
+
+    Rejecting a hazardous category alone does not prove normal conditions.
+    Longer categories consume their nested words so special-heavy work is not
+    also interpreted as a second, ordinary-heavy assertion.
+    """
+    from .fact_polarity import assertion_uncertain
+    patterns=(('SPECIAL_HEAVY',r'(?:nghề\s+|công việc\s+)?đặc biệt nặng nhọc(?:,?\s+độc hại,?\s+nguy hiểm)?'),
+              ('HEAVY',r'(?:nghề\s+|công việc\s+)nặng nhọc(?:,?\s+độc hại,?\s+nguy hiểm)?|nặng nhọc,?\s+độc hại,?\s+nguy hiểm'),
+              ('NORMAL',r'điều kiện(?:\s+lao động)? bình thường|(?:công việc|làm việc) bình thường|(?:nhân viên|công việc) văn phòng'))
+    spans=[];found={};uncertain=False
+    for category,pattern in patterns:
+        for match in re.finditer(pattern,query,re.I):
+            if any(start<=match.start() and match.end()<=end for start,end in spans):continue
+            spans.append(match.span())
+            if assertion_uncertain(query,match.start(),match.end()):
+                uncertain=True;continue
+            prefix=re.split(r'[.;!?,]|\b(?:nhưng|tuy nhiên)\b',query[max(0,match.start()-90):match.start()])[-1]
+            negative=re.search(r'\b(?:không|chẳng|chưa)(?:\s+(?:hề|phải|là|thuộc|nhóm|làm|nghề|công|việc|có|điều|kiện|lao|động)){0,10}\s*$',prefix,re.I)
+            if not negative:found.setdefault(category,match)
+    if len(found)==1 and not uncertain:
+        category=next(iter(found));return category,found[category]
+    return None,None
+
+
 def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     facts={}
     # query_date is the date on which the user wants the law evaluated.  It is
     # not necessarily a factual event date, so keep it in QueryAnalysis instead
     # of presenting it to users as a fact of their case.
-    no_notice=NO_NOTICE.search(q)
-    notice=NOTICE_DAYS.search(q)
-    if no_notice: facts['notice_days']=0
-    elif notice: facts['notice_days']=int(notice.group(1))
-    worked=WORKED_MONTHS.search(q)
-    duration_prefix=q[worked.start():worked.start(1)] if worked else ''
-    approximate=bool(re.search(r'(?:chưa\s+(?:đủ|tới)|dưới|hơn|trên|khoảng|gần|ít\s+nhất|tối\s+đa)\s*$',duration_prefix))
-    if worked and not approximate:
-        number=worked.group(1).lower()
-        facts['worked_months']=int(number) if number.isdigit() else MONTH_NUMBER_WORDS[number]
+    notice,notice_span=_notice_days_fact(q)
+    if notice_span is not None:facts['notice_days']=notice
+    worked,worked_span=_worked_months_fact(q)
+    if worked_span is not None:facts['worked_months']=worked
     service_years,service=_service_duration(q)
     if service is not None: facts['service_years']=service_years
     ages=list(AGE.finditer(q))
@@ -668,9 +760,8 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if salary_base:
         facts['salary_base_amount']=salary_base.amount
         facts['salary_base_unit']=salary_base.unit
-    if 'đặc biệt nặng nhọc' in q: facts['work_category']='SPECIAL_HEAVY'
-    elif any(term in q for term in ('nặng nhọc, độc hại, nguy hiểm','nghề nặng nhọc','công việc nặng nhọc')): facts['work_category']='HEAVY'
-    elif any(term in q for term in ('điều kiện bình thường','công việc bình thường','nhân viên văn phòng','công việc văn phòng')): facts['work_category']='NORMAL'
+    work_category,_=_work_category_fact(q)
+    if work_category:facts['work_category']=work_category
     if 'chưa thành niên' in q and affirmative_phrase(q,('chưa thành niên',)):
         facts['minor']=True
     if any(t in q for t in ('nhận lương cố định','làm việc có trả công','làm công việc có trả công')): facts['employment_paid_work']=True
@@ -705,7 +796,7 @@ def _extract_facts(q:str,query_date:str|None,month_date:str|None)->dict:
     if termination_date: facts['termination_date']=f'{termination_date.group(3)}-{termination_date.group(2).zfill(2)}-{termination_date.group(1).zfill(2)}'
     contract_start=CONTRACT_START_YEAR.search(q)
     if contract_start: facts['contract_start_year']=int(contract_start.group(1))
-    if explicit_employer_action(q) or any(term in q for term in ('công ty cho tôi nghỉ','công ty cho người lao động nghỉ','người sử dụng lao động cho người lao động nghỉ','người sử dụng lao động chấm dứt','công ty chấm dứt','công ty chủ động chấm dứt','công ty đơn phương','công ty muốn đơn phương','người sử dụng lao động đơn phương','người sử dụng lao động muốn đơn phương','tôi bị công ty cho nghỉ','công ty sa thải')): facts['actor']='EMPLOYER'
+    if explicit_employer_action(q): facts['actor']='EMPLOYER'
     elif (re.search(r'\b(?:tôi|người lao động)\b[^.]{0,160}\b(?:nghỉ việc|xin nghỉ|chấm dứt hợp đồng|gửi thông báo nghỉ|muốn nghỉ|dự định nghỉ|sẽ nghỉ|(?:chỉ\s+)?báo trước)',q)
       or any(term in q for term in ('người lao động đơn phương','gửi thông báo đơn phương nghỉ','gửi thông báo','gửi email chấm dứt','gửi đơn chỉ báo trước','báo trước 1 ngày rồi nghỉ','báo trước 30 ngày'))): facts['actor']='EMPLOYEE'
     notice_exception,notice_exception_span=_notice_exception_fact(q)

@@ -27,8 +27,14 @@ def generation_evidence(pack):
     """
     import re
     from .taxonomy import locator_matches
+    # Reporting that an employer fined a worker is a fact to assess, not a
+    # request for the administrative fine payable by that employer.
+    asks_sanction=bool(re.search(r'xử\s+phạt|chế tài|hậu quả|xử lý thế nào|xử lý như thế nào|'
+        r'mức\s+(?:xử\s+)?phạt|phạt\s+(?:tiền\s+)?(?:bao nhiêu|thế nào|như thế nào|ra sao)|'
+        r'xử phạt\s+(?:hành chính|công ty|doanh nghiệp|người sử dụng lao động)|'
+        r'có\s+bị\s+(?:xử\s+)?phạt|phạt[^.;?!]{0,25}mức nào',pack.query,re.I))
     if (not any(item.norm_role=='RULE' for item in pack.evidence)
-        or re.search(r'phạt|chế tài|hậu quả|xử lý thế nào|xử lý như thế nào',pack.query,re.I)):
+        or asks_sanction):
         return list(pack.evidence)
     plan=pack.evidence_plan
     groups=[group for _,group in required_groups(plan)] if plan else []

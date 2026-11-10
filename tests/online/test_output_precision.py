@@ -42,7 +42,9 @@ class OutputPrecisionTests(unittest.TestCase):
         draft,warnings=engine.generate(pack('Hiện nay hợp đồng lao động có những loại nào?',items),False)
         engine.provider.structured.assert_not_called()
         self.assertFalse(warnings); self.assertEqual(len(draft.claims),2)
-        self.assertIn('không phải một loại hợp đồng lao động thứ ba',draft.answer_summary)
+        self.assertNotIn('thử việc',draft.answer_summary)
+        self.assertIn('không xác định thời hạn',draft.answer_summary)
+        self.assertIn('không quá 36 tháng',draft.answer_summary)
         self.assertEqual({uid for claim in draft.claims for uid in claim.evidence_ids},{'a','b'})
 
     def test_intern_label_does_not_establish_employment(self):

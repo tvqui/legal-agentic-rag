@@ -21,6 +21,10 @@ def variant_config(base,name):
     cfg=base.model_copy(deep=True)
     # Otherwise easy exact/profile routes may skip the component being measured.
     cfg.retrieval.profile_fast_path=False;cfg.retrieval.exact_lookup=False
+    # Production recovery can use the distinct reviewer provider to draft.
+    # Disable it in every arm so removing review does not also change the
+    # generation provider being compared in this isolated ablation.
+    cfg.adjudication.recovery_budget_seconds=0
     cfg.graph.enabled=name!='without_graph'
     cfg.reranker.enabled=name!='without_reranker'
     if name=='without_auditor':cfg.applicability.mode='deterministic'
