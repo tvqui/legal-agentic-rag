@@ -4,8 +4,8 @@ from vn_labor_online.analysis import analyze,intake,plan_evidence
 from vn_labor_online.answer_review import review_error_code
 from vn_labor_online.config import AdjudicationConfig
 from vn_labor_online.errors import StructuredOutputError
-from vn_labor_online.generation import LegalAdjudicator,literal_lookup_draft
-from vn_labor_online.models import EvidenceState,ExplicitReference,VerifiedEvidenceItem,VerifiedEvidencePack
+from vn_labor_online.generation import LegalAdjudicator,literal_lookup_draft,_render_literal_source_draft
+from vn_labor_online.models import AdjudicationDraft,Claim,EvidenceState,ExplicitReference,VerifiedEvidenceItem,VerifiedEvidencePack
 
 def lookup():
     text='Điều 9. Nội dung nguồn gồm các quy định về quyền và nghĩa vụ của các bên.'
@@ -17,6 +17,30 @@ def lookup():
       lookup_reference=ExplicitReference(instrument_number='99/2024/NĐ-CP',article='9'))
 
 class LiteralSourceTests(unittest.TestCase):
+    def test_literal_rendering_emits_exact_common_prefix_once_and_keeps_source_mapping(self):
+        prefix='Điều 1. Phạm vi điều chỉnh quy định chung được giữ nguyên trong toàn bộ các khoản sau đây:'
+        suffixes=['',' 1. Nội dung khoản thứ nhất.',' 2. Nội dung khoản thứ hai.']
+        pack=lookup()
+        evidence=[]
+        claims=[]
+        for index,suffix in enumerate(suffixes,1):
+            text=prefix+suffix
+            uid=f'source_{index}'
+            evidence.append(pack.evidence[0].model_copy(update={'evidence_id':uid,'text':text,
+                'full_text':text,'provenance_span':{'char_start':index*10,'char_end':index*10+len(text)}}))
+            claims.append(Claim(claim_id=f'quote_{index}',text=text,evidence_ids=[uid]))
+        pack=pack.model_copy(update={'evidence':evidence})
+        draft=AdjudicationDraft(answer_summary='',claims=claims,applicable_law_versions=[],
+            semantic_review={'status':'LITERAL_SOURCE_MATCH','source_authority_approved':True})
+        rendered=_render_literal_source_draft(draft,pack,False)
+        self.assertEqual(rendered.answer_summary.count(prefix),1)
+        self.assertIn('[source_1] [source_2] [source_3]',rendered.answer_summary)
+        self.assertIn('1. Nội dung khoản thứ nhất. [source_2]',rendered.answer_summary)
+        self.assertIn('2. Nội dung khoản thứ hai. [source_3]',rendered.answer_summary)
+        self.assertEqual([claim.text for claim in rendered.claims],[prefix+suffix for suffix in suffixes])
+        self.assertEqual([item.provenance_span for item in pack.evidence],
+            [{'char_start':i*10,'char_end':i*10+len(prefix+suffix)} for i,suffix in enumerate(suffixes,1)])
+
     def test_literal_lookup_is_source_copy_not_a_model_completion(self):
         pack=lookup(); engine=LegalAdjudicator(AdjudicationConfig(mode='ollama'))
         engine.provider=Mock()

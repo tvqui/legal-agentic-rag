@@ -6,7 +6,10 @@ from .applicability import LegalApplicabilityAuditor
 from .artifact_store import ArtifactStore
 from .audit import deterministic_audit,citations,reference_audit
 from .config import OnlineConfig,AdjudicationConfig
-from .evidence import state_for,build_verified_pack,detect_authoritative_conflicts,select_for_plan,extend_plan_for_evidence
+from .evidence import (
+    state_for,build_verified_pack,detect_authoritative_conflicts,
+    select_for_plan,selection_diagnostics,extend_plan_for_evidence,
+)
 from .generation import LegalAdjudicator
 from .errors import IndexUnavailable,ProviderRateLimited
 from .graph import GraphExplorer
@@ -704,7 +707,8 @@ class OnlinePipeline:
            'decisions':[{'evidence_id':x.evidence_id,'audit_status':x.audit_status,'relevant':x.relevant,
              'supports_claim':x.supports_claim,'conditions_status':x.conditions_status,
              'exception_status':x.exception_status,'reasons':x.reasons} for x in decisions]},
-          {'event':'selection','selected':len(selected),'deduplicated':max(0,len(verified)-len(selected)),
+          {'event':'selection',**selection_diagnostics(
+            verified,plan,selected,analysis.query_date,allow_fallback,route_limit),
             'evidence_ids':[item.unit_id for item in selected]},
           {'event':'evidence_state','coverage':state.coverage,'gaps':state.gaps},
           {'event':'verified_evidence_pack','count':len(pack.evidence),'characters':sum(len(x.text) for x in pack.evidence),

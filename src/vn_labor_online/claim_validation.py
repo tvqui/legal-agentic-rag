@@ -22,9 +22,99 @@ def _continued_work_context(query):
 
 
 def invalid_clause_locator(text):
-    for match in re.finditer(r'\bkhoản\s+([a-zđ])\b',str(text),re.I):
-        prefix=str(text)[max(0,match.start()-50):match.start()]
+    value=str(text)
+    for match in re.finditer(r'\bkhoản\s+([a-zđ])\b',value,re.I):
+        prefix=value[max(0,match.start()-50):match.start()]
         if not re.search(r"(?:không\s+(?:có|phải|tồn tại)|ghi\s+sai(?:\s+là)?)\s*['\"“‘]?\s*$",prefix,re.I):
+            return True
+    for match in re.finditer(r'\bđiểm\s+\d+\s*,?\s*điều\s+\d+\b',value,re.I):
+        prefix=value[max(0,match.start()-50):match.start()]
+        if not re.search(r"(?:không\s+(?:có|phải|tồn tại)|ghi\s+sai(?:\s+là)?)\s*['\"“‘]?\s*$",prefix,re.I):
+            return True
+    return False
+
+
+def _explicit_locators(text):
+    content=fold(text)
+    article_matches=list(re.finditer(r'\bdieu\s+(\d+)\b',content))
+    def locator(pattern,segment,reverse=False):
+        matches=list(re.finditer(pattern,segment))
+        if reverse:matches.reverse()
+        for candidate in matches:
+            before=segment[max(0,candidate.start()-45):candidate.start()]
+            if not re.search(r'(?:khong\s+(?:co|phai|ton tai)|ghi sai(?:\s+la)?)\s*$',before):
+                return candidate
+        return None
+    for index,match in enumerate(article_matches):
+        previous_end=article_matches[index-1].end() if index else 0
+        sentence_start=max((content.rfind(mark,previous_end,match.start())+1
+            for mark in '.;?!\n'),default=previous_end)
+        prefix=content[max(previous_end,sentence_start,match.start()-100):match.start()]
+        next_article=article_matches[index+1].start() if index+1<len(article_matches) else len(content)
+        punctuation=[position for mark in '.;?!\n'
+            if (position:=content.find(mark,match.end(),next_article))>=0]
+        suffix_end=min([next_article,match.end()+100,*punctuation])
+        suffix=content[match.end():suffix_end]
+        prefix_clauses=list(re.finditer(r'\bkhoan\s+(\d+)\b',prefix))
+        if len(prefix_clauses)>1:
+            for clause_index,clause_match in enumerate(prefix_clauses):
+                start=prefix_clauses[clause_index-1].end() if clause_index else 0
+                point_match=locator(r'\bdiem\s+([a-z]|\d+)\b',prefix[start:clause_match.start()],reverse=True)
+                yield (match.group(1),clause_match.group(1),point_match.group(1) if point_match else None)
+            continue
+        def nearest(pattern):
+            before=locator(pattern,prefix,reverse=True)
+            after=locator(pattern,suffix)
+            options=[]
+            if before:options.append((len(prefix)-before.end(),before))
+            if after:options.append((after.start(),after))
+            return min(options,key=lambda pair:pair[0])[1] if options else None
+        clause_match=nearest(r'\bkhoan\s+(\d+)\b')
+        point_match=nearest(r'\bdiem\s+([a-z]|\d+)\b')
+        yield (match.group(1),clause_match.group(1) if clause_match else None,
+            point_match.group(1) if point_match else None)
+
+
+def _locator_metadata_mismatch(text,items):
+    """Require explicit claim locators to agree with attached evidence metadata."""
+    content_locators=list(_explicit_locators(text))
+    cited_source_locators={
+        locator for item in items
+        for locator in _explicit_locators(
+            ' '.join(str(value or '') for value in (
+                getattr(item,'ancestor_context',None),
+                getattr(item,'full_text',None),
+                getattr(item,'source_text',None),
+                item.text,
+            ))
+        )
+    }
+    for article,clause,point in content_locators:
+        metadata_present=False
+        matched=False
+        for item in items:
+            item_article=getattr(item,'article',None)
+            if item_article is None:item_article=getattr(item,'article_number',None)
+            item_clause=getattr(item,'clause',None)
+            if item_clause is None:item_clause=getattr(item,'clause_number',None)
+            item_point=getattr(item,'point',None)
+            if item_point is None:item_point=getattr(item,'point_number',None)
+            item_article=str(item_article or '')
+            if not item_article:
+                continue
+            metadata_present=True
+            if item_article!=article:
+                continue
+            if clause is not None and item_clause is not None and str(item_clause)!=clause:
+                continue
+            if point is not None and item_point is not None and fold(item_point)!=point.lower():
+                continue
+            matched=True
+            break
+        # A source may itself refer to another provision. Preserve that
+        # source-level cross-reference rather than treating it as the source's
+        # own article/clause locator.
+        if metadata_present and not matched and (article,clause,point) not in cited_source_locators:
             return True
     return False
 
@@ -152,6 +242,14 @@ def _conditional_consequence_lost(claim,source,query):
             r'([^.;,]{8,180}?)(?=\s+quy dinh tai|\s+it nhat|[,.;]|$)',source):
         consequence,condition=match.groups()
         if re.search(r'\b(?:duoc|phai|co quyen)\b',consequence):pairs.append((condition,consequence))
+    # Relative clauses may qualify an operative duty after its main phrase.
+    for match in re.finditer(r'([^.;]{14,220}?)\s+ma\s+([^.;]{8,180}?)(?=[;,.]|$)',source):
+        consequence,condition=match.groups()
+        if re.match(r'(?:van|duoc|phai|co quyen|co nghia vu)\b',condition.strip()):continue
+        consequence=re.split(r':|(?:^|\s)[a-z]\)\s*',consequence)[-1].strip()
+        consequence=re.sub(r'^(?:[a-z]\)|\d+[.)])\s*','',consequence.strip())
+        if re.search(r'\b(?:phai|duoc|co quyen|khong duoc|co nghia vu)\b',consequence):
+            pairs.append((condition,consequence))
     for condition,consequence in pairs:
         consequence=consequence.strip(' ,:')
         # Omitting the nominal prefix "thời gian" does not turn a conditional
@@ -159,7 +257,10 @@ def _conditional_consequence_lost(claim,source,query):
         # detects omitted scope; it never rewrites the published/source text.
         consequence_form=re.sub(r'\bthoi gian\s+','',consequence)
         claim_form=re.sub(r'\bthoi gian\s+','',claim)
-        if len(consequence.split())<7 or consequence_form not in claim_form:continue
+        predicate_form=re.sub(r'^(?:phai|duoc|co quyen|co nghia vu)\s+','',consequence_form)
+        inherited_duty=bool(re.search(r'\b(?:phai|duoc|co quyen|co nghia vu)\b',claim_form)
+            and predicate_form in claim_form)
+        if len(consequence.split())<7 or not (consequence_form in claim_form or inherited_duty):continue
         # Citation boilerplate is a locator, not an additional case fact.
         # Likewise, a paraphrase can state the agreement without repeating the
         # grammatical subject "hai bên". Keep the actual agreement predicate.
@@ -170,11 +271,23 @@ def _conditional_consequence_lost(claim,source,query):
         claim_words=set(re.findall(r'[a-z]+',claim))
         if anchors<=claim_words:continue
         if re.search(r'(?:neu|khi)\s+(?:dap ung|thoa man|du)\s+(?:day du\s+)?(?:cac\s+)?dieu kien',claim):continue
-        # A stated personal case can establish the antecedent; a negated or
-        # uncertain statement cannot. Do not infer it from a heading or title.
-        context_ok=any(anchors<=set(re.findall(r'[a-z]+',sentence))
-            and not re.search(r'\b(?:khong|chua|chang|khong ro|khong biet|chua ro)\b',sentence)
-            for sentence in re.split(r'[.;?!]',query))
+        # A stated personal case can establish either a positive or negative
+        # antecedent, but the polarity must match the source condition.
+        def negative_targets(sentence):
+            targets=set()
+            for negation in re.finditer(r'\b(?:khong|chua|chang)\b',sentence):
+                words=re.findall(r'[a-z]+',sentence[negation.end():])
+                target=next((word for word in words if word not in stop),None)
+                if target:targets.add(target)
+            return targets
+        condition_negative=bool(negative_targets(condition)&anchors)
+        context_ok=False
+        for sentence in re.split(r'[.;?!]|\b(?:nhung|tuy nhien)\b',query):
+            if not anchors<=set(re.findall(r'[a-z]+',sentence)):continue
+            if re.search(r'\b(?:khong|chua)\s+(?:biet|ro|chac|xac nhan|xac dinh)|'
+                         r'\b(?:khong dung la|khong phai la|gia su|gia dinh|neu)\b',sentence):continue
+            if bool(negative_targets(sentence)&anchors)==condition_negative:
+                context_ok=True;break
         if not context_ok:return True
     return False
 
@@ -183,19 +296,33 @@ def semantic_issues(text, items, *, context_query=''):
     q=fold(text); problems=[]
     if _instrument_year_mismatch(text,items):problems.append('CLAIM_INSTRUMENT_YEAR_MISMATCH')
     if invalid_clause_locator(text): problems.append('CLAIM_CLAUSE_POINT_CONFUSION')
+    if _locator_metadata_mismatch(text,items):
+        problems.append('CLAIM_LOCATOR_METADATA_MISMATCH')
     invalidity_pattern=r'khong co gia tri phap ly|\bvo hieu\b|khong phat sinh quyen|khong co hieu luc|chi co hieu luc (?:neu|khi|trong truong hop|doi voi)'
     invalidity=re.search(invalidity_pattern,q)
     form_source=' '.join(fold(' '.join((str(getattr(item,'ancestor_context','') or ''),
         str(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text)))) for item in items)
-    notice_only=re.search(r'\b(?:chi\s+(?:xet|danh gia|hoi)|rieng)\s+(?:ve\s+)?(?:thoi han|so ngay)[^.;?!]{0,25}bao truoc',fold(context_query))
-    global_exit=re.search(r'\b(?:viec|hanh vi|quyet dinh)\s+(?:don phuong\s+)?(?:cham dut|nghi viec)[^.;?!]{0,70}\b(?:la|van|deu)\s+(?:hop phap|trai phap luat|dung phap luat)',q)
+    scoped_query=fold(context_query)
+    notice_only=re.search(r'\b(?:chi\s+(?:xet|danh gia|hoi)|rieng)\s+(?:ve\s+)?(?:thoi han|so ngay)[^.;?!]{0,25}bao truoc',scoped_query)
+    limited_facet=re.search(r'\b(?:chi\s+(?:xet|hoi|vi|theo)|rieng\s+(?:ve|xet)|xet rieng)\b[^.;?!]{0,100}',scoped_query)
+    global_exit=re.search(r'\b(?:viec|hanh vi|quyet dinh|cong ty|nguoi su dung lao dong)\b[^.;?!]{0,100}\b(?:la|van|deu|khong)\s+(?:hop phap|trai phap luat|dung phap luat|vi pham|khong vi pham)',q)
     bounded=re.search(r'\b(?:chi\s+(?:xet|ve)|rieng\s+(?:ve|xet)|xet rieng)[^.;?!]{0,50}bao truoc|(?:khong|chua) the (?:ket luan|khang dinh)',q)
-    if notice_only and global_exit and not bounded:
+    if not bounded and limited_facet:
+        statements=[statement for statement in re.split(r'[.;?!]',q) if re.search(global_exit.re.pattern,statement)] if global_exit else []
+        bounded=bool(statements) and all(re.search(
+            r'\b(?:chi xet|chi ve|rieng ve|xet rieng)\b[^.;?!]{0,140}'
+            r'\b(?:gioi han|thoi han|thoi luong|ty le|muc luong|hinh thuc|so ngay)\b',statement)
+            and not re.search(r'hoan toan hop phap|hop phap ve moi mat|toan bo[^.;?!]*hop phap',statement)
+            for statement in statements)
+    if (notice_only or limited_facet) and global_exit and not bounded:
         problems.append('CLAIM_LIMITED_FACET_AS_OVERALL_LEGALITY')
     legal_absence=re.search(r'\bkhong co(?:\s+bat ky)?(?:\s+dieu kien dac biet hoac)?\s+ngoai le\b[^.;?!]{0,110}\b(?:phap luat|bo luat|luat|nghi dinh)\b',q)
     if legal_absence and q not in form_source and not re.search(r'(?:khong|chua) the (?:ket luan|khang dinh)',q):
         problems.append('CLAIM_STATUTORY_ABSENCE_NOT_GROUNDED')
-    if _conditional_consequence_lost(q,form_source,fold(context_query)):
+    if any(_conditional_consequence_lost(q,fold(' '.join((
+            str(getattr(item,'ancestor_context','') or ''),
+            str(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text)))),
+            fold(context_query)) for item in items):
         problems.append('CLAIM_CONDITIONAL_ANTECEDENT_LOST')
     # A duty to notify does not itself prove an advance-notification deadline.
     notification=re.search(r'\b(?:phai|can|co nghia vu)[^.;?!]{0,60}\bthong bao\b[^.;?!]{0,90}\btruoc khi\b',q)
@@ -296,6 +423,16 @@ def semantic_issues(text, items, *, context_query=''):
                 if 'khong '+action in source and 'khong duoc '+action in q and 'khong duoc '+action not in source:
                     problems.append('CLAIM_OMISSION_DUTY_INVERTED')
         article=str(getattr(item,'article_number',None) or getattr(item,'article',None) or '')
+        clause=str(getattr(item,'clause_number',None) or getattr(item,'clause',None) or '')
+        single_act_source=any(
+            (getattr(other,'original_instrument_number',None) or getattr(other,'document_number',None)
+                or getattr(other,'instrument_number',None)) in {'45/2019/QH14','18/VBHN-VPQH'}
+            and str(getattr(other,'article_number',None) or getattr(other,'article',None) or '')=='122'
+            and str(getattr(other,'clause_number',None) or getattr(other,'clause',None) or '')=='2'
+            for other in items)
+        if number in {'45/2019/QH14','18/VBHN-VPQH'} and article=='122' and clause=='3' and not single_act_source and re.search(
+            r'\b(?:mot hanh vi|cung mot hanh vi|cung hanh vi)\b',q):
+            problems.append('CLAIM_DISCIPLINE_SINGLE_ACT_CITATION_MISMATCH')
         if number in {'45/2019/QH14','18/VBHN-VPQH'} and article=='97':
             permission=bool(re.search(r'(?<!khong )(?<!chua )\bduoc(?: phep)?\s+cham\b',q))
             remedy_condition='bien phap khac phuc' in full_source

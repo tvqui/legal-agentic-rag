@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from vn_labor_online.answer_quality import (
-    clean_display, clean_source_excerpt, draft_issues, guarded_language_edit, language_issues,
+    clean_display, clean_draft, clean_source_excerpt, draft_issues, guarded_language_edit, language_issues,
 )
 from vn_labor_online.audit import citations, reference_audit
 from vn_labor_online.compression import compress_evidence
@@ -35,6 +35,67 @@ def draft(text='Người lao động được nghỉ 12 ngày làm việc.'):
 
 
 class AnswerQualityTests(unittest.TestCase):
+    def test_repetition_cleanup_runs_before_semantic_reviewer(self):
+        from vn_labor_online.answer_review import review_answer
+        texts=[
+            'Việc gia nhập công đoàn là quyền tự nguyện của người lao động, không bị ràng buộc bởi điều kiện nào khác như cam kết không gia nhập công đoàn.',
+            'Người lao động có quyền tự do gia nhập công đoàn và không bị cản trở bởi bất kỳ điều kiện nào, kể cả việc cam kết không gia nhập công đoàn.',
+            'Việc yêu cầu người lao động cam kết không gia nhập công đoàn là trái pháp luật và có thể bị xử lý.',
+        ]
+        candidate=AdjudicationDraft(answer_summary='\n'.join(texts),
+            claims=[Claim(claim_id=f'claim_{index}',text=text,evidence_ids=['prov_1'])
+                for index,text in enumerate(texts,1)],applicable_law_versions=[])
+        engine=LegalAdjudicator(AdjudicationConfig(mode='ollama',semantic_review=True))
+        engine.provider=Mock()
+        engine._generate_with_layout=Mock(return_value=(candidate,[]))
+        reviewed=[]
+        def capture_review(provider,received,verified_pack,attempts):
+            reviewed.append(received)
+            return received.model_copy(update={'semantic_review':{'status':'PASS'}}),[]
+        with patch('vn_labor_online.answer_review.review_answer',side_effect=capture_review):
+            result,_=engine.generate(pack(),False)
+        self.assertEqual(len(reviewed),1)
+        self.assertEqual(len(reviewed[0].claims),2)
+        self.assertEqual(len(result.claims),2)
+
+    def test_repeated_union_pledge_claims_collapse_before_review_without_losing_distinct_content(self):
+        texts=[
+            'Doanh nghiệp yêu cầu người lao động viết cam kết không gia nhập công đoàn để được tiếp tục làm việc là hành vi phân biệt đối xử và vi phạm pháp luật.',
+            'Việc gia nhập công đoàn là quyền tự nguyện của người lao động, không bị ràng buộc bởi điều kiện nào khác như cam kết không gia nhập công đoàn.',
+            'Theo quy định pháp luật, doanh nghiệp không có quyền yêu cầu người lao động cam kết không gia nhập công đoàn để được tiếp tục làm việc.',
+            'Việc yêu cầu người lao động cam kết không gia nhập công đoàn là trái pháp luật và có thể bị xử lý theo quy định của pháp luật.',
+            'Việc doanh nghiệp yêu cầu người lao động cam kết không gia nhập công đoàn để được tiếp tục làm việc là không hợp pháp và vi phạm quyền tự do gia nhập công đoàn của người lao động.',
+            'Việc yêu cầu người lao động cam kết không gia nhập công đoàn để được tiếp tục làm việc là hành vi vi phạm pháp luật và có thể bị xử lý theo quy định của pháp luật.',
+            'Người lao động có quyền tự do gia nhập công đoàn và không bị cản trở bởi bất kỳ điều kiện nào, kể cả việc cam kết không gia nhập công đoàn.',
+        ]
+        claims=[Claim(claim_id=f'claim_{index}',text=text,evidence_ids=['source_a','source_b'])
+            for index,text in enumerate(texts,1)]
+        original=AdjudicationDraft(answer_summary='\n'.join(texts),claims=claims,applicable_law_versions=[])
+        cleaned=clean_draft(original,'Doanh nghiệp có được yêu cầu cam kết không gia nhập công đoàn không?')
+        self.assertEqual(len(cleaned.claims),6)
+        retained=[claim.text for claim in cleaned.claims]
+        self.assertTrue(any('phân biệt đối xử' in text for text in retained))
+        self.assertTrue(any('không có quyền yêu cầu' in text for text in retained))
+        self.assertTrue(any('có thể bị xử lý' in text for text in retained))
+        self.assertTrue(any('vi phạm quyền tự do gia nhập' in text for text in retained))
+        self.assertTrue(any('quyền tự nguyện' in text for text in retained))
+        self.assertEqual(sum('có thể bị xử lý' in text for text in retained),2)
+        self.assertTrue(all(claim.evidence_ids==['source_a','source_b'] for claim in cleaned.claims))
+        self.assertEqual(len(original.claims),7)
+
+    def test_union_pledge_repetition_guard_preserves_different_scope_or_sources(self):
+        first='Việc yêu cầu người lao động cam kết không gia nhập công đoàn là trái pháp luật và có thể bị xử lý.'
+        same_action_with_employment_gate='Việc yêu cầu người lao động cam kết không gia nhập công đoàn để được tiếp tục làm việc là trái pháp luật và có thể bị xử lý.'
+        claims=[
+            Claim(claim_id='a',text=first,evidence_ids=['source_a']),
+            Claim(claim_id='b',text=first,evidence_ids=['source_a']),
+            Claim(claim_id='c',text=first,evidence_ids=['source_b']),
+            Claim(claim_id='d',text=same_action_with_employment_gate,evidence_ids=['source_a']),
+        ]
+        cleaned=clean_draft(AdjudicationDraft(answer_summary='',claims=claims,applicable_law_versions=[]),'')
+        self.assertEqual(len(cleaned.claims),2)
+        self.assertTrue(any('tiếp tục làm việc' in claim.text for claim in cleaned.claims))
+
     def test_layout_cleanup_preserves_dates_money_minus_and_point(self):
         raw='----\nĐiều 1: 12 ngày; 1.000.000 đồng; 30/09/2026.\n- Điểm l: x - y = -1.\n___'
         cleaned=clean_display(raw)

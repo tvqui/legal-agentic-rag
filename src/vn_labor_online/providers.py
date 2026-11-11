@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 
 from .errors import LLMProviderError,StructuredOutputError,ProviderRateLimited
 from .runtime import checkpoint,request_timeout,RequestStopped,OperationBudgetExceeded
-from .demo_progress import observe_model
+from .demo_progress import observe_model,record_model_usage
 from .gemini_quota import GeminiRatePolicy,get_gemini_limiter,quota_info
 from .gemini_diagnostics import classify_error,public_diagnostics
 
@@ -64,7 +64,9 @@ class BaseProvider(ABC):
     def _post(self,payload,headers):
         for attempt in range(2):
             checkpoint()
-            response=self.client.post(self.url,json=payload,headers=headers,timeout=request_timeout(self.timeout))
+            timeout_seconds=request_timeout(self.timeout)
+            record_model_usage({'effective_timeout_seconds':timeout_seconds})
+            response=self.client.post(self.url,json=payload,headers=headers,timeout=timeout_seconds)
             checkpoint()
             if response.status_code in {429,502,503,504} and attempt==0:
                 time.sleep(.25); continue
@@ -181,6 +183,7 @@ class OllamaProvider(BaseProvider):
         }
         try:
             raw=self._post(payload,{"Content-Type": "application/json", "Accept": "application/json"})
+            record_model_usage(raw)
             if raw.get('done_reason')=='length': raise StructuredOutputError('OUTPUT_TOKEN_LIMIT')
             return _decode_content(raw['message']['content'])
         except (StructuredOutputError,RequestStopped,OperationBudgetExceeded):
@@ -274,8 +277,33 @@ class GeminiProvider(BaseProvider):
         self.rate_policy=GeminiRatePolicy.from_env()
         self.rate_limiter=get_gemini_limiter(model,self.rate_policy)
         self._probe_lock=threading.Lock()
+        self._status_lock=threading.Lock()
         self._probe_next_at=0.0
         self._probe_failure={}
+
+    def _mark_ready(self):
+        with self._status_lock:
+            self._ready=True
+            self._probe_failure={}
+            self._probe_next_at=0.0
+
+    def _mark_unavailable(self,code,*,error_type=None,quota_kind=None,retry_after_seconds=None):
+        details={'error_code':code}
+        if error_type:details['error_type']=error_type
+        if quota_kind:details['quota_kind']=quota_kind
+        if retry_after_seconds is not None:
+            details['retry_after_seconds']=max(1,math.ceil(retry_after_seconds))
+        cooldown=retry_after_seconds
+        if cooldown is None:
+            cooldown=900 if quota_kind in {'DAILY','QUOTA_DISABLED'} else 60
+        if quota_kind in {'DAILY','QUOTA_DISABLED'}:
+            # All roles share this project/model gate. A known terminal quota
+            # must fail fast before another role starts an expensive request.
+            self.rate_limiter.defer(cooldown,quota_kind)
+        with self._status_lock:
+            self._ready=False
+            self._probe_failure=details
+            self._probe_next_at=time.monotonic()+max(1,cooldown)
 
 
     @observe_model
@@ -290,8 +318,14 @@ class GeminiProvider(BaseProvider):
                 # HTTP 400. Never enlarge the caller's remaining allowance to
                 # hide this: let the component retain its downstream reserve.
                 raise OperationBudgetExceeded('GEMINI_MINIMUM_DEADLINE_BUDGET')
-            wait_remaining=max(0,wait_remaining-self.rate_limiter.acquire(wait_remaining))
+            try:
+                wait_remaining=max(0,wait_remaining-self.rate_limiter.acquire(wait_remaining))
+            except ProviderRateLimited as exc:
+                self._mark_unavailable('GEMINI_HTTP_429',quota_kind=exc.quota_kind,
+                    retry_after_seconds=exc.retry_after_seconds)
+                raise
             timeout_seconds=request_timeout(self.timeout)
+            record_model_usage({'effective_timeout_seconds':timeout_seconds})
             if timeout_seconds<10:
                 # Pacing/retry waits can exhaust the useful inference window.
                 raise OperationBudgetExceeded('GEMINI_MINIMUM_DEADLINE_BUDGET')
@@ -325,8 +359,21 @@ class GeminiProvider(BaseProvider):
                         'minLength','maxLength','minimum','maximum','const','anyOf','oneOf'}
                     if exc.validator in allowed: error.validation_keyword=exc.validator
                     raise error from None
+                self._mark_ready()
                 return decoded
-            except (RequestStopped,OperationBudgetExceeded,StructuredOutputError,ProviderRateLimited):
+            except ProviderRateLimited as exc:
+                self._mark_unavailable('GEMINI_HTTP_429',quota_kind=exc.quota_kind,
+                    retry_after_seconds=exc.retry_after_seconds)
+                raise
+            except StructuredOutputError as exc:
+                self._mark_unavailable(
+                    str(exc) if str(exc) in {'OUTPUT_TOKEN_LIMIT','GEMINI_EMPTY_RESPONSE',
+                        'GEMINI_SCHEMA_VALIDATION_FAILED','INVALID_JSON',
+                        'NON_OBJECT_STRUCTURED_OUTPUT','DUPLICATE_JSON_KEY',
+                        'NON_TEXT_STRUCTURED_OUTPUT'} else 'GEMINI_INVALID_RESPONSE',
+                    error_type=type(exc).__name__)
+                raise
+            except (RequestStopped,OperationBudgetExceeded):
                 raise
             except Exception as exc:
                 status=getattr(exc,'code',None)
@@ -336,6 +383,8 @@ class GeminiProvider(BaseProvider):
                     if info.retryable:
                         self.rate_limiter.defer(delay,info.kind)
                     if not info.retryable or attempt>=self.rate_policy.max_retries:
+                        self._mark_unavailable('GEMINI_HTTP_429',quota_kind=info.kind,
+                            retry_after_seconds=delay)
                         raise ProviderRateLimited('GEMINI_HTTP_429',quota_kind=info.kind,
                             retry_after_seconds=delay) from None
                     continue
@@ -350,6 +399,7 @@ class GeminiProvider(BaseProvider):
                 # SDK errors can include request URLs. Never surface credentials.
                 safe_code=f'GEMINI_HTTP_{status}' if type(status) is int and 400<=status<=599 else (
                   'GEMINI_TIMEOUT' if isinstance(exc,TimeoutError) else 'GEMINI_CLIENT_ERROR')
+                self._mark_unavailable(safe_code,error_type=type(exc).__name__)
                 raise LLMProviderError('GEMINI_REQUEST_FAILED:'+type(exc).__name__,safe_code=safe_code,
                     safe_diagnostics=classify_error(exc)) from None
         raise AssertionError('unreachable')
@@ -374,24 +424,30 @@ class GeminiProvider(BaseProvider):
         try: installed=find_spec('google.genai') is not None
         except ModuleNotFoundError: installed=False
         if not installed: return report(error_code='GEMINI_SDK_MISSING')
+        capacity=self.rate_limiter.cooldown_snapshot()
+        if capacity.get('quota_kind') in {'DAILY','QUOTA_DISABLED'}:
+            return report(error_code='GEMINI_HTTP_429',quota_kind=capacity['quota_kind'],
+                retry_after_seconds=max(1,math.ceil(capacity['retry_after_seconds'])))
         if not self._probe_lock.acquire(blocking=False):
             return report(error_code='GEMINI_PROBE_IN_PROGRESS',retry_after_seconds=2)
         try:
-            if getattr(self,'_ready',False): return report(True)
-            remaining=self._probe_next_at-time.monotonic()
+            with self._status_lock:
+                ready=getattr(self,'_ready',False)
+                failure=dict(self._probe_failure)
+                remaining=self._probe_next_at-time.monotonic()
+            if ready: return report(True)
             if remaining>0:
-                return report(**{**self._probe_failure,'retry_after_seconds':max(1,math.ceil(remaining))})
+                return report(**{**failure,'retry_after_seconds':max(1,math.ceil(remaining))})
             try:
                 # Default 20s; Kaggle may explicitly allow <=60s for a cold
                 # model. This bounds the entire probe, including pacing/retries.
                 # The launcher's HTTP timeout covers sequential role probes.
                 with request_budget(probe_seconds):
                     result=self.structured('Return the requested JSON only.','Set ready to true.',
-                      {'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False})
-                if result!={'ready':True}: raise StructuredOutputError('GEMINI_PROBE_RESPONSE_MISMATCH')
-                self._ready=True
-                self._probe_failure={}
-                return report(True)
+                          {'type':'object','properties':{'ready':{'type':'boolean'}},'required':['ready'],'additionalProperties':False})
+                    if result!={'ready':True}: raise StructuredOutputError('GEMINI_PROBE_RESPONSE_MISMATCH')
+                    self._mark_ready()
+                    return report(True)
             except Exception as exc:
                 details={'error_type':type(exc).__name__}
                 cooldown=self.rate_limiter.cooldown_snapshot()
@@ -413,9 +469,11 @@ class GeminiProvider(BaseProvider):
                     code=getattr(exc,'safe_code',None)
                     details['error_code']=code if isinstance(code,str) and re.fullmatch(r'GEMINI_(?:HTTP_[45]\d\d|TIMEOUT|CLIENT_ERROR)',code) else 'GEMINI_PROBE_ERROR'
                     details.update(public_diagnostics(getattr(exc,'safe_diagnostics',None)))
-                delay=details.get('retry_after_seconds',5)
-                self._probe_next_at=time.monotonic()+delay
-                self._probe_failure=details
+                delay=details.get('retry_after_seconds',900 if details.get('quota_kind') in {'DAILY','QUOTA_DISABLED'} else 60)
+                with self._status_lock:
+                    self._ready=False
+                    self._probe_next_at=time.monotonic()+delay
+                    self._probe_failure=details
                 logging.getLogger(__name__).warning('Gemini readiness failed: code=%s quota_kind=%s retry_after=%s',
                     details['error_code'],details.get('quota_kind'),details.get('retry_after_seconds'))
                 return report(**details)

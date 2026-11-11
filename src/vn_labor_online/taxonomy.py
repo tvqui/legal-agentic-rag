@@ -11,7 +11,7 @@ from .temporal import legal_regime_for
 from .durations import probation_duration
 from .termination_context import protection_clause,settlement_deadline_only
 
-TAXONOMY_VERSION = 'labor-subissues-v20'
+TAXONOMY_VERSION = 'labor-subissues-v21'
 CURRENT_CODE = ['45/2019/QH14', '18/VBHN-VPQH']
 OLD_CODE = ['10/2012/QH13']
 
@@ -43,6 +43,8 @@ def annual_leave_combination_only(query):
 
 # Mechanisms and remedies deliberately coexist rather than being exclusive siblings.
 SUBISSUES = {
+    'DISCIPLINE.SINGLE_ACT_SANCTION':'Một hành vi và giới hạn số hình thức kỷ luật',
+    'DISCIPLINE.CONCURRENT_ACTS':'Nhiều hành vi vi phạm kỷ luật đồng thời',
     'SAFETY.ACCIDENT_FIRST_AID':'Trách nhiệm sơ cứu, cấp cứu khi xảy ra tai nạn lao động',
     'SAFETY.ACCIDENT_MEDICAL_COSTS':'Trách nhiệm thanh toán chi phí y tế do tai nạn lao động',
     'CONTRACT.PARTY_DEFINITIONS':'Định nghĩa người lao động và người sử dụng lao động',
@@ -80,6 +82,7 @@ SUBISSUES = {
     'WAGE.NIGHT_PAY':'Tiền lương ban đêm',
     'WAGE.EQUAL_PAY':'Trả lương bình đẳng cho công việc có giá trị như nhau',
     'WAGE.MINIMUM_FLOOR':'Nguyên tắc không trả thấp hơn mức lương tối thiểu áp dụng',
+    'WAGE.MINIMUM_WAGE_AUTHORITY':'Thẩm quyền quyết định, công bố mức lương tối thiểu',
     'WAGE.PAYMENT_CYCLE':'Kỳ hạn trả lương',
     'WAGE.PAYMENT_DELAY':'Giới hạn chậm trả lương và khoản đền bù',
     'WAGE.PAYMENT_METHODS':'Trả lương bằng tiền mặt hoặc tài khoản và chi phí liên quan',
@@ -156,10 +159,30 @@ def deferred_topic(query,term):
     return True
 
 
+def discipline_act_scopes(query,*,confirmed_only=False):
+    """Classify act cardinality; an uncertain/negated premise proves no scope."""
+    from .fact_polarity import assertion_uncertain
+    q=query.lower(); result=[]
+    patterns=(('DISCIPLINE.SINGLE_ACT_SANCTION',r'\b(?:cùng\s+(?:một\s+)?hành vi|một hành vi)\b'),
+              ('DISCIPLINE.CONCURRENT_ACTS',r'\b(?:nhiều|hai|các) hành vi\b'))
+    for label,pattern in patterns:
+        for match in re.finditer(pattern,q):
+            if confirmed_only:
+                if assertion_uncertain(q,match.start(),match.end()):continue
+                prefix=q[max(0,match.start()-45):match.start()]
+                if re.search(r'\b(?:không|chưa)\s+(?:phải\s+)?$',prefix):continue
+                if label.endswith('CONCURRENT_ACTS') and not affirmative_phrase(q,('đồng thời','cùng lúc')):continue
+            result.append(label);break
+    return result
+
+
 def covered_profile_parents(analysis) -> set[str]:
     """Context hits may be covered; independent requests must remain mandatory."""
     keys=set(analysis.legal_subissues); q=analysis.query_text.lower()
     covered={key.split('.')[0] for key in keys}
+    if any(key.startswith('DISCIPLINE.') for key in keys) and not re.search(
+            r'trả lương|tiền lương|mức lương|cắt lương|tính lương',q):
+        covered.add('WAGE')  # "Kéo dài nâng lương" names a disciplinary form.
     if keys: covered.add('CONTRACT')
     if analysis.facts.get('termination_basis'): covered.update({'WAGE','HARASSMENT'})
     if 'CONTRACT.PROBATION_PAY' in keys: covered.add('WAGE')
@@ -246,6 +269,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     def add(label):
         if label not in found: found.append(label)
     has = lambda *terms: any(term in q for term in terms)
+    if 'DISCIPLINE' in issues or has('kỷ luật'):
+        for label in discipline_act_scopes(query):add(label)
     from .rule_catalog import accident_facets
     aid,medical=accident_facets(query)
     if aid:add('SAFETY.ACCIDENT_FIRST_AID')
@@ -321,6 +346,9 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     if has('chi phí đào tạo','hợp đồng đào tạo','cam kết sau đào tạo','cam kết đào tạo'):
         add('TRAINING.COST_REPAYMENT')
     wage_context='WAGE' in issues or has('tiền lương','trả lương','lương tháng','mức lương','dùng lương')
+    if has('lương tối thiểu') and re.search(
+        r'\b(?:cơ quan nào|ai|thẩm quyền|có quyền|có trách nhiệm|khuyến nghị)\b',q):
+        add('WAGE.MINIMUM_WAGE_AUTHORITY')
     if wage_context:
         if has('giá trị như nhau','cùng công việc','công việc tương đương') and has(
             'giới tính','là nữ','phụ nữ','lao động nữ','nam và nữ','nam, nữ'):
@@ -532,7 +560,11 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
     def rule(slot, new_article, old_article, clause=None):
         require(slot, [loc(old_article if historical else new_article, clause)])
     for key in analysis.legal_subissues:
-        if key=='CONTRACT.PROBATION_DURATION':
+        if key=='DISCIPLINE.SINGLE_ACT_SANCTION':
+            require('single_act_sanction',[loc('123' if historical else '122','2',exact=True)])
+        elif key=='DISCIPLINE.CONCURRENT_ACTS':
+            require('concurrent_act_sanction',[loc('123' if historical else '122','3',exact=True)])
+        elif key=='CONTRACT.PROBATION_DURATION':
             article='27' if historical else '25'
             require('probation_duration', *[[loc(article,str(i))] for i in probation_duration_clauses(analysis,historical)])
         elif key=='CONTRACT.PROBATION_END':
@@ -541,7 +573,7 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
         elif key=='CONTRACT.PROBATION_CANCELLATION':
             require('probation_cancellation',[loc('29' if historical else '27','2')])
         elif key=='CONTRACT.PROBATION_EXCLUSION':
-            require('probation_exclusion',[loc('26' if historical else '24')])
+            require('probation_exclusion',[loc('26' if historical else '24','2' if historical else '3',exact=True)])
         elif key=='CONTRACT.PROBATION_REPEAT':
             require('probation_once',[loc('27' if historical else '25',exact=True,contains=['một lần','một công việc'])])
         elif key=='CONTRACT.PROBATION_SANCTION':
@@ -671,6 +703,8 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
             require('equal_pay',[loc('90','3')])
         elif key=='WAGE.MINIMUM_FLOOR':
             require('minimum_floor',[loc('90','1' if historical else '2')])
+        elif key=='WAGE.MINIMUM_WAGE_AUTHORITY' and not historical:
+            require('minimum_wage_authority',[loc('91','4',exact=True)])
         elif key=='WAGE.PAYMENT_CYCLE':
             require('payment_cycle',[loc('95' if historical else '97')])
         elif key=='WAGE.PAYMENT_DELAY':

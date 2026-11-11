@@ -170,6 +170,38 @@ class GeminiRetryTests(unittest.TestCase):
             self.assertEqual(len(self.starts), 1)
             self.assertEqual(self.clock.now, 0)
 
+    def test_inference_quota_failure_invalidates_cached_readiness(self):
+        def run(provider):
+            provider._ready=True
+            with self.assertRaises(ProviderRateLimited):
+                provider.structured('system','user',{'type':'object','properties':{'ok':{'type':'boolean'}},
+                    'required':['ok']})
+            return provider.readiness()
+
+        result=self.invoke([UpstreamError('DAILY')],run=run)
+        self.assertEqual(result['status'],'DEGRADED')
+        self.assertEqual(result['error_code'],'GEMINI_HTTP_429')
+        self.assertEqual(result['quota_kind'],'DAILY')
+        self.assertGreater(result['retry_after_seconds'],0)
+        self.assertEqual(len(self.starts),1)
+
+    def test_daily_failure_is_shared_across_roles_and_does_not_hit_sdk_again(self):
+        def run(provider):
+            other=GeminiProvider(provider.model,'another-test-key')
+            other.rate_limiter=self.gate
+            other._ready=True
+            with self.assertRaises(ProviderRateLimited):provider.structured('s','u',{})
+            readiness=other.readiness()
+            self.assertEqual(readiness['status'],'DEGRADED')
+            self.assertEqual(readiness['quota_kind'],'DAILY')
+            with self.assertRaises(ProviderRateLimited):other.structured('s','u',{})
+            self.assertEqual(len(self.starts),1)
+            self.assertEqual(self.clock.now,0)
+            self.clock.now=901
+            self.assertEqual(other.structured('s','u',{'type':'object'}),{'ok':True})
+            return True
+        self.assertTrue(self.invoke([UpstreamError('DAILY'),'ok'],run=run))
+
     def test_repeated_429_is_bounded_and_credential_safe(self):
         with self.assertRaises(ProviderRateLimited) as caught:
             self.invoke([UpstreamError('RPM', '1s')] * 4)

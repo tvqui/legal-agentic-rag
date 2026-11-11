@@ -481,6 +481,45 @@ def literal_lookup_draft(pack,partial,assumptions=None):
         'evidence_ids':[item.evidence_id for item in pack.evidence]})
 
 
+def _render_literal_source_draft(draft,pack,partial):
+    """Render an exact shared source prefix once, without changing quoted claims."""
+    by_id={item.evidence_id:item for item in pack.evidence}
+    if len(draft.claims)<2:return render_claims(draft,partial)
+    if any(len(claim.evidence_ids)!=1
+              or claim.evidence_ids[0] not in by_id
+              or claim.text!=by_id[claim.evidence_ids[0]].full_text
+              for claim in draft.claims):
+          return render_claims(draft,partial)
+    prefix=draft.claims[0].text
+    for claim in draft.claims[1:]:
+          shared=0
+          while shared<min(len(prefix),len(claim.text)) and prefix[shared]==claim.text[shared]:
+              shared+=1
+          prefix=prefix[:shared]
+          if not prefix:break
+    if prefix and not prefix[-1].isspace():
+          boundary=max(prefix.rfind(char) for char in ' \t\r\n.:;!?')
+          prefix=prefix[:boundary+1] if boundary>=0 else ''
+    if len(prefix.strip())<40 or not any(claim.text[len(prefix):].strip() for claim in draft.claims):
+          return render_claims(draft,partial)
+    shared_ids=list(dict.fromkeys(uid for claim in draft.claims for uid in claim.evidence_ids))
+    lines=['Nội dung trích từ bộ dữ liệu nguồn:',
+          '> '+prefix.rstrip()+' '+' '.join(f'[{uid}]' for uid in shared_ids)]
+    for claim in draft.claims:
+          suffix=claim.text[len(prefix):].strip()
+          if not suffix:continue
+          item=by_id[claim.evidence_ids[0]]
+          label=f'{item.instrument_number} · Điều {item.article}'
+          if item.clause:label+=f' · Khoản {item.clause}'
+          if item.point:label+=f' · Điểm {item.point}'
+          lines.append(f'- {label}\n> {suffix} [{item.evidence_id}]')
+    if not draft.semantic_review.get('source_authority_approved',True):
+          lines.append('Liên kết nguồn lấy theo metadata của corpus; trạng thái xác minh nguồn vẫn đang chờ người có chuyên môn duyệt.')
+    if partial:
+          lines.append('Đây là bản trích nguồn trong corpus; việc duyệt nguồn hoặc hiệu lực cấp điều khoản còn chưa hoàn tất.')
+    return draft.model_copy(update={'answer_summary':'\n\n'.join(lines)})
+
+
 class LegalAdjudicator:
     """Generate only from a VerifiedEvidencePack, with deterministic fallback."""
     def __init__(self,cfg:AdjudicationConfig):
@@ -548,7 +587,7 @@ class LegalAdjudicator:
             skip_step('answer_quality','Luồng trích nguyên văn có kiểm tra literal riêng')
             if self._review_provider is None:
                 skip_step('semantic_review','LITERAL_SOURCE_MATCH: không cấu hình Gemini reviewer')
-                return literal,['LITERAL_SOURCE_QUOTATION']
+                return _render_literal_source_draft(literal,pack,partial),['LITERAL_SOURCE_QUOTATION']
             # Gemini checks even literal answers when configured. Keep source
             # text immutable; no model rewriting is needed to format a quote.
             draft,warnings=literal,['LITERAL_SOURCE_QUOTATION']
@@ -579,16 +618,33 @@ class LegalAdjudicator:
                 except (ProviderRateLimited,RequestStopped):
                     raise
                 except Exception as exc:
-                    return draft.model_copy(update={'claims':[],'answer_summary':'Chưa hoàn tất biên tập và kiểm tra câu trả lời với nguồn.',
-                        'applicable_law_versions':[],'semantic_review':{'status':'ERROR',
-                        'error_code':review_error_code(exc),'stage':'ANSWER_COMPOSITION',**review_error_details(exc)}}),[
-                        *warnings,'ANSWER_SEMANTIC_REVIEW_ERROR:'+type(exc).__name__,'ANSWER_QUALITY_BLOCKED']
+                    from .runtime import request_timeout
+                    code=review_error_code(exc)
+                    recoverable=code in {'GEMINI_HTTP_503','GEMINI_HTTP_504','GEMINI_TIMEOUT','TimeoutError'}
+                    if recoverable and request_timeout(self.cfg.review_timeout_seconds)>=10:
+                        # Composition is optional wording work. The original
+                        # candidate still needs the independent review below;
+                        # this never publishes an unchecked provider fallback.
+                        warnings.append('ANSWER_COMPOSITION_UNAVAILABLE:'+code)
+                    else:
+                        return draft.model_copy(update={'claims':[],'answer_summary':'Chưa hoàn tất biên tập và kiểm tra câu trả lời với nguồn.',
+                            'applicable_law_versions':[],'semantic_review':{'status':'ERROR',
+                            'error_code':code,'stage':'ANSWER_COMPOSITION',**review_error_details(exc)}}),[
+                            *warnings,'ANSWER_SEMANTIC_REVIEW_ERROR:'+type(exc).__name__,'ANSWER_QUALITY_BLOCKED']
+            if literal is None:
+                cleaned=clean_draft(draft,pack.query)
+                if cleaned!=draft:
+                    draft=cleaned
+                    warnings.append('ANSWER_CLEANED_BEFORE_REVIEW')
             draft,review_warnings=observed('semantic_review',review_answer,self.review_provider,draft,pack,0 if literal is not None else self.cfg.semantic_repair_attempts,
               technology='Reviewer '+self.cfg.review_provider+' · xem lượt provider/model thực tế',summary=draft_summary,
               status=lambda r:'DONE' if r[0].semantic_review.get('status')=='PASS' else 'ERROR' if r[0].semantic_review.get('status')=='ERROR' else 'WARNING')
             warnings+=review_warnings
             if draft.claims:
-                draft=render_claims(draft,partial or draft.semantic_review.get('status')!='PASS')
+                if literal is not None:
+                    draft=_render_literal_source_draft(draft,pack,partial or draft.semantic_review.get('status')!='PASS')
+                else:
+                    draft=render_claims(draft,partial or draft.semantic_review.get('status')!='PASS')
                 missing=draft.semantic_review.get('missing',[])
                 if missing: draft=draft.model_copy(update={'answer_summary':draft.answer_summary+'\n\nPhần chưa trả lời được: '+'; '.join(dict.fromkeys(missing))})
                 used={uid for c in draft.claims for uid in c.evidence_ids}

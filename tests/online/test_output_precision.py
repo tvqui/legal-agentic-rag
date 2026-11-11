@@ -9,9 +9,9 @@ from vn_labor_online.analysis import analyze,intake,plan_evidence
 from vn_labor_online.applicability import LegalApplicabilityAuditor
 from vn_labor_online.config import ApplicabilityConfig,AdjudicationConfig,ResearcherConfig
 from vn_labor_online.errors import StructuredOutputError
-from vn_labor_online.evidence import select_for_plan,state_for,build_verified_pack
+from vn_labor_online.evidence import select_for_plan,selection_diagnostics,state_for,build_verified_pack
 from vn_labor_online.generation import LegalAdjudicator
-from vn_labor_online.models import Evidence,EvidencePlan,ApplicabilityDecision
+from vn_labor_online.models import Evidence,EvidencePlan,LegalLocator,ApplicabilityDecision
 from vn_labor_online.providers import _decode_content,OllamaProvider
 from vn_labor_online.researcher import LegalResearcher
 
@@ -114,6 +114,25 @@ class OutputPrecisionTests(unittest.TestCase):
         historical=original.model_copy(update={'unit_id':'d','provision_identity_id':'d','provision_version_id':'d','valid_from':'2022-01-01'})
         selected,_=select_for_plan([original,copy,changed,historical],EvidencePlan(mandatory_slots=['governing_rule']),None,False,12)
         self.assertEqual({item.unit_id for item in selected},{'a','c','d'})
+
+    def test_selection_diagnostics_separate_duplicates_from_budget_omissions(self):
+        source=rule('a','20','1','a',text='Nội dung một.')
+        duplicate=source.model_copy(update={'unit_id':'a-copy'})
+        unrelated=rule('other','90','1',text='Nội dung khác.')
+        plan=EvidencePlan(
+            mandatory_slots=['requested_rule'],
+            slot_requirements={'requested_rule':[[
+                LegalLocator(documents=['45/2019/QH14'],article='20',clause='1',point='a')
+            ]]},
+        )
+        candidates=[source,duplicate,unrelated]
+        selected,_=select_for_plan(candidates,plan,None,False,1)
+        diagnostics=selection_diagnostics(candidates,plan,selected,None,False,1)
+        self.assertEqual(diagnostics['candidate_count'],3)
+        self.assertEqual(diagnostics['unique_candidate_count'],2)
+        self.assertEqual(diagnostics['deduplicated'],1)
+        self.assertEqual(diagnostics['unselected'],1)
+        self.assertEqual(diagnostics['unselected_by_reason'],{'selection_limit':1})
 
     def test_cleaner_existing_source_is_preferred_without_rewriting_ocr(self):
         query='Thế nào là người lao động và người sử dụng lao động?'

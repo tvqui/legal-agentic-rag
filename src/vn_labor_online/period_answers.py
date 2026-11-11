@@ -71,10 +71,18 @@ def rule_periods(request,store,max_periods=4,*,retriever=None):
     ordered=sorted(bounds)
     if len(ordered)-1>max_periods:return []
     periods=[]
+    scoped_query=query[:prefix.start()]+query[last.char_end:]
+    # A comparison instruction belongs to the aggregate response, not every
+    # dated subrequest. Keeping it in each slice makes a later period ask for
+    # statutes from earlier regimes that are correctly excluded by date.
+    scoped_query=re.sub(
+        r'\s*(?:[.?!]\s*)?(?:nếu|trường hợp)\s+(?:quy định|pháp luật|văn bản|điều luật)\b[^.?!]{0,120}'
+        r'\b(?:thay đổi|khác nhau)\b[^.?!]{0,80}\b(?:hãy|cần)\s+(?:phân biệt|so sánh|nêu rõ)\b[^.?!]*[.?!]?\s*$',
+        '',scoped_query,flags=re.I)
     for left,right in zip(ordered,ordered[1:]):
         # Replace only the exact range header. Preserve all substantive user
         # words; no legal answer, citation or asserted fact is added here.
-        scoped=query[:prefix.start()]+f'Tại ngày {left.isoformat()}'+query[last.char_end:]
+        scoped=scoped_query[:prefix.start()]+f'Tại ngày {left.isoformat()}'+scoped_query[prefix.start():]
         if len(scoped)>10000:return []
         periods.append(RulePeriod(left.isoformat(),(right-timedelta(days=1)).isoformat(),scoped))
     return periods

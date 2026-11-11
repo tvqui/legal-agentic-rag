@@ -1,10 +1,31 @@
 """Bounded execution facts for a request owner; never prompts or model reasoning."""
 from __future__ import annotations
 from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from functools import wraps
-import json,os,re,threading,time
+import json,math,os,re,threading,time
 from .gemini_diagnostics import FIELDS as GEMINI_ERROR_FIELDS,HINTS as GEMINI_ERROR_REASONS,STATUSES as GEMINI_API_STATUSES
+
+_MODEL_USAGE:ContextVar[dict|None]=ContextVar('online_model_usage',default=None)
+_SAFE_NUMERIC_MODEL_METRICS={
+    'context_characters','context_bytes','estimated_prompt_tokens','context_budget_tokens',
+    'max_output_tokens','effective_timeout_seconds','root_budget_remaining_seconds',
+    'component_budget_remaining_seconds','load_duration_ns','prompt_eval_duration_ns',
+    'eval_duration_ns','total_duration_ns','prompt_eval_count','eval_count',
+}
+_SAFE_MODEL_LABELS={'prompt_token_accounting','request_stage','component'}
+_SAFE_MODEL_METRICS=_SAFE_NUMERIC_MODEL_METRICS|_SAFE_MODEL_LABELS
+
+def _safe_model_metric(key,value):
+    if key in _SAFE_NUMERIC_MODEL_METRICS:
+        if type(value) is int:return 0<=value<2**63
+        return type(value) is float and math.isfinite(value) and value>=0
+    if key=='prompt_token_accounting':
+        return isinstance(value,str) and value in {'UTF8_UPPER_BOUND','CONFIGURED_MODEL_TOKENIZER'}
+    if key in {'request_stage','component'}:
+        return isinstance(value,str) and re.fullmatch(r'[A-Za-z0-9_-]{1,60}',value) is not None
+    return False
 
 SPECS={
  'api':('Tiếp nhận yêu cầu','Backend API','FastAPI · Pydantic','QueryRequest đã kiểm tra'),
@@ -62,7 +83,8 @@ def clean(value,depth=0):
     if isinstance(value,(list,tuple)):return [clean(v,depth+1) for v in value[:16]]
     if isinstance(value,dict):
         return {str(k)[:60]:clean(v,depth+1) for k,v in list(value.items())[:20]
-            if not re.search(r'(?i)(?:key|token|secret|password|prompt|raw_query|source_quote|full_text|^answer$)',str(k))}
+            if (_safe_model_metric(str(k),v) if str(k) in _SAFE_MODEL_METRICS else not re.search(
+                r'(?i)(?:key|token|secret|password|prompt|raw_query|source_quote|full_text|^answer$)',str(k)))}
     return type(value).__name__
 
 def public_error(exc):
@@ -209,9 +231,78 @@ def observe_model(fn):
         provider={'GeminiProvider':'Gemini','OllamaProvider':'Ollama','HttpJsonProvider':'HTTP JSON'}.get(type(self).__name__,'LLM')
         name=getattr(self,'model',None)
         name=name if isinstance(name,str) and re.fullmatch(r'[A-Za-z0-9_.:/-]{1,100}',name) else 'model cấu hình'
-        return call('model_call',lambda:fn(self,*args,**kwargs),technology=provider+' · '+name,
-            summary=lambda result:{'kieu_du_lieu':type(result).__name__,'so_truong':len(result) if isinstance(result,dict) else 0})
+        system=args[0] if args else kwargs.get('system','')
+        user=args[1] if len(args)>1 else kwargs.get('user','')
+        if not isinstance(system,str):system=''
+        if not isinstance(user,str):user=''
+        context=system+user
+        output={'context_characters':len(context),'context_bytes':len(context.encode('utf-8'))}
+        from .context_budget import prompt_tokens
+        try:estimate=prompt_tokens(self,system,user)
+        except Exception:estimate=None  # Optional observation must not break inference.
+        if type(estimate) is int and estimate>=0:
+            output['estimated_prompt_tokens']=estimate
+            accounting=getattr(self,'token_accounting','UTF8_UPPER_BOUND')
+            output['prompt_token_accounting']=accounting if accounting in {
+                'UTF8_UPPER_BOUND','CONFIGURED_MODEL_TOKENIZER'} else 'UTF8_UPPER_BOUND'
+        context_limit=getattr(self,'context_tokens',None)
+        output_tokens=getattr(self,'max_output_tokens',None)
+        if type(context_limit) is int and context_limit>=0:output['context_budget_tokens']=context_limit
+        if type(output_tokens) is int and output_tokens>=0:output['max_output_tokens']=output_tokens
+        timeout=getattr(self,'timeout',None)
+        limits=[float(timeout)] if type(timeout) in (int,float) and timeout>0 else []
+        from .runtime import _current,_operation
+        budget=_current.get()
+        if budget is not None:
+            root=max(0.0,budget.seconds-(time.monotonic()-budget.started))
+            output['root_budget_remaining_seconds']=round(root,3)
+            limits.append(root)
+            if isinstance(budget.stage,str) and re.fullmatch(r'[A-Za-z0-9_-]{1,60}',budget.stage):
+                output['request_stage']=budget.stage
+        operation=_operation.get()
+        if operation is not None:
+            component,deadline=operation
+            remaining=max(0.0,deadline-time.monotonic())
+            output['component_budget_remaining_seconds']=round(remaining,3)
+            limits.append(remaining)
+            if isinstance(component,str) and re.fullmatch(r'[A-Za-z0-9_-]{1,60}',component):
+                output['component']=component
+        if limits:output['effective_timeout_seconds']=round(min(limits),3)
+
+        usage={}
+        token=_MODEL_USAGE.set(usage)
+        handle=Step('model_call',technology=provider+' · '+name,output=output)
+        def usage_summary():
+            result={**output}
+            for key,value in usage.items():
+                target=key+'_ns' if key in {'load_duration','prompt_eval_duration','eval_duration','total_duration'} else key
+                if _safe_model_metric(target,value):result[target]=value
+            return result
+        try:
+            def summarize(result):
+                summary={'kieu_du_lieu':type(result).__name__,
+                    'so_truong':len(result) if isinstance(result,dict) else 0,**usage_summary()}
+                return summary
+            result=fn(self,*args,**kwargs)
+            handle.finish(summarize(result))
+            return result
+        except BaseException as exc:
+            handle.finish({**usage_summary(),**public_error(exc)},
+                'CANCELLED' if getattr(exc,'reason','')=='REQUEST_CANCELLED' else 'ERROR')
+            raise
+        finally:
+            _MODEL_USAGE.reset(token)
     return wrapped
+
+def record_model_usage(response):
+    """Keep only integer Ollama usage counters in the current model-call event."""
+    usage=_MODEL_USAGE.get()
+    if usage is None or not isinstance(response,dict):return
+    for key in ('load_duration','prompt_eval_duration','eval_duration','total_duration',
+                'prompt_eval_count','eval_count','effective_timeout_seconds'):
+        value=response.get(key)
+        target=key+'_ns' if key.endswith('_duration') else key
+        if _safe_model_metric(target,value):usage[key]=value
 
 def execution_snapshot():
     log=journal()

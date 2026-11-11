@@ -168,6 +168,7 @@ def assess_parts(analysis,selected,claims,semantic_review,allow_fallback,legal_r
         cited={uid for cid in claim_ids for uid in public_claims[cid].evidence_ids}
         cited_state=state_for([by_id[uid] for uid in cited if uid in by_id],plan,analysis.query_date,allow_fallback)
         cited_gaps=_actionable_gaps(cited_state.gaps,selected,allow_fallback)
+        missing=list(dict.fromkeys(missing+cited_gaps))
         status='NOT_CHECKED'
         if verdict and verdict.get('status')=='ANSWERED' and claim_ids and not missing and not cited_gaps:
             status='ANSWERED'

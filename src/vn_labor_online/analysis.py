@@ -3,7 +3,7 @@ import calendar,hashlib,json,re,unicodedata
 from datetime import date
 from .temporal import legal_regime_for
 from .taxonomy import classify_subissues,parent_issues,plan_with_profiles,profile_fact_questions,original_documents,relationship_comparison,affirmative_phrase,annual_leave_combination_only
-from .taxonomy import probation_cancellation_only,unused_leave_settlement_only
+from .taxonomy import probation_cancellation_only,unused_leave_settlement_only,deferred_topic
 from .query_clock import relative_date_ranges
 from .termination_context import explicit_employer_action,protection_clause,stipulated_liability_actor,settlement_deadline_only
 from .models import QueryEnvelope,QueryAnalysis,ExplicitReference,Route,EvidencePlan,FactCandidate
@@ -518,6 +518,17 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             missing.append('Trong năm đang xét, người lao động đã làm việc thực tế bao nhiêu tháng?')
         if not facts.get('work_category') and not facts.get('minor') and not facts.get('disabled'):
             missing.append('Công việc thuộc điều kiện bình thường, nặng nhọc/độc hại/nguy hiểm hay đặc biệt nặng nhọc/độc hại/nguy hiểm; người lao động có chưa thành niên hoặc khuyết tật không?')
+        personal_leave_amount=bool(
+            re.search(r'\b(?:tôi|của tôi|trường hợp của tôi)\b',query,re.I)
+            and re.search(r'\b(?:bao nhiêu|mấy)\s+ngày\b[^.;?!]{0,35}(?:phép|nghỉ)|(?:phép|nghỉ)[^.;?!]{0,35}\b(?:bao nhiêu|mấy)\s+ngày\b',query,re.I))
+        first_service_period=bool(
+            isinstance(facts.get('worked_months'),int) and 0<=facts['worked_months']<60
+            and re.search(r'\b(?:vừa|mới)(?:\s+(?:làm|việc|đủ|tròn|được|có)){0,5}\s+\d+\s+tháng\b',query,re.I)
+            and not re.search(r'\b(?:trong năm|năm nay)\b',query,re.I))
+        base_only=deferred_topic(query.lower(),'thâm niên') or bool(re.search(
+            r'\b(?:chỉ\s+(?:hỏi|xét)|riêng)\s+(?:mức\s+)?cơ sở\b',query,re.I))
+        if personal_leave_amount and not base_only and not first_service_period and not isinstance(facts.get('service_years'),int):
+            missing.append('Bạn đã làm việc liên tục cho cùng người sử dụng lao động bao nhiêu năm để kiểm tra ngày nghỉ tăng theo thâm niên?')
     # A personal oral-contract assessment depends on its term. A generic
     # explanation of available forms can instead present both legal branches.
     oral=affirmative_phrase(query,('thỏa thuận miệng','hợp đồng miệng','bằng lời nói'))

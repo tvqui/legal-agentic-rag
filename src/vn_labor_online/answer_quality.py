@@ -101,6 +101,44 @@ def _notice_claim_signature(text: str):
     return actor,contract,notice,quantities,conditions,bound,protected
 
 
+def _union_pledge_claim_signature(text: str):
+    """Collapse only repeated union-pledge propositions with matching scope."""
+    folded=unicodedata.normalize('NFD',text.lower()).replace('đ','d')
+    folded=''.join(char for char in folded if unicodedata.category(char)!='Mn')
+    folded=' '.join(folded.split())
+    if 'cam ket khong gia nhap cong doan' not in folded:return None
+    quantities=tuple(re.findall(r'\d+(?:[.,/]\d+)*',folded))
+    locators=tuple(re.findall(r'\b(?:dieu|khoan)\s+\d+[a-z]?\b|\bdiem\s+[a-z]\b',folded))
+    conditions=tuple(re.findall(
+        r'\b(?:neu|tru truong hop|chi khi|khong ap dung khi|truoc khi|sau khi)\b[^.;,]*',
+        folded))
+    polarity=folded.count('khong'),folded.count('chua')
+    if ('nguoi su dung lao dong' in folded or 'doanh nghiep' in folded
+            or 'viec yeu cau nguoi lao dong' in folded):
+        attributes=set()
+        if any(phrase in folded for phrase in (
+            'trai phap luat','khong hop phap','vi pham phap luat','khong co quyen')):
+            attributes.add('UNLAWFUL')
+        if 'phan biet doi xu' in folded:attributes.add('DISCRIMINATION')
+        if 'co the bi xu ly' in folded:attributes.add('SANCTION')
+        if 'vi pham quyen tu do gia nhap cong doan' in folded:
+            attributes.add('UNION_RIGHT_VIOLATION')
+        if not attributes:return None
+        employment_gate='CONTINUE_EMPLOYMENT' if 'tiep tuc lam viec' in folded else 'UNSTATED'
+        return ('EMPLOYER_REQUEST',employment_gate,tuple(sorted(attributes)),
+            quantities,locators,conditions,polarity)
+    if 'nguoi lao dong' in folded and 'quyen' in folded:
+        attributes=set()
+        if 'quyen tu nguyen' in folded or 'quyen tu do gia nhap cong doan' in folded:
+            attributes.add('RIGHT_TO_JOIN')
+        if (('khong bi rang buoc' in folded or 'khong bi can tro' in folded)
+                and 'dieu kien' in folded):
+            attributes.add('NO_EXTRA_CONDITIONS')
+        if attributes:
+            return ('EMPLOYEE_RIGHT',tuple(sorted(attributes)),quantities,locators,conditions,polarity)
+    return None
+
+
 def language_issues(text: str, *, allow_admin: bool = False) -> list[str]:
     """Detect observable defects, not arbitrary grammar or OCR substitutions."""
     issues = []
@@ -139,7 +177,7 @@ def clean_draft(draft: AdjudicationDraft, query: str) -> AdjudicationDraft:
     allow_admin = bool(_ADMIN_QUERY.search(query))
     claims = [claim.model_copy(update={'text': clean_display(claim.text, allow_admin=allow_admin)})
               for claim in draft.claims]
-    unique=[]; by_text={}; by_notice={}
+    unique=[]; by_text={}; by_notice={}; by_repetition={}
     for claim in claims:
         key=' '.join(claim.text.lower().split())
         # A neutral connective adds no legal proposition. All remaining words,
@@ -147,8 +185,11 @@ def clean_draft(draft: AdjudicationDraft, query: str) -> AdjudicationDraft:
         key=re.sub(r'^ngoài ra,\s*','',key)
         signature=_notice_claim_signature(claim.text)
         notice_key=(signature,tuple(sorted(claim.evidence_ids))) if signature else None
+        repetition=_union_pledge_claim_signature(claim.text)
+        repetition_key=(repetition,tuple(sorted(claim.evidence_ids))) if repetition else None
         index=by_text.get(key)
         if index is None and notice_key is not None: index=by_notice.get(notice_key)
+        if index is None and repetition_key is not None:index=by_repetition.get(repetition_key)
         if index is not None:
             previous=unique[index]
             unique[index]=previous.model_copy(update={'evidence_ids':list(dict.fromkeys(previous.evidence_ids+claim.evidence_ids))})
@@ -156,6 +197,7 @@ def clean_draft(draft: AdjudicationDraft, query: str) -> AdjudicationDraft:
             index=len(unique)
             by_text[key]=index
             if notice_key is not None: by_notice[notice_key]=index
+            if repetition_key is not None:by_repetition[repetition_key]=index
             unique.append(claim)
     answer = clean_display(draft.answer_summary, allow_admin=allow_admin)
     # Keep summary and public claim excerpts in sync.

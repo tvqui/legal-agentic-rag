@@ -24,6 +24,8 @@ class PeriodAnswerTests(unittest.TestCase):
         self.assertEqual([(p.start,p.end) for p in periods],[('2020-12-20','2020-12-31'),('2021-01-01','2021-01-10')])
         self.assertIn('Tại ngày 2020-12-20',periods[0].question)
         self.assertNotIn('10/01/2021',periods[0].question)
+        self.assertNotIn('hãy phân biệt',periods[0].question.lower())
+        self.assertNotIn('hãy phân biệt',periods[1].question.lower())
     def test_written_calendar_range_is_supported(self):
         q=QUERY.replace('20/12/2020','ngày 20 tháng 12 năm 2020').replace('10/01/2021','ngày 10 tháng 1 năm 2021')
         self.assertEqual(len(rule_periods(QueryRequest(question=q),self.store())),2)

@@ -107,8 +107,7 @@ def state_for(items:list[Evidence],plan:EvidencePlan|list[str],query_date:str|No
     return EvidenceState(slots=mapping,gaps=gaps,coverage=score/max(1,len(mandatory)),
       mandatory_slots=mandatory,conditional_slots=conditional)
 
-def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,allow_document_temporal_fallback:bool,limit:int)->tuple[list[Evidence],EvidenceState]:
-    """Greedily preserve evidence that fills mandatory slots before score-only fill."""
+def _deduplicate_for_selection(items:list[Evidence])->tuple[list[Evidence],int]:
     ordered=[]; seen_identity=set(); seen_content=set()
     for item in items:
         # Collapse duplicate retrieval hits, while retaining distinct legal
@@ -124,6 +123,11 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
           item.valid_from,item.valid_to,' '.join(item.ancestor_context.split()),' '.join((item.source_text or item.text).split()))
         if content in seen_content: continue
         seen_content.add(content); ordered.append(item)
+    return ordered,len(items)-len(ordered)
+
+def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,allow_document_temporal_fallback:bool,limit:int)->tuple[list[Evidence],EvidenceState]:
+    """Greedily preserve evidence that fills mandatory slots before score-only fill."""
+    ordered,_=_deduplicate_for_selection(items)
     selected=[]; selected_ids=set()
     # Allocate scarce room to explicit legal requirements first. These items
     # often satisfy the generic source/version slots too, avoiding a redundant
@@ -191,9 +195,101 @@ def select_for_plan(items:list[Evidence],plan:EvidencePlan,query_date:str|None,a
                 selected.append(item);selected_ids.add(item.unit_id)
     for item in ([] if substantive_requirements else ordered):
         if len(selected)>=limit: break
-        if item.unit_id not in selected_ids:
+        if item.verified and item.unit_id not in selected_ids:
             selected.append(item); selected_ids.add(item.unit_id)
     return selected,state_for(selected,plan,query_date,allow_document_temporal_fallback)
+
+def selection_diagnostics(items:list[Evidence],plan:EvidencePlan,selected:list[Evidence],
+                          query_date:str|None,allow_document_temporal_fallback:bool,
+                          limit:int)->dict:
+    """Separate true retrieval duplicates from candidates omitted by selection."""
+    from .evidence_budget import required_groups
+    ordered,duplicates=_deduplicate_for_selection(items)
+    selected_ids={item.unit_id for item in selected}
+    selected_candidates=[item for item in ordered if item.unit_id in selected_ids]
+    groups=list(required_groups(plan))
+    represented_groups=[
+        any(any(locator_matches(chosen,locator) for locator in alternatives)
+            for chosen in selected_candidates)
+        for _,alternatives in groups
+    ]
+    task_terms=[]
+    candidate_terms={}
+    if plan.task_queries:
+        from .retrieval import _terms
+        task_terms=[_terms(query) for query in plan.task_queries.values()]
+        candidate_terms={
+            item.unit_id:_terms(item.source_text or item.text)
+            for item in ordered+selected_candidates
+        }
+    omitted=defaultdict(int)
+    for item in ordered:
+        if item.unit_id in selected_ids:continue
+        if not item.verified:
+            omitted['not_verified']+=1
+            continue
+        if heading_only(item):
+            omitted['heading_only']+=1
+            continue
+        matching_groups=[
+            index for index,(_,alternatives) in enumerate(groups)
+            if any(locator_matches(item,locator) for locator in alternatives)
+        ]
+        if matching_groups:
+            if any(represented_groups[index] for index in matching_groups):
+                omitted['alternative_for_filled_requirement']+=1
+            else:
+                omitted['required_requirement_not_selected']+=1
+            continue
+        task_matches=[terms for terms in task_terms
+            if terms and terms&candidate_terms[item.unit_id]]
+        if task_matches:
+            selected_support=sum(
+                1 for candidate in selected_candidates
+                if any(terms&candidate_terms[candidate.unit_id] for terms in task_matches)
+            )
+            if selected_support>=2:
+                omitted['task_support_cap']+=1
+            elif len(selected)>=limit:
+                omitted['selection_limit']+=1
+            else:
+                omitted['other_unselected']+=1
+            continue
+        generic_slots=[slot for slot in plan.mandatory_slots if slot not in plan.slot_requirements]
+        found_slots=[]
+        for slot in generic_slots:
+            probe=state_for([item],EvidencePlan(
+                mandatory_slots=[slot],governing_roles=plan.governing_roles
+            ),query_date,allow_document_temporal_fallback).slots[slot]
+            if probe.status in {SlotStatus.FOUND_VERIFIED,SlotStatus.FOUND}:
+                found_slots.append(slot)
+        if found_slots:
+            represented=False
+            for slot in found_slots:
+                for candidate in selected_candidates:
+                    probe=state_for([candidate],EvidencePlan(
+                        mandatory_slots=[slot],governing_roles=plan.governing_roles
+                    ),query_date,allow_document_temporal_fallback).slots[slot]
+                    if probe.status in {SlotStatus.FOUND_VERIFIED,SlotStatus.FOUND}:
+                        represented=True
+                        break
+                if represented:break
+            omitted['alternative_for_filled_requirement' if represented
+                else 'required_requirement_not_selected']+=1
+        elif len(selected)>=limit:
+            omitted['selection_limit']+=1
+        elif plan.slot_requirements or plan.task_queries:
+            omitted['not_relevant_to_plan']+=1
+        else:
+            omitted['other_unselected']+=1
+    return {
+        'candidate_count':len(items),
+        'unique_candidate_count':len(ordered),
+        'selected':len(selected),
+        'deduplicated':duplicates,
+        'unselected':sum(omitted.values()),
+        'unselected_by_reason':dict(sorted(omitted.items())),
+    }
 
 def build_verified_pack(query:str,query_date:str|None,facts:dict,state:EvidenceState,items:list[Evidence],
                         decisions:list[ApplicabilityDecision]|None=None,requested_outcome:str='OTHER')->VerifiedEvidencePack:

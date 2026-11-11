@@ -4,7 +4,7 @@ import os
 import unicodedata
 from types import SimpleNamespace
 from .audit import applicability
-from .taxonomy import classify_subissues,taxonomy_exclusion,profile_requirements,locator_matches,profile_covers_issues
+from .taxonomy import classify_subissues,taxonomy_exclusion,profile_requirements,locator_matches,profile_covers_issues,discipline_act_scopes
 from .config import ApplicabilityConfig
 from .errors import StructuredOutputError,LLMProviderError
 from .runtime import RequestStopped
@@ -78,7 +78,7 @@ class LegalApplicabilityAuditor:
           'DETERMINISTIC_MISINFORMATION_CHAIN','DETERMINISTIC_HARASSMENT_EXCEPTION',
           'DETERMINISTIC_WITHDRAWAL_RULE','DETERMINISTIC_DEFINITION_CONSEQUENCE_CHAIN',
           'DETERMINISTIC_MUTUAL_AGREEMENT_RULE','DETERMINISTIC_LEAVE_RULE_CHAIN','DETERMINISTIC_PROFILE_RULE',
-          'DETERMINISTIC_PRO_RATA_BASE_PARAMETER',
+          'DETERMINISTIC_PRO_RATA_BASE_PARAMETER','DETERMINISTIC_DISCIPLINE_SCOPE',
           'DETERMINISTIC_HISTORICAL_NOTICE_CHAIN','DETERMINISTIC_EXACT_LOOKUP'}
         locked={d.evidence_id:d for d in base_decisions if proven_reasons.intersection(d.reasons)}
         candidates=[item for item in items if item.unit_id not in hard and item.unit_id not in locked]
@@ -284,6 +284,7 @@ Do not infer missing facts, choose a different law version, create evidence, or 
             for slot,groups in profile_requirements(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,query_date=regime_date,facts=facts,query_text=query,requested_outcome=requested_outcome)).items():
                 profile_groups.setdefault(slot,[]).extend(groups)
         covered=profile_covers_issues(SimpleNamespace(legal_subissues=subissues,legal_issues=issues,facts=facts,query_text=query))
+        discipline_scopes=set(discipline_act_scopes(query,confirmed_only=True))
         for item in items:
             matched=item.unit_id in accepted_ids or item.retrieval_method=='policy' or 'policy' in item.component_scores
             text=' '.join(x for x in (item.source_text,item.text) if x).lower(); folded=_fold(text)
@@ -362,6 +363,17 @@ Do not infer missing facts, choose a different law version, create evidence, or 
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_RULE_MATCH'])
             elif 'LEAVE' in issues and (item.retrieval_method=='policy' or 'policy' in item.component_scores) and (article in {'113','114'} or document=='145/2020/NĐ-CP' and article=='66'):
                 decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,conditions_status='SATISFIED',exception_status='NOT_TRIGGERED',audit_status='PASS',reasons=['DETERMINISTIC_LEAVE_RULE_CHAIN'])
+            elif ('DISCIPLINE' in issues and document in {'45/2019/QH14','18/VBHN-VPQH','10/2012/QH13'}
+              and article==('123' if document=='10/2012/QH13' else '122')
+              and ((item.clause_number=='2' and 'DISCIPLINE.SINGLE_ACT_SANCTION' in discipline_scopes
+                    and 'khong duoc' in folded and 'mot hanh vi' in folded)
+                   or (item.clause_number=='3' and 'DISCIPLINE.CONCURRENT_ACTS' in discipline_scopes
+                    and 'nhieu hanh vi' in folded and 'cao nhat' in folded))):
+                # Stated cardinality establishes scope, not the real-world truth
+                # of an alleged act. Source and final claim audits still apply.
+                decision=ApplicabilityDecision(evidence_id=item.unit_id,relevant=True,supports_claim=True,
+                  conditions_status='SATISFIED',exception_status='NOT_APPLICABLE',audit_status='PASS',
+                  reasons=['DETERMINISTIC_DISCIPLINE_SCOPE'])
             elif (requested_outcome!='ASSESS_LEGALITY' or set(issues)<={'CONTRACT','GENERAL','WAGE'}
               or facts.get('query_intent') in {'STIPULATED_EMPLOYEE_LIABILITY','STIPULATED_EMPLOYER_LIABILITY'}
               or 'WAGE.OVERTIME_PAY' in subissues and not facts.get('actor')

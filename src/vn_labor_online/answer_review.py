@@ -161,6 +161,15 @@ def repair_required_computations(draft, pack, tasks):
             expected in claim.text and evidence_id in claim.evidence_ids for claim in candidate.claims):
             continue
         claims=list(candidate.claims)
+        already_claimed=next((claim for claim in claims
+            if expected in claim.text and evidence_id in claim.evidence_ids),None)
+        if already_claimed is not None:
+            summary=candidate.answer_summary
+            if expected not in summary:
+                summary=summary.rstrip()+f'\n- {already_claimed.text} '+ ' '.join(
+                    f'[{uid}]' for uid in already_claimed.evidence_ids)
+            candidate=candidate.model_copy(update={'answer_summary':summary})
+            continue
         target=next((i for i,claim in enumerate(claims)
             if evidence_id in claim.evidence_ids and '85%' in claim.text),None)
         if target is not None:

@@ -87,7 +87,9 @@ def extra_requirements(analysis):
         points('training_contract_contents',62,2,['a','b','c','d','đ','e'])
         # Do not replace the contents question with repayment obligations.
         out['training_contract']=[[loc(62,1)]]
-    if has('luong toi thieu') and has('phu cap','luong co ban','muc luong','ap dung','thap hon','dap ung'):
+    authority_only=('WAGE.MINIMUM_WAGE_AUTHORITY' in getattr(analysis,'legal_subissues',[]) and not (
+        re.search(r'bao nhieu|muc (?:cu the|ap dung)|phu cap|luong co ban|thap hon|dap ung|\d+\s*(?:trieu|nghin|dong)',q)))
+    if not authority_only and has('luong toi thieu') and has('phu cap','luong co ban','muc luong','ap dung','thap hon','dap ung'):
         out['minimum_wage_salary_base']=[[loc(90,1)]]
         instruments=['90/2019/NĐ-CP'] if old else ['90/2019/NĐ-CP'] if analysis.query_date and analysis.query_date<'2022-07-01' else ['38/2022/NĐ-CP'] if analysis.query_date and analysis.query_date<'2024-07-01' else ['74/2024/NĐ-CP'] if analysis.query_date and analysis.query_date<'2026-01-01' else ['293/2025/NĐ-CP']
         # The 2019 and 2022 decrees use a different structural location.

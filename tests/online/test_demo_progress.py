@@ -1,7 +1,7 @@
 import io,json,logging,socket,threading,time,unittest
 from unittest.mock import Mock,patch
 from vn_labor_online.demo_progress import ProgressLog,Step,call,execution_snapshot,skip
-from vn_labor_online.runtime import request_budget,RequestStopped
+from vn_labor_online.runtime import request_budget,RequestStopped,operation_budget
 from vn_labor_online.models import AnswerResponse,Trace,Route,Stop
 from vn_labor_online.config import OnlineConfig
 from vn_labor_online.errors import LLMProviderError,IndexUnavailable
@@ -66,6 +66,14 @@ class ProgressJournalTests(unittest.TestCase):
         snapshot['steps'][0]['output']['so_nguon']=999
         self.assertNotEqual(log.snapshot()['steps'][0]['output']['so_nguon'],999)
 
+    def test_telemetry_allowlist_rejects_non_numeric_or_uncontrolled_values(self):
+        log=ProgressLog()
+        ident=log.begin('model_call')
+        log.finish(ident,{'estimated_prompt_tokens':'private prompt','prompt_token_accounting':'secret',
+            'component':'raw user question','context_characters':42})
+        output=log.snapshot()['steps'][0]['output']
+        self.assertEqual(output,{'context_characters':42})
+
     def test_snapshot_running_duration_and_console_safe_metadata(self):
         with patch.dict('os.environ',{'VN_LABOR_DEMO_CONSOLE':'1'}),patch('builtins.print') as printed,request_budget(10):
             stage=Step('bm25');before=execution_snapshot()['steps'][0]['elapsed_ms']
@@ -85,6 +93,37 @@ class ProgressJournalTests(unittest.TestCase):
         self.assertEqual(steps[0]['step'],'model_call')
         self.assertIn('Ollama',steps[0]['technology'])
         self.assertNotIn('private',json.dumps(steps))
+
+    def test_model_telemetry_records_safe_context_budgets_and_ollama_usage(self):
+        from vn_labor_online.providers import OllamaProvider
+        system='private system text';user='sensitive user question'
+        provider=OllamaProvider(timeout=20,max_output_tokens=128,context_tokens=4096)
+        provider._post=Mock(return_value={'message':{'content':'{"ok":true}'},
+            'load_duration':123456,'prompt_eval_count':34,'eval_count':5})
+        with request_budget(10) as budget:
+            budget.stage='answer_review'
+            with operation_budget('answer_review',4,3):
+                result=provider.structured(system,user,{'type':'object'})
+            steps=execution_snapshot()['steps']
+        output=steps[0]['output']
+        serialized=json.dumps(steps)
+        self.assertEqual(result,{'ok':True})
+        self.assertEqual(output['context_characters'],len(system+user))
+        self.assertEqual(output['context_bytes'],len((system+user).encode('utf-8')))
+        self.assertEqual(output['estimated_prompt_tokens'],output['context_bytes']+256)
+        self.assertEqual(output['prompt_token_accounting'],'UTF8_UPPER_BOUND')
+        self.assertEqual(output['context_budget_tokens'],4096)
+        self.assertEqual(output['max_output_tokens'],128)
+        self.assertEqual(output['component'],'answer_review')
+        self.assertEqual(output['request_stage'],'answer_review')
+        self.assertGreater(output['root_budget_remaining_seconds'],0)
+        self.assertGreater(output['component_budget_remaining_seconds'],0)
+        self.assertLessEqual(output['effective_timeout_seconds'],3)
+        self.assertEqual(output['load_duration_ns'],123456)
+        self.assertEqual(output['prompt_eval_count'],34)
+        self.assertEqual(output['eval_count'],5)
+        self.assertNotIn(system,serialized)
+        self.assertNotIn(user,serialized)
 
     def test_contextvars_do_not_mix_concurrent_requests(self):
         barrier=threading.Barrier(2);values={}
