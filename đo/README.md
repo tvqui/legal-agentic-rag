@@ -53,6 +53,8 @@ python -m unittest discover -s đo -p "test_*.py" -v
 
 `reranker_revision` đã ghim commit Hugging Face cụ thể, không tự chuyển theo `main` khi cache Kaggle bị mất. Dense dùng revision trong artifact. Khi đổi reranker phải đổi revision tương ứng và tạo run mới; không resume trộn trọng số.
 
+Sau sửa ngày 12/11/2026, Graph cố định mặc định dùng `graph_fusion_mode=candidate_union`: giữ thứ hạng Hybrid, nối thêm tối đa `graph_max_additions` căn cứ mới vào pool cho reranker/selector. Vì vậy top K của Graph không rerank có thể bằng Hybrid; lợi ích mở rộng phải đọc cả pool và nhánh có rerank, không gọi điểm bằng nhau là đã chứng minh Graph cải thiện. `weighted_rrf` vẫn có thể chọn tường minh để thử gộp một lần các kênh chưa fusion với `graph_fusion_weight`; không gộp lại danh sách Hybrid đã fusion. Tham số này dành cho nhánh đo fixed graph, không thay chính sách Graph adaptive ONLINE. Reranker nay nhận ngữ cảnh cha và có max_length=1024; rất dài vẫn có thể bị cắt. Mọi lần đo sau thay đổi phải tạo RUN_NAME mới, không resume hoặc ghi đè ZIP baseline cũ.
+
 ```python
 # Chỉ dùng trong Kaggle, trước lệnh đo QA. Không in giá trị Secret.
 import os

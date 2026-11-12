@@ -20,7 +20,10 @@ class LegalApplicabilityAuditor:
     def __init__(self,cfg:ApplicabilityConfig,store=None):
         self.cfg=cfg; self.store=store; self.provider=None
         provider_mode=cfg.provider if cfg.mode=='hybrid' else cfg.mode
-        if provider_mode=='ollama':
+        if provider_mode=='gemini':
+            if not cfg.model: raise ValueError('Gemini applicability mode requires model')
+            self.provider=GeminiProvider(cfg.model,cfg.api_key or os.getenv('GEMINI_API_KEY'),cfg.timeout_seconds,cfg.max_output_tokens)
+        elif provider_mode=='ollama':
             self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:8b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,tokenizer_path=cfg.tokenizer_path,tokenizer_model=cfg.tokenizer_model)
         elif provider_mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP applicability mode requires url and model')
@@ -43,7 +46,7 @@ class LegalApplicabilityAuditor:
             return provider.structured(system,serialized,schema)
 
     def audit(self,items:list[Evidence],query:str,issues:list[str],facts:dict,requested_outcome:str='EXPLAIN',plan=None):
-        if self.cfg.mode=='hybrid':
+        if self.cfg.mode in {'hybrid','gemini'}:
             return self._hybrid(items,query,issues,facts,requested_outcome,plan)
         if not self.provider: return self._deterministic(items,query,issues,facts,requested_outcome)
         return self._provider_per_item(items,query,issues,facts,requested_outcome)

@@ -524,7 +524,10 @@ class LegalAdjudicator:
     """Generate only from a VerifiedEvidencePack, with deterministic fallback."""
     def __init__(self,cfg:AdjudicationConfig):
         self.cfg=cfg; self.provider=None
-        if cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,cfg.context_tokens,tokenizer_path=cfg.tokenizer_path,tokenizer_model=cfg.tokenizer_model)
+        if cfg.mode=='gemini':
+            if not cfg.model: raise ValueError('Gemini adjudication mode requires model')
+            self.provider=GeminiProvider(cfg.model,cfg.api_key or os.getenv('GEMINI_API_KEY'),cfg.timeout_seconds,cfg.max_output_tokens)
+        elif cfg.mode=='ollama': self.provider=OllamaProvider(cfg.url or 'http://127.0.0.1:11434/api/chat',cfg.model or 'qwen3:4b',cfg.timeout_seconds,cfg.health_url,cfg.max_output_tokens,cfg.context_tokens,tokenizer_path=cfg.tokenizer_path,tokenizer_model=cfg.tokenizer_model)
         elif cfg.mode=='http':
             if not cfg.url or not cfg.model: raise ValueError('HTTP adjudication mode requires url and model')
             self.provider=HttpJsonProvider(cfg.url,cfg.model,cfg.api_key,cfg.timeout_seconds,cfg.health_url)

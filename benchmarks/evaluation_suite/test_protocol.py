@@ -50,7 +50,7 @@ class ProtocolTests(unittest.TestCase):
         e=Evidence(unit_id='s',text='source',document_id='d',retrieval_method='test',authority_rank=100,
             valid_from='2021-01-01',temporal_verified=True)
         for method in labor_retrieval.METHODS:
-            cfg=NS(reranker=NS(enabled=False))
+            cfg=NS(reranker=NS(enabled=False),retrieval=NS(graph_max_additions=10,graph_fusion_weight=.5))
             r=NS(bm25=Mock(return_value=[e]),dense=Mock(return_value=[e]),fusion=Mock(return_value=[e]),neural_rerank=Mock(return_value=[e]))
             g=NS(expand=Mock(return_value=([e],{})))
             row={'question':'q','query_date':'2026-01-01','required_groups':[['SECRET_GOLD']]}
@@ -208,5 +208,52 @@ class ProtocolTests(unittest.TestCase):
         from gold import status_comparison
         self.assertTrue(status_comparison('OUT_OF_SCOPE','ABSTAIN'))
         self.assertIsNone(status_comparison('UNKNOWN_LABEL','ABSTAIN'))
+
+class GraphFusionBoundaryTests(unittest.TestCase):
+    def fixture(self,weight=.5):
+        from vn_labor_online.config import OnlineConfig
+        from vn_labor_online.models import Evidence
+        from vn_labor_online.retrieval import Retriever
+        cfg=OnlineConfig(artifact_source='fixture');cfg.retrieval.graph_fusion_weight=weight
+        cfg.retrieval.graph_fusion_mode='weighted_rrf'
+        def item(uid,method,start='2021-01-01'):
+            return Evidence(unit_id=uid,text='source',retrieval_method=method,authority_rank=100,
+                document_id='doc',source_url='https://example.org/law',
+                valid_from=start,temporal_verified=True)
+        r=object.__new__(Retriever);r.cfg=cfg
+        r.bm25=Mock(return_value=[item('a','bm25')]);r.dense=Mock(return_value=[item('b','dense')])
+        r.fusion=Mock(wraps=r.fusion)
+        g=NS(expand=Mock(return_value=([item('c','graph')],{})))
+        return cfg,r,g,item
+
+    def test_graph_is_fused_with_raw_channels_not_hybrid_output(self):
+        cfg,r,g,_=self.fixture()
+        result,stats=labor_retrieval.retrieve('hybrid_graph',{'question':'query','query_date':'2026-01-01'},r,g,cfg)
+        channels=r.fusion.call_args.args[0]
+        self.assertEqual([c[0].retrieval_method for c in channels],['bm25','dense','graph'])
+        self.assertEqual(r.fusion.call_args.kwargs['weights'],[1,1,.5])
+        self.assertEqual(stats['novel_candidate_ids'],['c'])
+
+    def test_zero_graph_weight_is_exact_baseline_and_skips_traversal(self):
+        cfg,r,g,_=self.fixture(0)
+        graph,_=labor_retrieval.retrieve('hybrid_graph',{'question':'query','query_date':'2026-01-01'},r,g,cfg)
+        baseline,_=labor_retrieval.retrieve('hybrid',{'question':'query','query_date':'2026-01-01'},r,g,cfg)
+        self.assertEqual([x.unit_id for x in graph],[x.unit_id for x in baseline])
+        g.expand.assert_not_called()
+
+    def test_cap_applies_after_filter_and_deduplication(self):
+        cfg,r,g,item=self.fixture();cfg.retrieval.graph_max_additions=2
+        g.expand.return_value=([item('future','graph','2028-01-01'),item('c','graph'),item('c','graph'),item('d','graph')],{})
+        result,stats=labor_retrieval.retrieve('hybrid_graph',{'question':'query','query_date':'2026-01-01'},r,g,cfg)
+        self.assertEqual(stats['new_candidate_ids'],['c','d'])
+        self.assertNotIn('future',[x.unit_id for x in result])
+
+    def test_candidate_union_preserves_semantic_head_and_adds_only_new_sources(self):
+        cfg,r,g,item=self.fixture();cfg.retrieval.graph_fusion_mode='candidate_union'
+        g.expand.return_value=([item('b','graph'),item('c','graph')],{})
+        result,stats=labor_retrieval.retrieve('hybrid_graph',{'question':'query','query_date':'2026-01-01'},r,g,cfg)
+        self.assertEqual([x.unit_id for x in result],['a','b','c'])
+        self.assertEqual(stats['novel_candidate_ids'],['c'])
+        self.assertEqual([x.rank for x in result],[1,2,3])
 
 if __name__=='__main__':unittest.main()

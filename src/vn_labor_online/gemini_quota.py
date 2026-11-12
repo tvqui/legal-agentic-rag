@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import math
+import json
 import os
 import re
 import threading
@@ -27,9 +28,19 @@ class GeminiRatePolicy:
     quota_scope: str = 'default-project'
 
     @classmethod
-    def from_env(cls):
+    def from_env(cls, model=None):
+        rpm=int(os.getenv('VN_LABOR_GEMINI_RPM', '13'))
+        overrides=json.loads(os.getenv('VN_LABOR_GEMINI_MODEL_RPM','{}'))
+        if not isinstance(overrides,dict): raise ValueError('Model RPM overrides must be an object')
+        normalized={}
+        for name,limit in overrides.items():
+            name=name.removeprefix('models/')
+            if not name or type(limit) is not int or not 1 <= limit <= 10000 or name in normalized:
+                raise ValueError('Invalid model RPM override')
+            normalized[name]=limit
+        if model is not None: rpm=normalized.get(str(model).removeprefix('models/'),rpm)
         value = cls(
-            rpm=int(os.getenv('VN_LABOR_GEMINI_RPM', '13')),
+            rpm=rpm,
             max_retries=int(os.getenv('VN_LABOR_GEMINI_RATE_RETRIES', '2')),
             max_wait_seconds=float(os.getenv('VN_LABOR_GEMINI_RATE_MAX_WAIT_SECONDS', '70')),
             quota_scope=os.getenv('VN_LABOR_GEMINI_QUOTA_SCOPE', 'default-project').strip(),

@@ -108,17 +108,38 @@ def retrieve(method,row,retriever,graph,cfg):
     query=row['question'];channels=[]
     if method=='bm25' or method.startswith('hybrid'):channels.append(retriever.bm25(query))
     if method=='dense' or method.startswith('hybrid'):channels.append(retriever.dense(query))
-    items=channels[0] if len(channels)==1 else retriever.fusion(channels)
     def filter_items(values):
         values,_=temporal_filter(values,row['query_date'],strict=False)
         values,_=authority_filter(values,strict=False)
         return values
-    items=filter_items(items);stats={}
-    if method.startswith('hybrid_graph'):
+    # Graph traversal expands candidate coverage; it does not by itself prove
+    # relevance. Preserve the semantic head unless raw-channel RRF is explicitly
+    # requested. Neither mode re-fuses an already fused list.
+    items=filter_items(channels[0] if len(channels)==1 else retriever.fusion(channels));stats={}
+    if method.startswith('hybrid_graph') and cfg.retrieval.graph_fusion_weight>0 and cfg.retrieval.graph_max_additions>0:
         seeds=items[:5]
         added,stats=graph.expand(seeds,[],query)
-        items=retriever.fusion([items,filter_items(added)]) if added else items
+        stats['traversal_candidate_count']=len(added)
+        added=list({item.unit_id:item for item in filter_items(added)}.values())
+        stats['eligible_graph_candidate_count']=len(added)
+        baseline_ids={e.unit_id for e in items}
+        mode=getattr(cfg.retrieval,'graph_fusion_mode','candidate_union')
+        if mode=='candidate_union':added=[e for e in added if e.unit_id not in baseline_ids]
+        added=added[:cfg.retrieval.graph_max_additions]
         stats['new_candidate_ids']=[e.unit_id for e in added]
+        stats['novel_candidate_ids']=[e.unit_id for e in added if e.unit_id not in baseline_ids]
+        stats['overlap_candidate_ids']=[e.unit_id for e in added if e.unit_id in baseline_ids]
+        stats['fusion_weight']=cfg.retrieval.graph_fusion_weight
+        stats['fusion_protocol']='CANDIDATE_UNION_BASE_ORDER' if mode=='candidate_union' else 'SINGLE_PASS_RAW_CHANNELS'
+        if added:
+            if mode=='candidate_union':
+                items=[item.model_copy(update={'rank':i}) for i,item in enumerate(
+                    (items+added)[:cfg.retrieval.fusion_top_k],1)]
+            else:
+                weights=[1.0]*len(channels)+[cfg.retrieval.graph_fusion_weight]
+                items=filter_items(retriever.fusion(channels+[added],weights=weights))
+    elif method.startswith('hybrid_graph'):
+        stats={'fusion_protocol':'GRAPH_DISABLED_WEIGHT_OR_CAP_ZERO','new_candidate_ids':[]}
     if method.endswith('_rerank'):
         cfg.reranker.enabled=True
         items=retriever.neural_rerank(items,query)
@@ -234,7 +255,7 @@ def run(args):
         'gold_sha256':digest(args.gold),'runner_sha256':digest(__file__),
         'compatibility':store.report.model_dump(mode='json'),
         'device':args.device,'config':cfg.model_dump(mode='json'),
-        'graph_protocol':'fixed 2 hops; first 5 eligible hybrid seeds; RRF union; same temporal/authority filters',
+        'graph_protocol':f'fixed 2 hops; first 5 eligible hybrid seeds; {cfg.retrieval.graph_fusion_mode}; same temporal/authority filters',
         'warmup':{},'created_at':datetime.now(timezone.utc).isoformat()}
     import vn_labor_online,importlib.metadata
     source_root=Path(vn_labor_online.__file__).parent

@@ -274,7 +274,7 @@ class GeminiProvider(BaseProvider):
     def __init__(self, model, api_key=None, timeout=20, max_output_tokens=2048):
         self.model, self.api_key = model, api_key
         self.timeout, self.max_output_tokens = timeout, max_output_tokens
-        self.rate_policy=GeminiRatePolicy.from_env()
+        self.rate_policy=GeminiRatePolicy.from_env(model)
         self.rate_limiter=get_gemini_limiter(model,self.rate_policy)
         self._probe_lock=threading.Lock()
         self._status_lock=threading.Lock()
@@ -338,10 +338,16 @@ class GeminiProvider(BaseProvider):
                 with genai.Client(api_key=self.api_key, http_options=types.HttpOptions(
                         timeout=int(timeout_seconds*1000),
                         retry_options=types.HttpRetryOptions(attempts=1))) as client:
+                    generation_options=dict(system_instruction=system+gemini_array_limits(schema),
+                        max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
+                        response_json_schema=gemini_transport_schema(schema))
+                    # New model families reject legacy sampling controls. Do
+                    # not retry with weaker JSON validation on HTTP 400.
+                    name=str(self.model).removeprefix('models/')
+                    if not name.startswith(('gemini-3.5-','gemini-3.6-','gemini-3.8-','gemini-4-')):
+                        generation_options['temperature']=0
                     response=client.models.generate_content(model=self.model, contents=user,
-                        config=types.GenerateContentConfig(system_instruction=system+gemini_array_limits(schema), temperature=0,
-                            max_output_tokens=self.max_output_tokens, response_mime_type='application/json',
-                            response_json_schema=gemini_transport_schema(schema)))
+                        config=types.GenerateContentConfig(**generation_options))
                 checkpoint()
                 candidates=getattr(response,'candidates',None) or []
                 if candidates:

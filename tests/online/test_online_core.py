@@ -718,7 +718,9 @@ class AgentBoundaryTests(unittest.TestCase):
         from vn_labor_online.models import Evidence
         from vn_labor_online.retrieval import Retriever
         class Model:
-            def compute_score(self,pairs,normalize=True): return [0.1,0.9]
+            def compute_score(self,pairs,max_length=512,normalize=True):
+                assert max_length==1024
+                return [0.1,0.9]
         retriever=object.__new__(Retriever)
         retriever.cfg=OnlineConfig(artifact_source='unused',reranker=RerankerConfig(enabled=True,top_n=2))
         retriever._reranker=Model(); import threading; retriever._lock=threading.Lock()

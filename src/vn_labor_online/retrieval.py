@@ -1,5 +1,6 @@
 from __future__ import annotations
-import re,threading,unicodedata
+import re,threading,unicodedata,math
+from numbers import Real
 from functools import wraps
 from copy import deepcopy
 from pathlib import Path
@@ -258,14 +259,30 @@ class Retriever:
                             device=settings.device
                             if device=='auto': device='cuda:0' if torch.cuda.is_available() else 'cpu'
                             self._reranker=FlagReranker(model,use_fp16=settings.use_fp16 and device!='cpu',devices=device)
-            pairs=[[query,item.source_text or item.text] for item in candidates]
+            # Keep inherited prohibitions/conditions visible to the encoder.
+            # This changes model input only, never the immutable source text.
+            def passage(item):
+                text=item.source_text or item.text
+                parent=(item.ancestor_context or '').strip()
+                return parent+'\n'+text if parent and not text.lstrip().startswith(parent) else text
+            pairs=[[query,passage(item)] for item in candidates]
             with measured('reranker.score'):
-                raw=self._reranker.compute_score(pairs,normalize=True)
-            scores=[float(raw)] if len(candidates)==1 and isinstance(raw,(int,float)) else [float(x) for x in raw]
+                raw=self._reranker.compute_score(pairs,max_length=settings.max_length,normalize=True)
+            if hasattr(raw,'tolist'): raw=raw.tolist()
+            scores=[float(raw)] if len(candidates)==1 and isinstance(raw,Real) else [float(x) for x in raw]
             if len(scores)!=len(candidates): raise ValueError('reranker score count mismatch')
-            rescored=[item.model_copy(update={'score':score,'component_scores':{**item.component_scores,'cross_encoder':score}})
-              for item,score in zip(candidates,scores)]
-            return sorted(rescored,key=lambda x:(-x.score,x.unit_id))+items[len(candidates):]
+            if any(not math.isfinite(x) or not 0<=x<=1 for x in scores):
+                raise ValueError('invalid normalized reranker score')
+            # Optional blend with the first-stage RRF rank prior (1 at rank 1, decaying).
+            # first_stage_weight=0 reproduces pure cross-encoder ordering.
+            alpha=settings.first_stage_weight; rrf=self.cfg.retrieval.rrf_k; top=1/(rrf+1)
+            priors=[(1/(rrf+position))/top for position in range(1,len(scores)+1)]
+            blended=[(1-alpha)*cross+alpha*prior for cross,prior in zip(scores,priors)]
+            rescored=[item.model_copy(update={'score':score,'component_scores':{**item.component_scores,'cross_encoder':cross,'first_stage_prior':prior}})
+              for item,score,cross,prior in zip(candidates,blended,scores,priors)]
+            positions={item.unit_id:position for position,item in enumerate(candidates)}
+            ranked=sorted(rescored,key=lambda x:(-x.score,positions[x.unit_id],x.unit_id))+items[len(candidates):]
+            return [item.model_copy(update={'rank':rank}) for rank,item in enumerate(ranked,1)]
         except Exception as exc:
             raise IndexUnavailable(f'Neural reranker unavailable: {type(exc).__name__}') from exc
 
@@ -413,13 +430,34 @@ class Retriever:
             if item.unit_id not in best or item.score>best[item.unit_id].score: best[item.unit_id]=item
         ordered=sorted(best.values(),key=lambda item:(-item.score,item.unit_id))[:self.cfg.retrieval.community_case_top_k]
         return [item.model_copy(update={'rank':rank}) for rank,item in enumerate(ordered,1)]
-    def fusion(self,lists:list[list[Evidence]])->list[Evidence]:
-        scores=defaultdict(float); by_id={}; components=defaultdict(dict); rrf=self.cfg.retrieval.rrf_k
-        for values in lists:
-            for rank,item in enumerate(values,1):
-                scores[item.unit_id]+=1/(rrf+rank); by_id[item.unit_id]=item
+    def fusion(self,lists:list[list[Evidence]],weights:list[float]|None=None)->list[Evidence]:
+        """Single-pass weighted RRF over RAW channel lists.
+
+        Callers must not pass an already fused list: re-fusing counts shared
+        candidates twice. Ties are broken by best channel rank, then ID.
+        """
+        weights=[1.0]*len(lists) if weights is None else list(weights)
+        if len(weights)!=len(lists): raise ValueError('one weight per channel required')
+        if any(not isinstance(w,Real) or isinstance(w,bool) or not math.isfinite(w) or w<0 for w in weights):
+            raise ValueError('channel weights must be finite non-negative numbers')
+        scores=defaultdict(float); by_id={}; components=defaultdict(dict); best_rank={}; rrf=self.cfg.retrieval.rrf_k
+        for values,weight in zip(lists,weights):
+            if weight==0: continue
+            seen=set();rank=0
+            for item in values:
+                if item.unit_id in seen: continue
+                seen.add(item.unit_id);rank+=1
+                scores[item.unit_id]+=weight/(rrf+rank)
+                # Candidate metadata belongs to the first active channel.
+                # A disabled/weaker channel must not overwrite its source.
+                by_id.setdefault(item.unit_id,item)
+                if item.graph_path and not by_id[item.unit_id].graph_path:
+                    by_id[item.unit_id]=by_id[item.unit_id].model_copy(update={
+                      'graph_path':item.graph_path,'graph_relations':item.graph_relations,
+                      'graph_directions':item.graph_directions})
                 components[item.unit_id][item.retrieval_method]=item.score
-        ordered=sorted(scores,key=lambda uid:(-scores[uid],uid))[:self.cfg.retrieval.fusion_top_k]
+                best_rank[item.unit_id]=min(best_rank.get(item.unit_id,rank),rank)
+        ordered=sorted(scores,key=lambda uid:(-scores[uid],best_rank[uid],uid))[:self.cfg.retrieval.fusion_top_k]
         return [by_id[uid].model_copy(update={'score':scores[uid],'rank':i,'retrieval_method':'hybrid','component_scores':components[uid]}) for i,uid in enumerate(ordered,1)]
 
 def retain_required_anchors(items,anchors,plan,limit):

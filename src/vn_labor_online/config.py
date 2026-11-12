@@ -19,11 +19,24 @@ class RetrievalConfig(StrictModel):
     community_enabled:bool=True; community_top_k:int=Field(3,ge=1,le=20)
     community_case_top_k:int=Field(10,ge=1,le=50)
     fusion_top_k:int=Field(30,ge=1); rrf_k:int=Field(60,ge=1)
+    # Fixed-graph experiments preserve the hybrid head and append novel sources
+    # for the semantic selector. Weighted raw-channel RRF remains an explicit
+    # experiment; graph proximity is not independent semantic relevance.
+    # Adaptive ONLINE traversal keeps its existing gap-driven policy.
+    graph_fusion_mode:Literal['candidate_union','weighted_rrf']='candidate_union'
+    graph_fusion_weight:float=Field(.5,ge=0,le=2); graph_max_additions:int=Field(10,ge=0,le=50)
     relevance_weight:float=Field(.75,ge=0); authority_weight:float=Field(.2,ge=0); temporal_weight:float=Field(.05,ge=0)
 
 class RerankerConfig(StrictModel):
     enabled:bool=False; model:str='BAAI/bge-reranker-v2-m3'; model_path:str|None=None
     device:str='auto'; use_fp16:bool=True; top_n:int=Field(30,ge=1,le=100)
+    # FlagEmbedding defaults to 512 tokens, which truncates long Vietnamese
+    # provisions. A larger cap reduces truncation, but is NOT a completeness
+    # guarantee: very long sources can still exceed this model input budget.
+    max_length:int=Field(1024,ge=128,le=8192)
+    # Blend of the cross-encoder score with the first-stage RRF rank prior.
+    # 0 = pure cross-encoder (previous behaviour). Tune by ablation, not by eye.
+    first_stage_weight:float=Field(0.0,ge=0,le=1)
 
 class GraphConfig(StrictModel):
     enabled:bool=True; mode:Literal['adaptive','fixed']='adaptive'
@@ -62,8 +75,8 @@ class ApplicabilityConfig(StrictModel):
     unresolved_timeout_seconds:float=Field(20,ge=1,le=60)
     tokenizer_path:str|None=None; tokenizer_model:str|None=None
     max_output_tokens:int=Field(1536,ge=256,le=8192)
-    mode:Literal['deterministic','ollama','http','hybrid']='deterministic'; fail_closed:bool=True
-    provider:Literal['ollama','http']='ollama'
+    mode:Literal['deterministic','ollama','http','gemini','hybrid']='deterministic'; fail_closed:bool=True
+    provider:Literal['ollama','http','gemini']='ollama'
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None
     timeout_seconds:float=120; max_items:int=Field(10,ge=1,le=30)
     max_batches:int=Field(4,ge=1,le=12)
@@ -81,7 +94,7 @@ class AdjudicationConfig(StrictModel):
     semantic_repair_attempts:int=Field(1,ge=0,le=2)
     context_tokens:int=Field(16384,ge=4096,le=65536)
     max_output_tokens:int=Field(2048,ge=256,le=8192)
-    mode:Literal['deterministic','ollama','http']='deterministic'; fail_closed:bool=True
+    mode:Literal['deterministic','ollama','http','gemini']='deterministic'; fail_closed:bool=True
     url:str|None=None; model:str|None=None; api_key:str|None=None; health_url:str|None=None; timeout_seconds:float=120
 
 class OnlineConfig(StrictModel):
@@ -125,9 +138,18 @@ def load_config(path:Path)->OnlineConfig:
             env_key=f'{prefix}_{key.upper()}'
             if os.getenv(env_key): configured[key]=float(os.environ[env_key]) if key=='timeout_seconds' else int(os.environ[env_key])
         if configured: values[section]=configured
-    if values.get('researcher',{}).get('mode')=='gemini':
-        if not values['researcher'].get('api_key'): values['researcher']['api_key']=os.getenv('GEMINI_API_KEY')
-        if os.getenv('GEMINI_MODEL'): values['researcher']['model']=os.environ['GEMINI_MODEL']
+    for section in ('researcher','applicability','adjudication'):
+        configured=values.get(section,{})
+        if configured.get('mode')=='gemini' or (configured.get('mode')=='hybrid' and configured.get('provider')=='gemini'):
+            if not configured.get('api_key'): configured['api_key']=os.getenv('GEMINI_API_KEY')
+            # Role-specific ENV > YAML > shared default. A global model must
+            # not silently replace an explicitly selected role/experiment.
+            original=raw.get('online',raw).get(section,{}) or {}
+            original_provider=original.get('provider') if original.get('mode')=='hybrid' else original.get('mode')
+            switched_provider=original_provider!='gemini'
+            role_model=os.getenv('VN_LABOR_'+section.upper()+'_MODEL')
+            if not configured.get('model') or (switched_provider and not role_model):
+                configured['model']=os.getenv('GEMINI_MODEL')
     adjudication=dict(values.get('adjudication') or {})
     for key in ('review_provider','review_model','review_timeout_seconds','review_max_output_tokens'):
         configured=os.getenv('VN_LABOR_ADJUDICATION_'+key.upper())
