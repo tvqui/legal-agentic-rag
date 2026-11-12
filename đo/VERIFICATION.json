@@ -1,0 +1,65 @@
+{
+  "created_utc": "2026-11-11T12:53:58.032472+00:00",
+  "protocol": "unified-labor-eval-1",
+  "new_tests": {
+    "count": 28,
+    "status": "PASS",
+    "log": "results/verification_tests/new_framework.log"
+  },
+  "reused_legacy_tests": {
+    "count": 57,
+    "status": "PASS",
+    "log": "results/verification_tests/legacy_suite.log"
+  },
+  "real_corpus": {
+    "units": 19144,
+    "questions": 120,
+    "positive_retrieval_questions": 108,
+    "gold_status": "DRAFT",
+    "held_out": false
+  },
+  "real_smoke": {
+    "methods": [
+      "bm25",
+      "naive_bm25"
+    ],
+    "questions_each": 5,
+    "successes": 10,
+    "failures": 0,
+    "same_ranked_evidence": true,
+    "same_comparison_key": true,
+    "resume_byte_preserving": true,
+    "model_calls": 0,
+    "results": "results/release_comparison/comparison.md",
+    "scope": "ENGINEERING_SMOKE_NOT_QUALITY_OR_SPEED_IMPROVEMENT_EVIDENCE"
+  },
+  "na_handling": {
+    "methods": [
+      "graphrag",
+      "raptor",
+      "legalgraphrag_vi"
+    ],
+    "status": "N/A",
+    "fabricated_scores": false,
+    "native_process_exit": 2
+  },
+  "optional_baselines": {
+    "lightrag": "SOURCE_REVIEW_AND_PROTOCOL_ADAPTER_ONLY_NO_REAL_UPSTREAM_INTEGRATION_RUN",
+    "hipporag2": "SOURCE_REVIEW_AND_PROTOCOL_ADAPTER_ONLY_NO_REAL_UPSTREAM_INTEGRATION_RUN"
+  },
+  "qa_testing": "FIXTURES_AND_CONTRACT_TESTS_NO_REAL_LLM_QA_OR_PAID_JUDGE",
+  "source_files_sha256": {
+    "adapters.py": "16264dd641edd45027642cc7ae20e8811bdd58f173c4f57f4029af8c3a5d598f",
+    "evaluate_baselines.py": "f5507be93115b0ca98c7d28a9e5efb4eaebb4ab3e6aef6d76c5633ebd90b286a",
+    "evaluate_project.py": "fbad242d547d73497a9dd104f56b412d446f864f2d0cc07bd6676fe095d7909b",
+    "eval_core.py": "c7cc03d658d44bfdcfb223d0dcddf0c6e2023e6e4db15eb2570f536e21f676d2",
+    "native_worker.py": "d081ca832c433301780c6303d328b182d63410f0c5c2f6e03834e37e37595bc1",
+    "test_evaluation.py": "3dbae07a64c4bb8cbd1b8a32311e5a0cf024da27a38c0862f90aa0d91636278b"
+  },
+  "limitations": [
+    "Gold development set, not independent held-out",
+    "No expert legal approval; temporal/source review remains provisional",
+    "No validated Microsoft GraphRAG/RAPTOR canonical-source adapter or Vietnamese original LegalGraphRAG adaptation",
+    "No claim of performance improvement from two identical BM25 retrieval paths"
+  ]
+}

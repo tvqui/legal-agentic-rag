@@ -1,0 +1,47 @@
+{
+  "online_config": "config/online_kaggle.yaml",
+  "cache": "đo/cache",
+  "device": "cpu",
+  "timeout_seconds": 180,
+  "prepare_timeout_seconds": 14400,
+  "candidate_k": 30,
+  "graph_hops": 2,
+  "graph_nodes": 50,
+  "embedding_identity": "FROM_BUNDLE",
+  "reranker_revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+  "reader_k": 10,
+  "reader_timeout_seconds": 45,
+  "context_char_limit": 24000,
+  "reader": {
+    "provider": "ollama", "model": "qwen3:8b", "temperature": 0,
+    "max_output_tokens": 6144, "context_tokens": 32768
+  },
+  "judge": {
+    "provider": "gemini", "model": "gemini-3.1-flash-lite", "temperature": 0,
+    "max_output_tokens": 2048, "context_tokens": 32768
+  },
+  "judge_timeout_seconds": 120,
+  "judge_context_char_limit": 60000,
+  "baselines": {
+    "lightrag": {"enabled": false, "repo": "/kaggle/working/baselines/LightRAG",
+      "commit": "793f929c0d9e1187cc91cc346267747a287d589c",
+      "python": "/kaggle/working/envs/lightrag/bin/python",
+      "work_dir": "/kaggle/working/baseline_indexes/lightrag",
+      "llm_model": "qwen3:8b", "llm_base_url": "http://127.0.0.1:11434/v1",
+      "llm_api_key_env": "BASELINE_API_KEY", "embedding_model": "BAAI/bge-m3",
+      "embedding_base_url": "http://127.0.0.1:8801/v1", "embedding_api_key_env": "BASELINE_API_KEY",
+      "embedding_dim": 1024, "embedding_model_identity": "MUST_VERIFY_MATCHING_WEIGHTS_AND_REVISION",
+      "chunk_token_size": 1200, "index_timeout_seconds": 14400},
+    "hipporag2": {"enabled": false, "repo": "/kaggle/working/baselines/HippoRAG",
+      "commit": "d5c8329422e0a0b834a15874545cb6a74b4f9b26",
+      "python": "/kaggle/working/envs/hipporag/bin/python",
+      "work_dir": "/kaggle/working/baseline_indexes/hipporag2",
+      "llm_model": "qwen3:8b", "llm_base_url": "http://127.0.0.1:11434/v1",
+      "llm_api_key_env": "BASELINE_API_KEY", "embedding_model": "BAAI/bge-m3",
+      "embedding_base_url": "http://127.0.0.1:8801/v1", "embedding_api_key_env": "BASELINE_API_KEY",
+      "embedding_model_identity": "MUST_VERIFY_MATCHING_WEIGHTS_AND_REVISION", "index_timeout_seconds": 14400},
+    "graphrag": {"enabled": false},
+    "raptor": {"enabled": false},
+    "legalgraphrag_vi": {"enabled": false}
+  }
+}

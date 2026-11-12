@@ -1,0 +1,4 @@
+# Install the main repository first: pip install -e ".[retrieval,online]"
+# Pin the resolved environment with pip freeze for each experiment.
+psutil>=5.9
+matplotlib>=3.7

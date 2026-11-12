@@ -1,0 +1,38 @@
+{
+  "notebook_sha256": "b1ddd9ae9eb2c3a4378419ba78b17d6733394b51db3bafb3e3c59a914cb97e13",
+  "code_cells_compile": "PASS",
+  "phase_profile_dispatch": [
+    {
+      "phase": "retrieval",
+      "profile": "smoke",
+      "dispatch": "PASS"
+    },
+    {
+      "phase": "retrieval",
+      "profile": "standard",
+      "dispatch": "PASS"
+    },
+    {
+      "phase": "ablation",
+      "profile": "smoke",
+      "dispatch": "PASS"
+    },
+    {
+      "phase": "ablation",
+      "profile": "standard",
+      "dispatch": "PASS"
+    },
+    {
+      "phase": "naive_qa",
+      "profile": "smoke",
+      "dispatch": "PASS"
+    },
+    {
+      "phase": "naive_qa",
+      "profile": "standard",
+      "dispatch": "PASS"
+    }
+  ],
+  "real_kaggle_execution": "NOT_RUN",
+  "model_api_calls": 0
+}

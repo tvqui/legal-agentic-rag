@@ -1,0 +1,166 @@
+{
+  "inspection_time_environment": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",
+    "cpu_count": 20,
+    "packages": {
+      "numpy": "2.5.3",
+      "torch": "2.14.0",
+      "psutil": "7.2.2",
+      "bm25s": "0.3.11",
+      "faiss-cpu": "1.15.1",
+      "FlagEmbedding": "1.4.2",
+      "google-genai": "2.31.0"
+    },
+    "git_commit": "5e433b90d2812068bf90218c22af81d43cd2044f",
+    "git_tracked_dirty": false,
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU, GPU-fe95e3d6-80cd-60d4-239a-8fd6a9738ebc, 8188 MiB, 610.74",
+    "hardware_id": null
+  },
+  "repositories": [
+    {
+      "method": "lightrag",
+      "url": "https://github.com/HKUDS/LightRAG",
+      "assessment": "OPTIONAL_ADAPTER: aquery_data chunks mapped by exact file_path and source content; isolated installation and matched embedding endpoint required; not integration-tested here.",
+      "commit": "793f929c0d9e1187cc91cc346267747a287d589c",
+      "sources": [
+        {
+          "path": "lightrag/lightrag.py",
+          "url": "https://raw.githubusercontent.com/HKUDS/LightRAG/793f929c0d9e1187cc91cc346267747a287d589c/lightrag/lightrag.py",
+          "sha256": "f92e25bf1bf8082dba64f604fe22badaeaa69ef2eaa34d23c5058059be8031d3",
+          "interfaces_and_requirements": [
+            "async def ainsert(",
+            "async def aquery_data("
+          ]
+        },
+        {
+          "path": "lightrag/base.py",
+          "url": "https://raw.githubusercontent.com/HKUDS/LightRAG/793f929c0d9e1187cc91cc346267747a287d589c/lightrag/base.py",
+          "sha256": "e7f0ec700659071d616b4c81c8711626d512d356d0036ce6f8da8d9a37a19f28",
+          "interfaces_and_requirements": []
+        },
+        {
+          "path": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/HKUDS/LightRAG/793f929c0d9e1187cc91cc346267747a287d589c/pyproject.toml",
+          "sha256": "c7cac0eeeecd1a9fd94f96bb4e15fec1a1cfa0228458fd831b1574e84d9855a1",
+          "interfaces_and_requirements": [
+            "requires-python = \">=3.10\"",
+            "# requires-python allows 3.10, which needs this backport instead for"
+          ]
+        }
+      ],
+      "source_read_status": "PASS_SOURCE_INSPECTION_ONLY"
+    },
+    {
+      "method": "hipporag2",
+      "url": "https://github.com/OSU-NLP-Group/HippoRAG",
+      "assessment": "OPTIONAL_ADAPTER: index/retrieve QuerySolution.docs exact source mapping; upstream pins torch/transformers, needs a separate venv; not integration-tested here.",
+      "commit": "d5c8329422e0a0b834a15874545cb6a74b4f9b26",
+      "sources": [
+        {
+          "path": "src/hipporag/HippoRAG.py",
+          "url": "https://raw.githubusercontent.com/OSU-NLP-Group/HippoRAG/d5c8329422e0a0b834a15874545cb6a74b4f9b26/src/hipporag/HippoRAG.py",
+          "sha256": "3935854368bb11e960323c31fb3cc67bee9e393079ce522711586d5e643bdb46",
+          "interfaces_and_requirements": [
+            "def index(self, docs: List[Union[str, Chunk]]):",
+            "def retrieve(self,",
+            "def rag_qa(self,"
+          ]
+        },
+        {
+          "path": "src/hipporag/utils/config_utils.py",
+          "url": "https://raw.githubusercontent.com/OSU-NLP-Group/HippoRAG/d5c8329422e0a0b834a15874545cb6a74b4f9b26/src/hipporag/utils/config_utils.py",
+          "sha256": "d7bd050da68bfee51be384fe90a1a10714ea1a8f75be0928616c76bdb31c4fe9",
+          "interfaces_and_requirements": [
+            "embedding_provider: Optional[Literal[\"openai\", \"transformers\", \"vllm\", \"gritlm\", \"nvembed\", \"contriever\", \"cohere\"]] = field(",
+            "if self.embedding_provider not in {None, \"openai\", \"transformers\", \"vllm\", \"gritlm\", \"nvembed\", \"contriever\", \"cohere\"}:"
+          ]
+        },
+        {
+          "path": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/OSU-NLP-Group/HippoRAG/d5c8329422e0a0b834a15874545cb6a74b4f9b26/pyproject.toml",
+          "sha256": "4d3580f63930a31b6317fc6533dab874c5c8046ee487c3d3cba7bf288e4bc5aa",
+          "interfaces_and_requirements": [
+            "requires-python = \">=3.10\"",
+            "\"torch==2.5.1\",",
+            "\"transformers==4.45.2\","
+          ]
+        }
+      ],
+      "source_read_status": "PASS_SOURCE_INSPECTION_ONLY"
+    },
+    {
+      "method": "graphrag",
+      "url": "https://github.com/microsoft/graphrag",
+      "assessment": "N/A: Microsoft global/local contexts include generated reports/entities. No validated canonical provision mapping or controlled reader integration for this pinned version.",
+      "commit": "34b2b67ae4601ad0b47bcd179fbe3f2a23aa0857",
+      "sources": [
+        {
+          "path": "README.md",
+          "url": "https://raw.githubusercontent.com/microsoft/graphrag/34b2b67ae4601ad0b47bcd179fbe3f2a23aa0857/README.md",
+          "sha256": "36df9326f1e83343fd46373a2a059093590e4c2ad2256d3ed5de5c5e6e492709",
+          "interfaces_and_requirements": []
+        },
+        {
+          "path": "pyproject.toml",
+          "url": "https://raw.githubusercontent.com/microsoft/graphrag/34b2b67ae4601ad0b47bcd179fbe3f2a23aa0857/pyproject.toml",
+          "sha256": "e7ebce5c2fe82a6518c48f1f9d25535829f04f3cb5cb7ef85a19b1952b87ddac",
+          "interfaces_and_requirements": [
+            "requires-python = \">=3.11,<3.14\""
+          ]
+        }
+      ],
+      "source_read_status": "PASS_SOURCE_INSPECTION_ONLY"
+    },
+    {
+      "method": "raptor",
+      "url": "https://github.com/parthsarthi03/raptor",
+      "assessment": "N/A: recursive summary retrieval changes source units; no verified leaf/span mapping back to canonical provisions. A generic tree is NOT the official RAPTOR baseline.",
+      "commit": "7da1d48a7e1d7dec61a63c9d9aae84e2dfaa5767",
+      "sources": [
+        {
+          "path": "raptor/RetrievalAugmentation.py",
+          "url": "https://raw.githubusercontent.com/parthsarthi03/raptor/7da1d48a7e1d7dec61a63c9d9aae84e2dfaa5767/raptor/RetrievalAugmentation.py",
+          "sha256": "3b599c6dbef4a8c2b25167aab29ece1d953ced4bb3a5f6540c8372ceadf339af",
+          "interfaces_and_requirements": [
+            "def add_documents(self, docs):",
+            "def retrieve("
+          ]
+        },
+        {
+          "path": "raptor/tree_retriever.py",
+          "url": "https://raw.githubusercontent.com/parthsarthi03/raptor/7da1d48a7e1d7dec61a63c9d9aae84e2dfaa5767/raptor/tree_retriever.py",
+          "sha256": "e7e7184f4222c735762eabd217d527ec37bafc782c5f0cb3c1a1a9f576f617d4",
+          "interfaces_and_requirements": [
+            "def retrieve("
+          ]
+        },
+        {
+          "path": "requirements.txt",
+          "url": "https://raw.githubusercontent.com/parthsarthi03/raptor/7da1d48a7e1d7dec61a63c9d9aae84e2dfaa5767/requirements.txt",
+          "sha256": "f67def96a701be7290d05611112c0645638d733128d6a2a932ab2ad3152f0203",
+          "interfaces_and_requirements": []
+        }
+      ],
+      "source_read_status": "PASS_SOURCE_INSPECTION_ONLY"
+    },
+    {
+      "method": "legalgraphrag_original",
+      "path": "D:\\data_thô\\legalgraphrag\\LegalGraphRAG",
+      "commit": "a3c9c3070cadb72ec317d2ecc2cce99da4b37c57",
+      "source_sha256": {
+        "README.md": "a96e98135835da5e9c494e52d5ae3f9734a7b78720f7892cac3e8cba835c0c80",
+        "requirements.txt": "883587f585b303c2836e41ca685cc7c44cbe106024882c7e9febc4ceb56b4769",
+        "core/LegalGraphRAG.py": "6c4c609bee18928242b3caa016206c71e6579c4d17d613c23fd2c0c0eabc01ec",
+        "evaluation/evaluate_results.py": "9c8cc1d52f4ea9f4575ed70266ada7222ecec81a5dcdcffc82b90a062a7ca835"
+      },
+      "source_read_status": "PASS_LOCAL_SOURCE_INSPECTION_ONLY",
+      "task": "CHINESE_LJP_CHARGE_ARTICLE_SENTENCE",
+      "vietnamese_qa": "N/A_REQUIRES_NEW_SCHEMA_PROMPTS_RULE_CORPUS_AND_VALIDATED_ADAPTATION",
+      "notes": "ModelConfig accepts en/zh, not vi. analyze_case uses law_to_crime and judge_res. Native China metrics are not Vietnamese QA metrics."
+    }
+  ],
+  "limitations": "Source inspection is not successful execution or faithful paper reproduction."
+}
