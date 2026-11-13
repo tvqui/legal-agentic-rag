@@ -243,10 +243,12 @@ class Retriever:
             raise
         except Exception as exc:
             raise IndexUnavailable(f'Dense retrieval unavailable: {type(exc).__name__}') from exc
-    def neural_rerank(self,items:list[Evidence],query:str)->list[Evidence]:
+    def neural_rerank(self,items:list[Evidence],query:str,*,candidate_limit:int|None=None)->list[Evidence]:
+        if candidate_limit is not None and (type(candidate_limit) is not int or not 1<=candidate_limit<=100):
+            raise ValueError('candidate_limit must be an integer in 1..100')
         settings=self.cfg.reranker
         if not settings.enabled or not items: return items
-        candidates=items[:settings.top_n]
+        candidates=items[:settings.top_n if candidate_limit is None else candidate_limit]
         try:
             if self._reranker is None:
                 with self._lock:

@@ -67,7 +67,11 @@ def search_seeds(accepted,source_audited,decisions,limit):
 class GraphExplorer:
     def __init__(self,store:ArtifactStore,cfg:GraphConfig):
         self.store=store; self.cfg=cfg; self.adj=defaultdict(list); self.degree=defaultdict(int)
+        # Built once, not an all-edge scan for each reranked question. Only
+        # outgoing statutory references, never hierarchy/similarity, enter it.
+        self.references_by_source=defaultdict(set)
         for edge in store.edges:
+            if edge['type']=='REFERENCES': self.references_by_source[edge['source']].add(edge['target'])
             self.adj[edge['source']].append((edge,edge['target'],'OUT'))
             self.adj[edge['target']].append((edge,edge['source'],'IN'))
             self.degree[edge['source']]+=1; self.degree[edge['target']]+=1
@@ -122,7 +126,9 @@ class GraphExplorer:
         seeds=seeds[:self.cfg.max_nodes]
         visited={e.unit_id for e in seeds}; paths={e.unit_id:list(e.graph_path) for e in seeds}
         relation_paths={e.unit_id:list(e.graph_relations) for e in seeds}; direction_paths={e.unit_id:list(e.graph_directions) for e in seeds}
-        frontier=list(visited)
+        # Preserve the incoming retrieval order for queue tie-breaking and
+        # bounded expansion; set iteration varies between Python processes.
+        frontier=list(dict.fromkeys(e.unit_id for e in seeds))
         all_added=[]; edge_count=0; rounds=0; followed=[]; started=time.monotonic()
         round_limit=min(self.cfg.max_rounds,self.cfg.max_hops)
         while frontier and rounds<round_limit and len(visited)<self.cfg.max_nodes and edge_count<self.cfg.max_edges:

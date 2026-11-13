@@ -25,6 +25,12 @@ class RetrievalConfig(StrictModel):
     # Adaptive ONLINE traversal keeps its existing gap-driven policy.
     graph_fusion_mode:Literal['candidate_union','weighted_rrf']='candidate_union'
     graph_fusion_weight:float=Field(.5,ge=0,le=2); graph_max_additions:int=Field(10,ge=0,le=50)
+    # Opt-in fixed-retrieval experiment controls. Adaptive ONLINE evidence
+    # planning remains gap-driven and does not silently inherit these gates.
+    graph_query_gate:Literal['always','reference_intent']='always'
+    graph_reference_selection:bool=False
+    graph_reference_head_k:int=Field(10,ge=1,le=100)
+    graph_reference_max_promotions:int|None=Field(None,ge=0,le=99)
     relevance_weight:float=Field(.75,ge=0); authority_weight:float=Field(.2,ge=0); temporal_weight:float=Field(.05,ge=0)
 
 class RerankerConfig(StrictModel):
