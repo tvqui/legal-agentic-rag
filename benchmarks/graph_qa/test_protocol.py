@@ -102,6 +102,8 @@ class ProtocolTests(unittest.TestCase):
         settings={**p.DEFAULTS,'request_timeout_seconds':360,'provider_timeout_seconds':120}
         pair=p.assert_pair(settings,'fixture')
         for cfg in pair.values():
+            self.assertEqual(cfg['applicability']['mode'],'hybrid')
+            self.assertEqual(cfg['applicability']['provider'],'ollama')
             self.assertEqual(cfg['request_timeout_seconds'],360)
             self.assertEqual(cfg['applicability']['call_timeout_seconds'],120)
             self.assertEqual(cfg['applicability']['budget_seconds'],180)

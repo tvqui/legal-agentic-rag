@@ -108,3 +108,11 @@ Mặc định SOURCE='github', RUN_NAME='graph_qa_v2'. Import notebook mới, b�
 - Kiểm thử local chỉ xác minh code, mô phỏng lỗi/warmup/GPU và artifact. Chưa xác minh tốc độ hay chất lượng thực của Qwen trên T4; nếu model vẫn timeout, giữ ZIP để phân tích đúng agent/batch thay vì tăng chờ vô hạn.
 
 API warmup/model residency đối chiếu tài liệu Ollama: https://docs.ollama.com/api/generate và https://docs.ollama.com/api/ps.
+
+## Bản v3: sửa đúng nguyên nhân ngân sách Auditor
+
+Log thực tế cho thấy applicability chỉ còn 3 giây dù toàn câu còn khoảng 181 giây. V3 giữ ngân sách 360/120 của v2, chuyển Auditor từ mode ollama (gọi từng căn cứ) sang hybrid/provider ollama (quy tắc cứng và LLM theo nhóm), như cơ chế ONLINE hiện tại. Hai nhánh đổi giống nhau.
+
+Adapter `auditor.py` chỉ dùng trong phép đo: chặn gọi mạng mới khi ngân sách Auditor khả dụng thấp hơn min(10 giây, giới hạn call). Không vay thêm thời gian dự phòng, không phê duyệt căn cứ chưa kiểm tra. Lớp Auditor gốc xử lý budget-exhausted và giữ phần chưa kiểm tra là chưa xác minh. Không thay đổi mã ONLINE; timeout transport thực vẫn làm dừng run.
+
+Dùng RUN_NAME='graph_qa_v3', chạy smoke trước. Không resume/gộp v1-v2 vì mode Auditor và code đã thay đổi.

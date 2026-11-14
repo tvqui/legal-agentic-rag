@@ -30,6 +30,10 @@ def init(state):
     from vn_labor_online.providers import OllamaProvider,GeminiProvider
     cfg=config(state['settings'],state['artifact_root'],False)
     pipe=OnlinePipeline(cfg);s=state['settings']
+    from auditor import GraphQAAuditor
+    old_provider=getattr(pipe.applicability,'provider',None)
+    if old_provider is not None:old_provider.close()
+    pipe.applicability=GraphQAAuditor(cfg.applicability,pipe.store)
     for key,relative in [('units','06_indexes/retrieval_units.jsonl'),('nodes','05_graph/nodes.jsonl'),('edges','05_graph/edges.jsonl')]:
         if sha(pipe.store.path(relative))!=state['artifact_hashes'][key]:raise ValueError('Artifact changed before inference')
     for name,expected in state['all_artifact_files_sha256'].items():

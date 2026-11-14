@@ -93,6 +93,8 @@ def config(s,artifact,enabled):
     # Legacy 180s/45s settings retain exactly their original budgets. Both arms share these values.
     cfg.applicability.budget_seconds=max(90,min(s['request_timeout_seconds']/2,2*s['provider_timeout_seconds']))
     cfg.applicability.reserve_seconds=max(60,min(120,s['request_timeout_seconds']/3))
+    # Use the production hybrid/batched algorithm, not the legacy per-source LLM mode.
+    cfg.applicability.mode='hybrid';cfg.applicability.provider='ollama'
     cfg.applicability.call_timeout_seconds=s['provider_timeout_seconds']
     cfg.adjudication.primary_budget_seconds=max(45,s['provider_timeout_seconds'])
     cfg.adjudication.review_reserve_seconds=max(45,min(60,s['provider_timeout_seconds']))

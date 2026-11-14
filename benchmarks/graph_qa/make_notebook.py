@@ -19,7 +19,7 @@ def notebook():
 # Pháp Điển AI — Graph QA đối chứng trên Kaggle
 
 Mục tiêu: kiểm tra **khi nào mở rộng Graph giúp tìm đủ căn cứ và trả lời tốt hơn**.
-Bản v2 warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
+Bản v3 dùng Auditor hybrid theo nhóm và warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
 Artifact hiện chốt đến **15/09/2026**; giữ đúng query_date đã ghim, không tự đổi thành ngày chạy. Bộ nhãn được đóng băng trước khi suy luận. Nhãn kiểm bằng artifact vẫn là **DRAFT**, không tự coi là đã duyệt pháp lý.
 
 **Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối. Mặc định lấy code từ GitHub, không cần ZIP code; ZIP chỉ dùng khi chọn attached_zip.
@@ -34,7 +34,7 @@ REPO_URL = 'https://github.com/tvqui/legal-agentic-rag.git'
 CODE_ROOT = Path('/kaggle/working/graph_qa_code')
 WORK = Path('/kaggle/working/graph_qa_evaluation')
 PROFILE = 'smoke'            # smoke | standard
-RUN_NAME = 'graph_qa_v2'
+RUN_NAME = 'graph_qa_v3'
 ARTIFACT = 'auto'            # hoặc đường dẫn ZIP / thư mục artifacts trong /kaggle/input
 RESUME = False               # True chỉ khi code/data/settings/model vẫn y nguyên
 RETRY_ERRORS = False         # không tự đo lại câu từ chối/partial
