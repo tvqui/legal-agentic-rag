@@ -6,6 +6,8 @@ import json
 import stat
 import tempfile
 import unittest
+import sys
+from unittest.mock import patch
 import zipfile
 from pathlib import Path, PurePosixPath
 import make_notebook
@@ -86,5 +88,45 @@ class NotebookTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):exec(compile(source,'<download_cell>','exec'),scope)
         self.assertEqual(len(calls),2)
         self.assertTrue(all(call[1]['check'] is False for call in calls))
+
+
+    def helper_scope(self):
+        helper=next(''.join(c['source']) for c in self.nb['cells'] if c['cell_type']=='code' and 'def run_step(' in ''.join(c['source']))
+        scope=dict(WORK=self.base/'work',LOGS=self.base/'logs',OUT=self.base/'out')
+        exec(compile(helper,'<helpers>','exec'),scope)
+        return scope
+    def test_failure_displays_cause_and_redacts_secret(self):
+        scope=self.helper_scope();scope['OUT'].mkdir()
+        (scope['OUT']/'worker.log').write_text('SYNTHETIC_SECRET',encoding='utf-8')
+        out=io.StringIO()
+        with patch.dict('os.environ',{'GEMINI_API_KEY':'SYNTHETIC_SECRET'}),contextlib.redirect_stdout(out):
+            with self.assertRaisesRegex(RuntimeError,'OLLAMA_TIMEOUT'):
+                scope['run_step']([sys.executable,'-c','print("Evaluation stopped: RuntimeError OLLAMA_TIMEOUT");raise SystemExit(1)'],'fixture',timeout=10)
+        self.assertNotIn('SYNTHETIC_SECRET',out.getvalue());self.assertIn('[REDACTED]',out.getvalue())
+    def test_warmup_neutral_request_and_gpu_guard(self):
+        import ast
+        code=next(''.join(c['source']) for c in self.nb['cells'] if c['cell_type']=='code' and 'warm_code=' in ''.join(c['source']))
+        assignment=next(n for n in ast.parse(code).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='warm_code' for t in n.targets))
+        warm=ast.literal_eval(assignment.value);ast.parse(warm)
+        requests=[]
+        def urlopen(req,timeout):
+            requests.append(req)
+            value={'done':True,'load_duration':1000000000} if len(requests)%2 else {'models':[{'name':'qwen3:8b','size':100,'size_vram':100}]}
+            return io.BytesIO(json.dumps(value).encode())
+        with patch('urllib.request.urlopen',side_effect=urlopen),patch('sys.argv',['warm','qwen3:8b','300']),contextlib.redirect_stdout(io.StringIO()):exec(compile(warm,'<warm>','exec'),{})
+        payload=json.loads(requests[0].data)
+        self.assertFalse(payload['think']);self.assertEqual(payload['keep_alive'],'30m');self.assertEqual(payload['options']['num_ctx'],16384)
+        self.assertNotIn('gold',json.dumps(payload).lower())
+        mixed=[io.BytesIO(json.dumps({'done':True}).encode()),io.BytesIO(json.dumps({'models':[{'name':'qwen3:8b','size':100,'size_vram':80}]}).encode())]
+        with patch('urllib.request.urlopen',side_effect=mixed),patch('sys.argv',['warm','qwen3:8b','300']),contextlib.redirect_stdout(io.StringIO()):exec(compile(warm,'<warm>','exec'),{})
+        replies=[io.BytesIO(json.dumps({'done':True}).encode()),io.BytesIO(json.dumps({'models':[{'name':'qwen3:8b','size':100,'size_vram':0}]}).encode())]
+        with patch('urllib.request.urlopen',side_effect=replies),patch('sys.argv',['warm','qwen3:8b','300']),contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError,'GPU'):exec(compile(warm,'<warm>','exec'),{})
+    def test_failure_snapshot_redacts_logs(self):
+        scope=self.helper_scope();scope['OUT'].mkdir()
+        (scope['LOGS']/'fixture.log').write_text('SYNTHETIC_SECRET',encoding='utf-8')
+        with patch.dict('os.environ',{'GEMINI_API_KEY':'SYNTHETIC_SECRET'}):scope['snapshot_logs']()
+        saved=(scope['OUT']/'notebook_logs/fixture.log.tail.txt').read_text(encoding='utf-8')
+        self.assertEqual(saved,'[REDACTED]')
 
 if __name__=='__main__':unittest.main()

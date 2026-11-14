@@ -96,3 +96,15 @@ Generator kiểm cú pháp tất cả cell và notebook không có output lưu s
 `paired_questions.md/csv/json` giữ từng cặp, căn cứ thêm/mất và số vòng thực tế. `elapsed_ms` là thời gian suy luận warm trong worker, `controller_round_trip_ms` bao gồm IPC; đây không phải latency frontend/Internet.
 
 Mọi câu trong phép thử này được ghim cùng ngày 15/09/2026; đây chưa phải phép đối chứng riêng về thay đổi hiệu lực qua nhiều mốc. `seed=42` điều khiển lịch câu hỏi; provider Ollama hiện ghim seed sinh bằng 0 và temperature=0 ở cả hai nhánh. Khi AI-judge lỗi, dừng hậu chấm và giữ nguyên toàn bộ câu trả lời đã đo.
+
+## Bản notebook v2 sửa timeout khi chạy Kaggle
+
+Mặc định SOURCE='github', RUN_NAME='graph_qa_v2'. Import notebook mới, bật T4×2/Internet và Secrets như trước. Dùng phiên sạch hoặc dừng Ollama do notebook cũ sở hữu trước khi bắt đầu. Không xóa kết quả v1.
+
+- Nạp và gọi thử Qwen bằng yêu cầu trung tính trước khi preflight; giữ model 30 phút, xác minh model đang dùng VRAM; cảnh báo khi cần kiểm tra phân bổ CPU/GPU, không coi tỷ lệ size_vram/size là phần trăm layer GPU. Warmup tối đa 300 giây, ngoài latency QA. Đây là kiểm tra vận hành, không dùng câu hỏi/nhãn Gold.
+- Cấu hình v2 chọn tổng 360 giây/câu và tối đa 120 giây/lời gọi. Ngân sách Auditor/tạo câu trả lời được điều chỉnh tương ứng, ghi trong effective_config và giống nhau giữa hai nhánh. Timeout vẫn được giữ, không chuyển lỗi thành câu trả lời thành công. Không trộn số liệu v1 (180/45) với v2 (360/120).
+- Khi bước lỗi, notebook hiện preflight_error, bước xử lý bị lỗi ở record cuối, worker/Ollama log đã che Secrets; thông báo RuntimeError chứa nguyên nhân cuối từ bộ chạy. Log đuôi được đưa vào ZIP checkpoint. Hậu chấm không được chạy nếu generation đã dừng.
+- Lỗi 'OK ... Ollama timeout' nghĩa là giao thức đã trả một response có lỗi nội bộ, không chứng minh câu trả lời đúng. Bộ chạy vẫn dừng để tránh Ollama xử lý sót làm nhiễu câu tiếp theo.
+- Kiểm thử local chỉ xác minh code, mô phỏng lỗi/warmup/GPU và artifact. Chưa xác minh tốc độ hay chất lượng thực của Qwen trên T4; nếu model vẫn timeout, giữ ZIP để phân tích đúng agent/batch thay vì tăng chờ vô hạn.
+
+API warmup/model residency đối chiếu tài liệu Ollama: https://docs.ollama.com/api/generate và https://docs.ollama.com/api/ps.

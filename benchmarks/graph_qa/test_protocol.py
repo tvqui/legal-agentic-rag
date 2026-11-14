@@ -97,4 +97,19 @@ class ProtocolTests(unittest.TestCase):
                 second,_=run.freeze_run(root,p.DEFAULTS,'standard');self.assertEqual(second['runtime'],first['runtime'])
                 with self.assertRaises(ValueError):run.freeze_run(root,{**p.DEFAULTS,'seed':9},'standard')
 
+
+    def test_v2_scaled_budgets_are_identical_and_explicit(self):
+        settings={**p.DEFAULTS,'request_timeout_seconds':360,'provider_timeout_seconds':120}
+        pair=p.assert_pair(settings,'fixture')
+        for cfg in pair.values():
+            self.assertEqual(cfg['request_timeout_seconds'],360)
+            self.assertEqual(cfg['applicability']['call_timeout_seconds'],120)
+            self.assertEqual(cfg['applicability']['budget_seconds'],180)
+            self.assertEqual(cfg['adjudication']['primary_budget_seconds'],120)
+        old=p.config(p.DEFAULTS,'fixture',False)
+        self.assertEqual(old.applicability.budget_seconds,90)
+        self.assertEqual(old.applicability.reserve_seconds,60)
+        self.assertEqual(old.adjudication.primary_budget_seconds,45)
+        self.assertEqual(old.adjudication.review_reserve_seconds,45)
+
 if __name__=='__main__':unittest.main()

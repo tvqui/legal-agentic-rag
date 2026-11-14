@@ -222,7 +222,7 @@ def execute(args):
                 if old:append(run/'retry_history.jsonl',old)
                 append(run/'attempt_journal.jsonl',record);by_key[key(job)]=record
                 save_records(run,list(by_key.values()));(run/'inflight.json').unlink(missing_ok=True)
-                print('=>',record['status'],round(record['elapsed_ms']/1000,2),'s',flush=True)
+                print('=> transport='+record['status'], 'answer='+str((record.get('response') or {}).get('status','NONE')), round(record['elapsed_ms']/1000,2),'s',flush=True)
                 if 'OLLAMA_TIMEOUT' in canonical(record):raise RuntimeError('Ollama timeout: checkpoint saved; restart owned server before resuming to avoid overlapping inference')
                 if record['status']=='TIMEOUT':raise RuntimeError('Hard timeout: stopped before next query. Restart owned Ollama via notebook Run All before resume; do not pool overlapping workloads.')
                 if quota_error(record):raise RuntimeError('Quota exhausted: results saved; restore SAME model quota before resuming')

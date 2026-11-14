@@ -89,7 +89,13 @@ def config(s,artifact,enabled):
     cfg.graph.max_nodes=60;cfg.graph.max_edges=180;cfg.graph.wall_clock_ms=10000
     for role in (cfg.researcher,cfg.applicability,cfg.adjudication):
         role.mode='ollama';role.url=s['ollama_url'];role.model=s['llm_model'];role.timeout_seconds=s['provider_timeout_seconds']
+    # Scale component budgets only when the experiment explicitly selects a larger allowance.
+    # Legacy 180s/45s settings retain exactly their original budgets. Both arms share these values.
+    cfg.applicability.budget_seconds=max(90,min(s['request_timeout_seconds']/2,2*s['provider_timeout_seconds']))
+    cfg.applicability.reserve_seconds=max(60,min(120,s['request_timeout_seconds']/3))
     cfg.applicability.call_timeout_seconds=s['provider_timeout_seconds']
+    cfg.adjudication.primary_budget_seconds=max(45,s['provider_timeout_seconds'])
+    cfg.adjudication.review_reserve_seconds=max(45,min(60,s['provider_timeout_seconds']))
     cfg.adjudication.semantic_review=s['semantic_review'];cfg.adjudication.review_provider='gemini' if s['semantic_review'] else 'same'
     cfg.adjudication.review_model=s['review_model'];cfg.adjudication.review_timeout_seconds=s['provider_timeout_seconds']
     return OnlineConfig.model_validate(cfg.model_dump())

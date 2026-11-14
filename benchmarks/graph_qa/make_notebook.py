@@ -19,22 +19,22 @@ def notebook():
 # Pháp Điển AI — Graph QA đối chứng trên Kaggle
 
 Mục tiêu: kiểm tra **khi nào mở rộng Graph giúp tìm đủ căn cứ và trả lời tốt hơn**.
-Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
+Bản v2 warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
 Artifact hiện chốt đến **15/09/2026**; giữ đúng query_date đã ghim, không tự đổi thành ngày chạy. Bộ nhãn được đóng băng trước khi suy luận. Nhãn kiểm bằng artifact vẫn là **DRAFT**, không tự coi là đã duyệt pháp lý.
 
-**Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối và `PhapDienAI_GraphQA_Code.zip` do bộ chuẩn bị xuất.
+**Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối. Mặc định lấy code từ GitHub, không cần ZIP code; ZIP chỉ dùng khi chọn attached_zip.
 Bật Secret `GEMINI_API_KEY` nếu giữ semantic review hoặc AI-judge; `HF_TOKEN` tùy chọn. Không cần Groq/coding-team key, frontend, ngrok hay Neo4j.
 Dừng backend và workload khác dùng GPU hoặc quota trước khi đo.
-Bắt đầu `PROFILE='smoke'`. Sau smoke, đặt `PROFILE='standard'` và giữ thư mục output riêng.
+Mặc định lấy code GitHub. Bắt đầu `PROFILE='smoke'`. Sau smoke, đặt `PROFILE='standard'` và giữ thư mục output riêng.
 """),code(r"""
 from pathlib import Path
-SOURCE = 'attached_zip'       # attached_zip | github
+SOURCE = 'github'       # attached_zip | github
 CODE_ZIP = 'auto'            # hoặc đường dẫn ZIP / thư mục chứa package_manifest.json
 REPO_URL = 'https://github.com/tvqui/legal-agentic-rag.git'
 CODE_ROOT = Path('/kaggle/working/graph_qa_code')
 WORK = Path('/kaggle/working/graph_qa_evaluation')
 PROFILE = 'smoke'            # smoke | standard
-RUN_NAME = 'graph_qa_v1'
+RUN_NAME = 'graph_qa_v2'
 ARTIFACT = 'auto'            # hoặc đường dẫn ZIP / thư mục artifacts trong /kaggle/input
 RESUME = False               # True chỉ khi code/data/settings/model vẫn y nguyên
 RETRY_ERRORS = False         # không tự đo lại câu từ chối/partial
@@ -45,6 +45,9 @@ JUDGE_ENABLED = False        # generation không chấm AI trong latency trả l
 RUN_AI_JUDGE = True          # chấm riêng sau generation; cùng model reviewer, không độc lập về mô hình
 REPETITIONS = 1
 ALLOW_EXISTING_OLLAMA = False
+REQUEST_TIMEOUT_SECONDS = 360  # tổng mỗi câu, giống nhau ở cả hai nhánh
+PROVIDER_TIMEOUT_SECONDS = 120 # gọi model; ngân sách thành phần được chốt trong manifest
+STARTUP_TIMEOUT_SECONDS = 300  # chỉ nạp/warmup, không tính vào latency QA
 if SOURCE not in {'attached_zip','github'}: raise ValueError('SOURCE không hợp lệ')
 if PROFILE not in {'smoke','standard'}: raise ValueError('PROFILE không hợp lệ')
 if not RUN_NAME or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in RUN_NAME):
@@ -103,7 +106,10 @@ def run_step(arguments,name,timeout=1200,cwd=None,check=True,env=None):
                     raise TimeoutError(name+' vượt thời gian, xem '+str(path))
             result=process.wait()
         if check and result:
-            raise RuntimeError(name+' thất bại, exit='+str(result)+'; xem '+str(path))
+            show_diagnostics(name)
+            tail=path.read_text(encoding='utf-8',errors='replace').splitlines()
+            reason=next((line for line in reversed(tail) if 'Evaluation stopped:' in line), 'Xem chẩn đoán ngay phía trên')
+            raise RuntimeError(name+' thất bại, exit='+str(result)+'; '+safe_line(reason)+'; log: '+str(path))
         print('KẾT THÚC:',name,'exit=',result,'seconds=',round(time.monotonic()-started,1),flush=True)
         return result
     finally:
@@ -113,6 +119,33 @@ def run_step(arguments,name,timeout=1200,cwd=None,check=True,env=None):
             except subprocess.TimeoutExpired:process.kill();process.wait(timeout=10)
         if process.stdout is not None: process.stdout.close()
         thread.join(timeout=1)
+
+
+def show_diagnostics(stage):
+    print('\nCHẨN ĐOÁN BƯỚC: '+str(stage),flush=True)
+    for path in (OUT/'preflight_error.json',OUT/'inflight.json',OUT/'worker.log',LOGS/'ollama.log'):
+        if path.is_file():
+            print('\n--- '+path.name+' (đuôi log, có thể chứa lần chạy trước) ---',flush=True)
+            print(safe_line(path.read_text(encoding='utf-8',errors='replace')[-6000:]),flush=True)
+    response_path=OUT/'responses.jsonl'
+    if response_path.is_file():
+        from collections import deque
+        with response_path.open(encoding='utf-8') as handle:recent=deque(handle,maxlen=1)
+        if recent:
+            try:
+                record=json.loads(recent[0]);response=record.get('response') or {}
+                trace=response.get('trace') or {}
+                errors=[e for e in trace.get('execution_steps',[]) if e.get('status') in ('ERROR','CANCELLED')]
+                print(safe_line(json.dumps({'last_question':record.get('id'),'arm':record.get('arm'),
+                    'transport_status':record.get('status'),'answer_status':response.get('status'),
+                    'error':record.get('error'),'failed_steps':errors},ensure_ascii=False)),flush=True)
+            except (ValueError,TypeError):print('Không đọc được record cuối; giữ file để kiểm tra.',flush=True)
+
+def snapshot_logs():
+    if not OUT.exists():return
+    destination=OUT/'notebook_logs';destination.mkdir(exist_ok=True)
+    for path in LOGS.glob('*.log'):
+        (destination/(path.name+'.tail.txt')).write_text(safe_line(path.read_text(encoding='utf-8',errors='replace')[-64000:]),encoding='utf-8')
 """),markdown("""
 ## 2. Nạp code đã chuẩn bị
 
@@ -226,8 +259,8 @@ if SEMANTIC_REVIEW or RUN_AI_JUDGE:
 os.environ['VN_LABOR_GEMINI_RPM']='13'
 settings={'device':'cuda:0','cache':str(WORK/'cache'),'llm_model':LLM_MODEL,
     'ollama_url':'http://127.0.0.1:11434/api/chat','review_model':REVIEW_MODEL,
-    'semantic_review':SEMANTIC_REVIEW,'request_timeout_seconds':180,
-    'provider_timeout_seconds':45,'repetitions':REPETITIONS,'seed':42,'k':10,
+    'semantic_review':SEMANTIC_REVIEW,'request_timeout_seconds':REQUEST_TIMEOUT_SECONDS,
+    'provider_timeout_seconds':PROVIDER_TIMEOUT_SECONDS,'repetitions':REPETITIONS,'seed':42,'k':10,
     'reranker_revision':'953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e','judge_enabled':JUDGE_ENABLED,
     'judge_model':REVIEW_MODEL,'judge_timeout_seconds':60}
 SETTINGS.parent.mkdir(parents=True,exist_ok=True)
@@ -255,7 +288,7 @@ if server_up and not (old_owned is not None and old_owned.poll() is None) and no
     raise RuntimeError('Ollama đang chạy ngoài notebook này. Dùng phiên sạch hoặc chỉ cho phép tái sử dụng khi chắc chắn không có workload khác.')
 if not server_up:
     OLLAMA_LOG=(LOGS/'ollama.log').open('a',encoding='utf-8')
-    environment=dict(os.environ);environment.update(CUDA_VISIBLE_DEVICES='1',OLLAMA_NUM_PARALLEL='1',OLLAMA_MAX_LOADED_MODELS='1')
+    environment=dict(os.environ);environment.update(CUDA_VISIBLE_DEVICES='1',OLLAMA_NUM_PARALLEL='1',OLLAMA_MAX_LOADED_MODELS='1',OLLAMA_KEEP_ALIVE='30m')
     OWN_OLLAMA=subprocess.Popen(['ollama','serve'],env=environment,stdout=OLLAMA_LOG,stderr=subprocess.STDOUT)
     for attempt in range(60):
         if OWN_OLLAMA.poll() is not None:raise RuntimeError('Ollama dừng; xem '+str(LOGS/'ollama.log'))
@@ -272,7 +305,26 @@ if LLM_MODEL not in names:
         except (RuntimeError,TimeoutError):
             if attempt==1:raise
             time.sleep(5)
-print('Ollama/model sẵn sàng; runner sẽ ghim digest và kiểm lại khi resume.',flush=True)
+# Warm a neutral request outside measured QA; prevent the first 45s probe from paying cold-load cost.
+warm_code=r'''import json,sys,time,urllib.request
+model=sys.argv[1];timeout=float(sys.argv[2]);base='http://127.0.0.1:11434'
+payload={'model':model,'prompt':'Return exactly OK.','stream':False,'think':False,'keep_alive':'30m',
+         'options':{'temperature':0,'seed':0,'num_predict':8,'num_ctx':16384}}
+request=urllib.request.Request(base+'/api/generate',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
+with urllib.request.urlopen(request,timeout=timeout) as response:result=json.load(response)
+if result.get('done') is not True:raise RuntimeError('Ollama warmup chưa hoàn tất')
+with urllib.request.urlopen(base+'/api/ps',timeout=10) as response:running=json.load(response)
+models=[m for m in running.get('models',[]) if m.get('name')==model or m.get('model')==model]
+if len(models)!=1:raise RuntimeError('Không xác nhận được model đã nạp')
+m=models[0];size=m.get('size',0);vram=m.get('size_vram',0)
+print(json.dumps({'model':model,'load_seconds':result.get('load_duration',0)/1e9,
+    'total_seconds':result.get('total_duration',0)/1e9,'size':size,'size_vram':vram}),flush=True)
+if not size or vram<=0:raise RuntimeError('Qwen không dùng GPU; kiểm tra ollama.log/GPU trước khi đo')
+if vram<size*.9:print('WARNING: VRAM thấp hơn tổng size; kiểm tra ollama ps. Tỷ lệ này không phải phần trăm layer GPU.',flush=True)
+'''
+run_step([PYTHON,'-u','-c',warm_code,LLM_MODEL,str(STARTUP_TIMEOUT_SECONDS)],
+         'ollama_warmup',timeout=STARTUP_TIMEOUT_SECONDS+30,cwd=ROOT)
+print('Ollama đã warmup trên GPU; thời gian này không tính vào phép đo QA.',flush=True)
 """),markdown("""
 ## 6. Chuẩn bị artifact, đóng băng nhãn và kiểm tra readiness
 """),code(r"""
@@ -291,8 +343,14 @@ if OUT.exists():
 else:
     run_step([PYTHON,'-X','utf8',ENTRY,'prepare','--artifact',artifact,'--output',OUT,'--cache',WORK/'cache'],
         'prepare',timeout=1800,cwd=ROOT)
-run_step([PYTHON,'-X','utf8',ENTRY,'preflight','--run',OUT,'--settings',SETTINGS],
-    'preflight',timeout=1800,cwd=ROOT)
+try:
+    run_step([PYTHON,'-X','utf8',ENTRY,'preflight','--run',OUT,'--settings',SETTINGS],
+        'preflight',timeout=1800,cwd=ROOT)
+except Exception:
+    snapshot_logs()
+    run_step([PYTHON,'-X','utf8',ENTRY,'export','--run',OUT,'--output',RESULT_ZIP],
+        'export_preflight_failure',timeout=300,cwd=ROOT,check=False)
+    raise
 PREPARED=True
 print('Chuẩn bị đạt. OUT:',OUT,flush=True)
 """),markdown("""
@@ -313,6 +371,7 @@ try:
 except Exception as exc:
     failure=exc
 finally:
+    snapshot_logs()
     for command,name in [([PYTHON,'-X','utf8',ENTRY,'report','--run',OUT],'report'),
                          ([PYTHON,'-X','utf8',ENTRY,'export','--run',OUT,'--output',RESULT_ZIP],'export')]:
         try:run_step(command,name,timeout=300,cwd=ROOT)
