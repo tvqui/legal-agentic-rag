@@ -132,7 +132,7 @@ def _renewal_base_shift(claim,source):
     if len(set(limits))!=1:return False
     prior=re.search(rf'\bsau(?: khi)?\s+({_NUMBER})\s+hop dong\b',claim)
     if not prior:
-        prior=re.search(rf'\b(?:sau(?: khi)?|khi)\b[^.;]{{0,100}}?\bhop dong(?: lao dong)?(?: xac dinh thoi han)?(?: lan)?\s+thu\s+({_NUMBER}|nhat)\b',claim)
+        prior=re.search(rf'\b(?:sau(?: khi)?|khi|truong hop|neu)\b[^.;]{{0,100}}?\bhop dong(?: lao dong)?(?: xac dinh thoi han)?(?: lan)?\s+thu\s+({_NUMBER}|nhat)\b',claim)
     if not prior:return False
     prior_count=1 if prior.group(1)=='nhat' else _integer(prior.group(1))
     if prior_count is None:return False

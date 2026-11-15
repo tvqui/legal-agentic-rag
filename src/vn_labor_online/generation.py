@@ -578,6 +578,45 @@ class LegalAdjudicator:
                 else 'ADJUDICATION_PRIMARY_UNAVAILABLE:'+str(code))
             return raw,[warning,'ADJUDICATION_ALTERNATE_DRAFT_USED']
 
+    def _bounded_generation_structured(self,system,payload,schema):
+        from copy import deepcopy
+        from .generation_context import generation_batches,encode_payload
+        from .context_budget import fits_context
+        from .models import ProviderClaim
+        from .runtime import operation_budget
+        try:batches=generation_batches(self.provider,system,payload)
+        except StructuredOutputError:
+            # One oversized source cannot be cut. Preserve the existing,
+            # explicitly configured alternate-provider/fail-closed behavior.
+            return self._generation_structured(system,encode_payload(payload),schema)
+        if len(batches)==1:
+            raw,warnings=self._generation_structured(system,encode_payload(batches[0]),schema)
+            if not fits_context(self.provider,system,json.dumps(payload,ensure_ascii=False)):
+                warnings+=['ADJUDICATION_CONTEXT_METADATA_COMPACTED']
+            return raw,warnings
+        maximum=schema['properties']['claims'].get('maxItems',12)
+        claims=[];seen=set();warnings=['ADJUDICATION_CONTEXT_BATCHED']
+        reserve=self.cfg.review_reserve_seconds if self.cfg.semantic_review else 0
+        with operation_budget('adjudication_source_batches',self.cfg.primary_budget_seconds,self.cfg.primary_budget_seconds,reserve):
+            for index,batch in enumerate(batches):
+                remaining=maximum-len(claims)
+                if remaining<1:raise StructuredOutputError('GENERATION_CLAIM_BUDGET_EXHAUSTED')
+                limit=max(1,remaining//(len(batches)-index))
+                local_schema=deepcopy(schema)
+                local_schema['properties']['claims'].update(minItems=0,maxItems=limit)
+                ids={item['evidence_id'] for item in batch['evidence']}
+                local_schema['$defs']['ProviderClaim']['properties']['evidence_ids']['items']={'type':'string','enum':sorted(ids)}
+                raw,notices=self._generation_structured(system,encode_payload(batch),local_schema)
+                warnings+=notices
+                if not isinstance(raw,dict) or set(raw)!={'claims'} or not isinstance(raw['claims'],list) or len(raw['claims'])>limit:
+                    raise StructuredOutputError('GENERATION_BATCH_OUTPUT_INVALID')
+                for value in raw['claims']:
+                    claim=ProviderClaim.model_validate(value)
+                    if set(claim.evidence_ids)-ids:raise StructuredOutputError('claim references evidence outside batch')
+                    key=(claim.text,tuple(sorted(claim.evidence_ids)))
+                    if key not in seen:seen.add(key);claims.append(claim.model_dump())
+        return {'claims':claims},list(dict.fromkeys(warnings))
+
     @property
     def review_provider(self):
         return self._review_provider if self._review_provider is not None else self.provider
@@ -804,7 +843,7 @@ class LegalAdjudicator:
         system+=' If freshness_status is UNVERIFIED_AFTER_SNAPSHOT, conclusions are conditional on the supplied dated corpus; never assert these are exhaustively the current laws or that no later amendment exists.'
         schema['$defs']['ProviderClaim']['properties']['evidence_ids']['items']={'type':'string','enum':sorted(allowed_ids)}
         try:
-            raw,recovery_warnings=self._generation_structured(system,json.dumps(payload,ensure_ascii=False),schema)
+            raw,recovery_warnings=self._bounded_generation_structured(system,payload,schema)
             output=ProviderClaims.model_validate(raw)
             if simple and (len(output.claims)>4 or any(len(c.text)>1000 for c in output.claims)):
                 raise StructuredOutputError('ADAPTIVE_CLAIM_LIMIT_EXCEEDED')

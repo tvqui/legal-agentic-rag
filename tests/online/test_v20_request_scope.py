@@ -90,6 +90,7 @@ class RequestScopeTests(unittest.TestCase):
         second=r.model_copy(deep=True)
         second.claims[0].claim_id='claim_001'
         second.coverage[0].claim_ids=['claim_001']
+        second.claims.append(r.claims[0].model_copy(deep=True))
         provider=Mock();provider.structured.return_value={'claims':[{'text':
             'Nếu đã qua 12 ngày làm việc mà chưa xác nhận thì đã vượt thời hạn 07 ngày làm việc.',
             'evidence_ids':['source']}]}
@@ -97,6 +98,7 @@ class RequestScopeTests(unittest.TestCase):
             result,_=review_answer(provider,d,p,1)
         self.assertEqual(result.semantic_review['status'],'PASS')
         self.assertEqual(audit.call_count,2)
+        self.assertEqual({c.claim_id for c in audit.call_args.args[2].claims},{'c','claim_001'})
         prompt,payload,_=provider.structured.call_args.args
         self.assertIn('PUBLIC claim text',prompt)
         self.assertEqual(json.loads(payload)['input']['requested_outcome'],'ASSESS_LEGALITY')

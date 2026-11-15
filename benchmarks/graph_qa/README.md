@@ -1,4 +1,4 @@
-**Bản hiện tại: v7, SOURCE=github, PROFILE=standard.**
+**Bản hiện tại: v8, SOURCE=github, PROFILE=standard.**
 
 # Phép đo Graph QA theo cặp
 
@@ -157,3 +157,14 @@ Giữ nguyên 24 câu, Gold DRAFT, corpus, hai nhánh và model. Dùng `RUN_NAME
 Sửa chung ONLINE: nhận các biến thể số thứ tự/động từ giao kết; kiểm tra biểu thức lương theo đơn vị với bộ AST nhỏ không eval (ngoặc có mặt chưa có nghĩa đặt đúng); giữ căn cứ cấm xử lý kỷ luật trong lúc chờ xác minh cùng nội dung điều được dẫn chiếu; yêu cầu kết luận công khai khi người dùng hỏi một hệ quả có tự động xảy ra hay không. Kiểm tra đơn vị không chứng minh tỷ lệ, mức tiền hay áp dụng pháp luật đúng; semantic review và nguồn vẫn bắt buộc.
 
 Kết quả chấm có thêm `local_answer_checks`, per_attempt_metrics có cảnh báo tương ứng, bảng có cột Local warnings. Các cảnh báo này độc lập với AI Judge, không tự hạ/nâng điểm AI hoặc biến thành human review. Khi AI chấm tối đa mà còn cảnh báo, phải đọc lại câu/nguồn thay vì coi là đúng tuyệt đối. Không tự sửa kết quả cũ, Gold hoặc lựa câu có lợi cho Graph.
+
+
+## V8: giữ ý đã kiểm chứng và giới hạn ngữ cảnh
+
+Dùng `SOURCE='github'`, `RUN_NAME='graph_qa_v8'`, `PROFILE='standard'`; không resume v7 bằng code mới. Cần đưa mã sửa lên origin/main trước Run All. Giữ nguyên artifact, 24 câu DRAFT, model, prompt đánh giá và giới hạn thời gian của cả hai nhánh. Không cần chạy lại OFFLINE.
+
+- Sửa câu trả lời giữ nguyên các ý đã được nguồn hỗ trợ; phần bổ sung có ID mới và toàn bộ tập ý được kiểm chứng lại. Không lấy PASS cũ để bỏ qua hậu kiểm.
+- Gói sinh câu trả lời vượt context được chia theo nguồn nguyên vẹn, giữ kế hoạch tổng thể, giới hạn số ý và ngân sách tổng. Không cắt văn bản giữa điều kiện/ngoại lệ; nguồn riêng lẻ quá dài vẫn theo cơ chế dự phòng hoặc chặn hiện có.
+- Phân biệt từ có dấu “thưởng” với “thường”, bổ sung định vị căn cứ cho trách nhiệm thiệt hại dụng cụ và khấu trừ lương, kiểm tra biến thể điều kiện của mốc số lần. Đây là sửa cơ chế ONLINE chung, không viết đáp án theo ID câu hỏi.
+
+V7 chỉ một câu thực sự chạy mở rộng Graph; chênh lệch điểm ở các câu không mở rộng không chứng minh hiệu quả của bước mở rộng. V8 không ép Graph chạy khi đã đủ căn cứ, không sửa Gold và không bảo đảm Graph sẽ thắng. Cần đọc cả trace ứng viên, căn cứ được chấp nhận và câu trả lời, không chỉ điểm AI.

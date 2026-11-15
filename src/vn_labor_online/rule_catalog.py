@@ -3,7 +3,7 @@
 This catalogue covers mechanisms. Matching a topic never proves applicability
 or legal authority. Missing corpus entries remain missing, not invented rules.
 """
-import re
+import re,unicodedata
 from .models import LegalLocator
 from .claim_validation import fold
 
@@ -64,11 +64,19 @@ def extra_requirements(analysis):
         clauses('discipline_financial_prohibition',128 if old else 127,[2])
     if not old and has('luong') and (has('nguyen tac tra','tra truc tiep','uy quyen nhan luong') or re.search(r'tra[^.;?!]{0,25}luong[^.;?!]{0,40}(?:day du|dung han)',q)):
         clauses('wage_payment_principles',94,[1])
-    if not old and has('thuong','luong thang muoi ba','luong thang 13'):
+    # Accent folding conflates thưởng with thường/bồi thường. A bare folded
+    # token is not a reward request; keep accent evidence or an explicit phrase.
+    raw=unicodedata.normalize('NFC',analysis.query_text).casefold()
+    reward_requested=bool(re.search(r'\bthưởng\b',raw)) or has('tien thuong','quy che thuong','thuong tet','thuong nang suat','thuong hieu suat','luong thang muoi ba','luong thang 13')
+    if not old and reward_requested:
         if has('dua tren','yeu to','can cu','ket qua','muc do','thang muoi ba','thang 13'):
             clauses('bonus_basis',104,[1])
         if has('quy che','cong bo','tham khao','thu tuc'):
             clauses('bonus_regulation_procedure',104,[2])
+    if not old and has('boi thuong') and has('dung cu','thiet bi','lam hong','hu hong'):
+        clauses('work_property_damage_rule',129,[1])
+        if has('khau tru','tru luong','hang thang','moi thang'):
+            clauses('work_property_wage_deduction',102,[3])
     if not old and has('ky luat') and has('xac minh','dieu tra') and has('cho','dang doi'):
         out['pending_discipline_waiting_rule']=[[loc(122,4,'c')]]
     if not old and has('ky luat') and has('xac minh','dieu tra') and has('dan chieu','nhom hanh vi','gom nhung','hanh vi nao'):

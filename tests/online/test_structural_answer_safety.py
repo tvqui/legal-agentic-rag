@@ -79,7 +79,20 @@ class BoundedReviewRepairTests(unittest.TestCase):
         def verdict(cid):
             return {'claims':[{'claim_id':cid,'verdict':'SUPPORTED','grounding':[{'evidence_id':'s','quote':source}],'reason':'SYNTHETIC verdict'}],
                 'coverage':[{'task_id':'t','status':'ANSWERED','claim_ids':[cid],'missing':''}],'question_fully_addressed':True,'missing_requirements':[]}
-        provider=Mock();provider.structured.side_effect=[verdict('initial'),{'claims':[{'text':bad if repeat_bad else good,'evidence_ids':['s']}]},verdict('claim_001')]
+        def repaired_review(system,user,schema):
+            import json
+            ids=[c['claim_id'] for c in json.loads(user)['claims']]
+            result=verdict('claim_001')
+            # The repair retains independently supported background; account
+            # for it as well, without assigning it the missing application.
+            if 'initial' in ids:result['claims']+=verdict('initial')['claims']
+            return result
+        provider=Mock()
+        replies=iter([verdict('initial'),{'claims':[{'text':bad if repeat_bad else good,'evidence_ids':['s']}]},repaired_review])
+        def respond(*args):
+            reply=next(replies)
+            return reply(*args) if callable(reply) else reply
+        provider.structured.side_effect=respond
         result,_=review_answer(provider,draft,pack,1)
         self.assertEqual(provider.structured.call_count,3)
         return result
