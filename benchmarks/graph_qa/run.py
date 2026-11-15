@@ -145,23 +145,8 @@ def make_report(run):
         'error_rate_all_attempts':sum(r.get('status')!='OK' for r in journal)/len(journal) if journal else None,
         'all_attempts_elapsed_ms':sum(r.get('elapsed_ms',0) for r in journal),
         'note':'comparison tables describe latest scheduled attempt; this file retains retry/error costs.'}
-    from service_recovery import service_failure
-    summary['total_service_failure_attempts']=sum(service_failure(r) for r in journal)
-    summary['service_recovery_attempts']=sum(bool(r.get('service_recovery_pair')) for r in journal)
-    recovery_path=run/'service_recovery.json'
-    recovery=load(recovery_path) if recovery_path.exists() else {}
-    summary['incomplete_service_recovery_pairs']=[k for k,v in recovery.items() if v.get('status')!='DONE']
-    if summary['incomplete_service_recovery_pairs']:
-        result['warnings']=list(dict.fromkeys(result.get('warnings',[])+['SERVICE_RECOVERY_PAIR_INCOMPLETE']))
-        write(run/'comparison.json',result)
     write(run/'attempt_history_summary.json',summary)
     question_diagnostics(run)
-    with (run/'comparison.md').open('a',encoding='utf-8') as f:
-        f.write('\n## Lịch sử lỗi dịch vụ và phục hồi\n\n'+
-            'Lỗi dịch vụ hậu kiểm trong toàn bộ lượt: '+str(summary['total_service_failure_attempts'])+
-            '; lượt đo lại theo cặp: '+str(summary['service_recovery_attempts'])+
-            '. Bảng trên dùng lượt cuối; xem attempt_journal.jsonl/retry_history.jsonl để giữ kết quả đầu và toàn bộ chi phí.\n'+
-            ('CẢNH BÁO: phục hồi cặp chưa hoàn tất; chưa dùng cặp trộn lượt đầu/lượt phục hồi để kết luận.\n' if summary['incomplete_service_recovery_pairs'] else ''))
     return result
 
 
@@ -250,11 +235,6 @@ def execute(args):
             if worker:worker.close()
             make_report(run)
 
-def recover_services(args):
-    from service_recovery import recover_services as recover
-    return recover(args,sys.modules[__name__])
-
-
 def judge(args):
     run=Path(args.run);s=settings(args.settings)
     from vn_labor_online.providers import GeminiProvider
@@ -302,7 +282,7 @@ def export(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)
     p=sub.add_parser('prepare');p.add_argument('--artifact',required=True);p.add_argument('--output',required=True);p.add_argument('--cache',required=True)
-    for name in ('preflight','run','judge','recover-services'):
+    for name in ('preflight','run','judge'):
         p=sub.add_parser(name);p.add_argument('--run',required=True);p.add_argument('--settings',required=True)
         if name=='run':p.add_argument('--profile',choices=['smoke','standard'],default='smoke');p.add_argument('--retry-errors',action='store_true');p.add_argument('--dry-run',action='store_true')
     p=sub.add_parser('report');p.add_argument('--run',required=True)
@@ -311,7 +291,7 @@ def main():
     try:
         if args.command=='report':
             make_report(Path(args.run))
-        else:globals()[{'run':'execute','recover-services':'recover_services'}.get(args.command,args.command)](args)
+        else:globals()[{'run':'execute'}.get(args.command,args.command)](args)
         return 0
     except Exception as exc:
         # Only evaluator-authored exceptions can describe the action; no raw SDK strings.

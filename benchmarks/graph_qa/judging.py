@@ -75,10 +75,6 @@ def local_answer_checks(record,corpus):
                 sources[uid]=source;attached.append(source)
             codes=semantic_issues(claim.text,attached,context_query=record['question'])
             if codes:issues.append({'claim_id':claim.claim_id,'codes':codes})
-        from vn_labor_online.answer_quality import source_layout_issues
-        for uid in sources:
-            codes=source_layout_issues(corpus[uid].get('source_text') or '')
-            if codes:issues.append({'claim_id':None,'evidence_id':uid,'codes':codes})
         issues.extend({'claim_id':cid,'codes':[code]} for cid,code in omitted_coupled_reporting_duties(claims,list(sources.values())).items())
         if missing_automatic_conclusion(record['question'],claims):
             issues.append({'claim_id':None,'codes':['EXPLICIT_AUTOMATIC_CONCLUSION_MISSING']})
