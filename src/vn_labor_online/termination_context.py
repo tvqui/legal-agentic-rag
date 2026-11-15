@@ -63,7 +63,7 @@ def contract_expiry_context(query):
     return bool(re.search(r'\b(?:het (?:han|thoi han) (?:hop dong|hdld)|'
         r'(?:hop dong(?: lao dong)?|hdld)(?:\s+(?:co|xac dinh))?\s*(?:thoi han)?'
         r'(?:\s+\d+\s+(?:thang|nam|ngay))?'
-        r'(?:\s+(?:cua toi|nay|do)){0,2}\s+(?:(?:vua|da|sap)\s+)?het(?:\s+(?:han|thoi han))?)\b',q))
+        r'(?:\s+(?:cua toi|nay|do)){0,2}\s+(?:(?:vua|da|sap)\s+)?(?:(?:den|toi)\s+(?:ngay\s+|thoi diem\s+)?)?het(?:\s+(?:han|thoi han))?)\b',q))
 
 
 def contract_continuation_facets(query):

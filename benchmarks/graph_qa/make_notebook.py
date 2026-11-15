@@ -19,30 +19,30 @@ def notebook():
 # Pháp Điển AI — Graph QA đối chứng trên Kaggle
 
 Mục tiêu: kiểm tra **khi nào mở rộng Graph giúp tìm đủ căn cứ và trả lời tốt hơn**.
-Bản v3 dùng Auditor hybrid theo nhóm và warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
+Bản v6 bổ sung kiểm tra mốc số lần, công thức, điều kiện đi kèm và độ đủ các ý độc lập; tách chấm theo Gold và kiểm chứng bằng nguồn thực, dùng Auditor hybrid theo nhóm và warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
 Artifact hiện chốt đến **15/09/2026**; giữ đúng query_date đã ghim, không tự đổi thành ngày chạy. Bộ nhãn được đóng băng trước khi suy luận. Nhãn kiểm bằng artifact vẫn là **DRAFT**, không tự coi là đã duyệt pháp lý.
 
-**Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối. Mặc định lấy code từ GitHub, không cần ZIP code; ZIP chỉ dùng khi chọn attached_zip.
+**Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối. Bản v6 mặc định lấy code GitHub đã push; chỉ cần thêm artifact OFFLINE. Không cần ZIP code.
 Bật Secret `GEMINI_API_KEY` nếu giữ semantic review hoặc AI-judge; `HF_TOKEN` tùy chọn. Không cần Groq/coding-team key, frontend, ngrok hay Neo4j.
 Dừng backend và workload khác dùng GPU hoặc quota trước khi đo.
-Mặc định lấy code GitHub. Bắt đầu `PROFILE='smoke'`. Sau smoke, đặt `PROFILE='standard'` và giữ thư mục output riêng.
+Bắt đầu `PROFILE='smoke'`. Sau smoke, đặt `PROFILE='standard'` và giữ thư mục output riêng.
 """),code(r"""
 from pathlib import Path
-SOURCE = 'github'       # attached_zip | github
+SOURCE = 'github'       # github | attached_zip
 CODE_ZIP = 'auto'            # hoặc đường dẫn ZIP / thư mục chứa package_manifest.json
 REPO_URL = 'https://github.com/tvqui/legal-agentic-rag.git'
 CODE_ROOT = Path('/kaggle/working/graph_qa_code')
 WORK = Path('/kaggle/working/graph_qa_evaluation')
 PROFILE = 'smoke'            # smoke | standard
-RUN_NAME = 'graph_qa_v3'
+RUN_NAME = 'graph_qa_v6'
 ARTIFACT = 'auto'            # hoặc đường dẫn ZIP / thư mục artifacts trong /kaggle/input
 RESUME = False               # True chỉ khi code/data/settings/model vẫn y nguyên
 RETRY_ERRORS = False         # không tự đo lại câu từ chối/partial
 LLM_MODEL = 'qwen3:8b'
-REVIEW_MODEL = 'gemini-3.1-flash-lite'
+REVIEW_MODEL = 'gemini-3.5-flash-lite'
 SEMANTIC_REVIEW = True
 JUDGE_ENABLED = False        # generation không chấm AI trong latency trả lời
-RUN_AI_JUDGE = True          # chấm riêng sau generation; cùng model reviewer, không độc lập về mô hình
+RUN_AI_JUDGE = True          # hai giai đoạn; tốn thêm API calls, cùng model reviewer
 REPETITIONS = 1
 ALLOW_EXISTING_OLLAMA = False
 REQUEST_TIMEOUT_SECONDS = 360  # tổng mỗi câu, giống nhau ở cả hai nhánh
@@ -149,7 +149,7 @@ def snapshot_logs():
 """),markdown("""
 ## 2. Nạp code đã chuẩn bị
 
-Mặc định dùng ZIP nguồn đã đóng gói hoặc thư mục được Kaggle tự giải nén: không cần push lên GitHub. Gói chứa source cần thiết và 24 câu/nhãn dự kiến; corpus luật vẫn lấy từ artifact riêng.
+Mặc định dùng GitHub origin/main; mã commit và hash được lưu trong kết quả. Corpus luật vẫn lấy từ artifact riêng. ZIP nguồn chỉ là lựa chọn phụ nếu đổi SOURCE.
 Kiểm SHA-256 của từng file, từ chối đường dẫn không an toàn và không ghi đè source khác nội dung.
 Nếu chọn GitHub, phải push bộ đo mới trước; notebook lấy `origin/main` và ghi phiên bản khi chạy.
 """),code(r"""

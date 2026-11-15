@@ -145,7 +145,7 @@ def score_record(record,gold,corpus,k=10):
         expected={t['task_id'] for t in gold.get('expected_tasks',[])}
         if expected and len(tasks)==len(expected) and {t.get('task_id') for t in tasks}==expected:
             result['ai_task_addressed_fraction']=average(float(t.get('addressed') is True) for t in tasks)
-            result['ai_task_supported_fraction']=average(float(t.get('evidence_supported') is True) for t in tasks)
+            result['ai_task_supported_fraction']=average(float(t['evidence_supported']) for t in tasks if type(t.get('evidence_supported')) is bool)
     parts=response.get('parts') or []
     result['self_reported_part_answered_fraction']=average(float(p.get('answer_status')=='ANSWERED') for p in parts)
     result.update(reviewed_scores(record))
@@ -218,6 +218,7 @@ def build_report(gold_rows,records,corpus,manifest,k=10):
             'expected_attempts':len(expected),'completed_attempts':len(records),'missing_schedule':missing,
             'successful_pairs':complete_pairs,'expected_pairs':len(selected)*repeats,
             'tables':tables,'paired':paired,'records':scored,
+            'judge_protocol_versions':sorted({(r.get('judge') or {}).get('protocol_version','legacy-v1') for r in records if (r.get('judge') or {}).get('status')=='AI_JUDGED'}),
             'warnings':['Small per-group samples limit inference; bootstrap unit is the query, not repeat.',
                 'Paired metric deltas use matched successful repeats only; inspect errors and pair coverage before interpretation.',
                 'Citation metadata validity and interval consistency do not establish legal correctness or semantic entailment.',

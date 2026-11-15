@@ -123,23 +123,63 @@ def _renewal_base_shift(claim,source):
     from .durations import _NUMBER,_integer
     if not re.search(r'hop dong(?: lao dong)? moi',source):return False
     if not ('sau do' in source and 'khong xac dinh thoi han' in source):return False
-    # An explicit attached exception can defeat the ordinary repetition cap;
-    # its factual applicability remains for the independent auditor.
-    if re.search(r'nhieu lan[^.;]{0,100}hop dong|hop dong[^.;]{0,100}nhieu lan',source):return False
+    # Extra citations cannot cancel a cap on an ordinary-rule proposition.
+    if (re.search(r'nhieu lan[^.;]{0,100}hop dong|hop dong[^.;]{0,100}nhieu lan',source)
+            and re.search(r'\b(?:theo|trong)\s+(?:ngoai le|truong hop ngoai le)\b',claim)):
+        return False
     limits=[_integer(m.group(1)) for m in re.finditer(rf'\bchi duoc ky them ({_NUMBER})\s+lan\b',source)]
     limits=[value for value in limits if value is not None]
     if len(set(limits))!=1:return False
     prior=re.search(rf'\bsau(?: khi)?\s+({_NUMBER})\s+hop dong\b',claim)
+    if not prior:
+        prior=re.search(rf'\b(?:sau(?: khi)?|khi)\b[^.;]{{0,100}}?\bhop dong(?: lao dong)?(?: xac dinh thoi han)?\s+thu\s+({_NUMBER}|nhat)\b',claim)
     if not prior:return False
-    prior_count=_integer(prior.group(1))
+    prior_count=1 if prior.group(1)=='nhat' else _integer(prior.group(1))
     if prior_count is None:return False
-    for addition in re.finditer(rf'\b(?:duoc|co the) ky them ({_NUMBER})\s+lan\b',claim):
+    for addition in re.finditer(rf'\b(?:duoc|co the)(?: tiep tuc)? ky them (?:toi da |it nhat )?({_NUMBER})\s*(?:lan|hop dong)\b',claim):
         prefix=claim[max(0,addition.start()-35):addition.start()]
         if re.search(r'\b(?:khong|chua)(?:\s+(?:the|co|phai)){0,3}\s*$',prefix):continue
         extra=_integer(addition.group(1))
         if extra is not None and prior_count+extra>1+limits[0]:return True
     return False
 
+
+def ambiguous_formula_grouping(claim,source):
+    """Flag a verbal sum/product whose aggregation is left ambiguous.
+
+    Does not infer a new formula or edit source bytes. Literal source quotations
+    and explicitly grouped expressions remain for the semantic reviewer.
+    """
+    if claim in source:return False
+    if 'cong thuc' not in claim or '+' not in source or '=' not in source:return False
+    if not re.search(r'\b(?:so gio|so ngay|so thang|so san pham)\b',claim):return False
+    verbal=' cong ' in claim and ' nhan ' in claim
+    symbolic='+' in claim and bool(re.search(r'[*×]|\bx\b',claim))
+    grouped=('(' in claim and ')' in claim) or bool(re.search(r'\b(?:lay tong|tong cua|ca tong|toan bo tong)\b',claim))
+    return (verbal or symbolic) and not grouped
+
+
+def omitted_coupled_reporting_duties(claims,evidence):
+    """Find permissions missing an explicit, tightly coupled reporting duty.
+
+    A separately stated supported duty with the same citation is sufficient.
+    No missing personal fact or duty is invented from general topic keywords.
+    """
+    rejected={}
+    for item in evidence:
+        uid=getattr(item,'evidence_id',None) or getattr(item,'unit_id',None)
+        source=fold(getattr(item,'full_text',None) or getattr(item,'source_text',None) or item.text)
+        duty=re.search(r'\bnhung phai\s+(?:bao|thong bao)\s+ngay\s+cho\s+nguoi quan ly',source)
+        if not duty:continue
+        attached=[claim for claim in claims if uid in claim.evidence_ids]
+        reported=any(re.search(r'\b(?:phai|can|co nghia vu)\b[^.;]{0,30}\b(?:bao|thong bao)\s+(?:ngay|lap tuc|lien)\b[^.;]{0,45}\bquan ly\b',fold(claim.text))
+            and not re.search(r'\bkhong\s+(?:can|phai)\b',fold(claim.text)) for claim in attached)
+        if reported:continue
+        for claim in attached:
+            text=fold(claim.text)
+            if re.search(r'\b(?:tu choi|roi bo noi lam viec)\b',text) and re.search(r'\b(?:co quyen|duoc|khong bi)\b',text):
+                rejected[claim.claim_id]='CLAIM_COUPLED_REPORTING_DUTY_OMITTED'
+    return rejected
 
 
 
@@ -332,6 +372,7 @@ def semantic_issues(text, items, *, context_query=''):
         explicit_advance=re.search(r'thong bao truoc|bao truoc|truoc khi|truoc (?:it nhat|toi thieu|cham nhat)|truoc\s+\d+\s+ngay',form_source)
         if not caution and not explicit_advance:problems.append('CLAIM_NOTIFICATION_ADVANCE_NOT_GROUNDED')
     if _renewal_base_shift(q,form_source):problems.append('CLAIM_RENEWAL_COUNT_BASE_SHIFT')
+    if ambiguous_formula_grouping(q,form_source):problems.append('CLAIM_AMBIGUOUS_FORMULA_GROUPING')
     no_change=re.search(r'\bkhong (?:co (?:bat ky |bat cu )?(?:quy dinh )?)?(?:thay doi|sua doi|bo sung)',q)
     interval_scope=re.search(r'trong (?:suot|khoang)|tu \d[^.;]{0,30}den \d',q)
     if no_change and interval_scope and q not in form_source:

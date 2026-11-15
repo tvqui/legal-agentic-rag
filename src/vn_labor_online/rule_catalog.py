@@ -38,6 +38,39 @@ def extra_requirements(analysis):
         if has('hop dong','thoa uoc','thoa thuan'):
             clauses('labour_contract_transition',240 if old else 220,[2])
         return out
+    # Requested implementing detail is a source requirement, never an answer.
+    # Keep plain rule lookups small; do not apply the 2020 decree to old events.
+    subissues=set(getattr(analysis,'legal_subissues',[]))
+    detail=has('cong thuc','nghi dinh 145','145/2020','huong dan chi tiet','quy dinh chi tiet')
+    time_pay=has('huong luong theo thoi gian','luong theo thoi gian','luong gio')
+    product_pay=has('huong luong theo san pham','luong theo san pham','don gia san pham')
+    if not old:
+        decree=['145/2020/NĐ-CP']
+        if 'WAGE.OVERTIME_PAY' in subissues and detail:
+            # Clause 1/2 contains the operative formula; an article heading does not.
+            branches=[1] if time_pay and not product_pay else [2] if product_pay and not time_pay else [1,2]
+            clauses('overtime_implementing_formula',55,branches,decree)
+        if 'WAGE.NIGHT_PAY' in subissues and 'WAGE.OVERTIME_PAY' not in subissues and detail:
+            branches=[1] if time_pay and not product_pay else [2] if product_pay and not time_pay else [1,2]
+            clauses('night_implementing_formula',56,branches,decree)
+            if 1 in branches:out['night_hourly_wage_reference']=[[loc(55,1,'a',decree)]]
+        if 'WORKING_TIME.EMERGENCY_OVERTIME' in subissues and has('thong thuong') and has('dong y'):
+            out['ordinary_overtime_consent']=[[loc(107,2,'a')]]
+        if 'WORKING_TIME.OVERTIME_CONSENT' in subissues and (detail or has('noi dung','bao quat','bao gom','nhung gi')):
+            points('overtime_consent_contents',59,1,['a','b','c'],decree)
+        if 'WORKING_TIME.REST_BREAK' in subissues and (detail or has('huong dan')):
+            clauses('rest_break_implementing_rule',64,[1],decree)
+    if has('ky luat') and has('phat tien','cat luong','tru luong'):
+        clauses('discipline_financial_prohibition',128 if old else 127,[2])
+    if not old and has('luong') and (has('nguyen tac tra','tra truc tiep','uy quyen nhan luong') or re.search(r'tra[^.;?!]{0,25}luong[^.;?!]{0,40}(?:day du|dung han)',q)):
+        clauses('wage_payment_principles',94,[1])
+    if not old and has('thuong','luong thang muoi ba','luong thang 13'):
+        if has('dua tren','yeu to','can cu','ket qua','muc do','thang muoi ba','thang 13'):
+            clauses('bonus_basis',104,[1])
+        if has('quy che','cong bo','tham khao','thu tuc'):
+            clauses('bonus_regulation_procedure',104,[2])
+    if not old and has('ky luat') and has('xac minh','dieu tra') and has('dan chieu','nhom hanh vi','gom nhung','hanh vi nao'):
+        clauses('pending_discipline_cross_reference',125,[1,2])
     from .dispute_context import individual_mediation_requested,mediation_only
     if individual_mediation_requested(analysis.query_text):
         selected=[]
@@ -67,6 +100,11 @@ def extra_requirements(analysis):
     if has('giao ket','ung vien','tuyen dung') and has('cung cap','thong tin','thong bao') and not facts.get('termination_basis'):
         clauses('employer_information',19 if old else 16,[1])
     from .termination_context import contract_expiry_context,contract_continuation_facets
+    if not old and has('tam hoan') and has('hop dong','hdld') and has('het thoi','ket thuc','tro lai','co mat','nhan lai'):
+        out['return_after_suspension_rule']=[[loc(31)]]
+        if has('khong tro lai','khong co mat','khong den') and has('cham dut','bao truoc'):
+            out['return_absence_termination_rule']=[[loc(36,1,'d')]]
+            if has('bao truoc'):out['return_absence_notice_rule']=[[loc(36,3)]]
     expiry=contract_expiry_context(q)
     facets=contract_continuation_facets(q)
     continuation=expiry and has('tiep tuc lam viec','van di lam','van lam','van tiep tuc','ky tiep','hop dong moi','ky moi','hop dong cu','loai hop dong','thuoc loai nao','moc thoi gian')

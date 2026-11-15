@@ -44,6 +44,9 @@ class RunnerTests(unittest.TestCase):
         report=p.load(self.root/'comparison.json');self.assertEqual(report['execution_status'],'COMPLETE')
         self.assertEqual(report['successful_pairs'],1)
         self.assertTrue((self.root/'paired_questions.md').exists())
+        diagnostics=p.load(self.root/'paired_questions.json')
+        self.assertIn('mechanism_note',diagnostics[0])
+        self.assertEqual(diagnostics[0]['graph_candidate_ids'],[])
         self.assertTrue((self.root/'human_review.csv').exists())
         records=p.rows(self.root/'responses.jsonl')
         self.assertTrue(all(set(k for k in FakeWorker.asks[0])=={'id','arm','repeat','question','query_date'} for _ in [1]))
@@ -76,7 +79,7 @@ class RunnerTests(unittest.TestCase):
         self.assertNotIn('SYNTHETIC_PRIVATE_ERROR',json.dumps(records))
     def test_judge_separate_then_resume_does_not_rejudge(self):
         runner.execute(self.args)
-        provider=Mock();provider.structured.return_value=dict(correctness=1.,completeness=1.,evidence_support=1.,notes='SYNTHETIC ONLY',tasks=[dict(task_id='t1',addressed=True,evidence_supported=True)])
+        provider=Mock();provider.structured.return_value=dict(correctness=1.,completeness=1.,notes='SYNTHETIC ONLY',tasks=[dict(task_id='t1',addressed=True)])
         with patch('vn_labor_online.providers.GeminiProvider',return_value=provider),patch.object(runner.time,'sleep'):
             runner.judge(self.args);runner.judge(self.args)
         self.assertEqual(provider.structured.call_count,2)

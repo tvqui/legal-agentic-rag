@@ -116,3 +116,33 @@ Log thực tế cho thấy applicability chỉ còn 3 giây dù toàn câu còn 
 Adapter `auditor.py` chỉ dùng trong phép đo: chặn gọi mạng mới khi ngân sách Auditor khả dụng thấp hơn min(10 giây, giới hạn call). Không vay thêm thời gian dự phòng, không phê duyệt căn cứ chưa kiểm tra. Lớp Auditor gốc xử lý budget-exhausted và giữ phần chưa kiểm tra là chưa xác minh. Không thay đổi mã ONLINE; timeout transport thực vẫn làm dừng run.
 
 Dùng RUN_NAME='graph_qa_v3', chạy smoke trước. Không resume/gộp v1-v2 vì mode Auditor và code đã thay đổi.
+
+## V4 sau khi rà ZIP Graph QA v3
+
+Không sửa Gold, câu hỏi, điểm hoặc archive cũ. ONLINE sửa số văn bản gốc trong Citation và nhận diện câu hỏi/dữ kiện; các thay đổi đi qua cùng pipeline cho hai nhánh. V4 dùng judge protocol `reference-and-cited-context-v2`:
+
+1. Chấm correctness/completeness theo đáp án và căn cứ tham khảo DRAFT.
+2. Một lời gọi riêng chỉ nhận claim/citation và nguyên văn nguồn thật đã được chọn rồi trích dẫn; không nhận reference_answer/Gold support. Heading/dẫn chiếu không tự thay thế nội dung quy định đích.
+
+Thiếu dấu vết selected hoặc thiếu source_text thì evidence_support=N/A; không biến thiếu quan sát thành sai luật. Citation không thuộc selected không được dùng làm bằng chứng. Hai giai đoạn được ghi hash riêng, kiểm đầy đủ task IDs và lưu protocol version. Tối đa hai lượt chấm ngữ nghĩa mỗi output (chưa tính retry), nên cần tính quota; không gộp evidence_support v1 với v2. AI chấm vẫn không phải duyệt pháp lý.
+
+Dùng RUN_NAME='graph_qa_v4', artifact cũ vẫn dùng được; không cần chạy OFFLINE. Chạy smoke trước rồi standard với mã mới. Không resume v3 vì mã/metric đã đổi. Nếu dùng GitHub, phải có source sửa mới trên origin/main trước khi đo; nếu chưa push, dùng ZIP code mới với SOURCE='attached_zip'.
+
+
+## V5: tìm căn cứ còn thiếu và theo dõi đóng góp thực tế
+
+- Notebook dùng run mới `graph_qa_v5`, mặc định `SOURCE='attached_zip'` và reviewer/judge `gemini-3.5-flash-lite`. Thêm ZIP code mới cùng artifact; không cần chạy OFFLINE lại. Nếu dùng GitHub thì phải push source mới trước.
+- Yêu cầu công thức/hướng dẫn bổ sung được đưa vào kế hoạch căn cứ; câu hỏi chỉ hỏi quy tắc cơ bản không bị buộc tìm mọi nghị định. Không dùng Nghị định 145 cho tình huống trước năm 2021.
+- Graph ưu tiên hàng xóm khớp định vị đang thiếu, giữ thứ tự seed ổn định. Đây là ưu tiên tìm kiếm; mọi ứng viên vẫn phải qua lọc nguồn, thời gian và Auditor.
+- Trace ghi candidate_ids và accepted_ids; báo cáo từng câu ghi selected_from_graph_ids và cảnh báo khi số vòng bằng 0. Không coi chênh lệch điểm ở câu không mở rộng là bằng chứng lợi ích của mở rộng Graph.
+- Đọc danh sách dẫn chiếu ngoại lệ cùng văn bản từ nguồn, không mã hóa đáp án theo ID câu hỏi. Nhãn DRAFT, bộ 24 câu và artifact được giữ nguyên; không loại câu Graph không giúp.
+- Không resume v4 bằng mã mới. Chạy smoke rồi standard. Local tests không thay thế phép đo QA thật trên Kaggle; chưa có cam kết tăng điểm hoặc giảm latency.
+
+
+## V6: bản chạy GitHub sau rà soát nội dung
+
+Notebook mới mặc định `SOURCE='github'`, `RUN_NAME='graph_qa_v6'`, Qwen3:8b và Gemini 3.5 Flash Lite. Chỉ thêm artifact OFFLINE hiện có và bật secrets như trước; không cần thêm ZIP code. Run All fetch/checkout origin/main; bản sửa phải được push trước. Bắt đầu smoke, sau đó đổi PROFILE sang standard; không resume v5 bằng mã v6.
+
+Các sửa dùng chung ONLINE gồm: kiểm tra mốc số lần với số thứ tự, công thức diễn đạt thiếu nhóm phép toán, nghĩa vụ báo ngay đi kèm quyền và bảo toàn nghĩa vụ đó khi rút gọn câu trả lời. Kế hoạch căn cứ giữ riêng nguyên tắc trả lương, quyền chi tiêu lương, cơ sở thưởng, thủ tục quy chế thưởng và danh sách hành vi được yêu cầu giải thích. Không đổi Gold hoặc ép Graph chạy khi đã đủ căn cứ.
+
+Các bộ đo khác lấy cùng GitHub sẽ dùng những sửa ONLINE này khi cập nhật code. Không gộp kết quả trước/sau thành một lượt đo; ghi phiên bản và các hash của từng lần chạy. Các sửa này không bảo đảm lần chạy tiếp theo không còn lỗi; kiểm thử local và chạy lại kiểm tra trên đáp án cũ không thay thế QA inference thật.

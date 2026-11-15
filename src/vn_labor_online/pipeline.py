@@ -462,7 +462,7 @@ class OnlinePipeline:
                 'policy':'SEARCH_HINTS_ARE_NOT_ACCEPTED_EVIDENCE'})
             visited={x.unit_id for x in graph_seeds}; paths={x.unit_id:list(x.graph_path) for x in graph_seeds}
             relation_paths={x.unit_id:list(x.graph_relations) for x in graph_seeds}; direction_paths={x.unit_id:list(x.graph_directions) for x in graph_seeds}
-            frontier=list(visited)
+            frontier=list(dict.fromkeys(x.unit_id for x in graph_seeds))
             max_rounds=1 if analysis.route==Route.STANDARD and self.cfg.graph.mode=='adaptive' else min(self.cfg.graph.max_rounds,self.cfg.graph.max_hops)
             graph_started=time.monotonic()
             for round_no in range(1,max_rounds+1):
@@ -480,11 +480,14 @@ class OnlinePipeline:
                   summary=lambda r:graph_summary(r,self.store,round_no))
                 graph_stats['edges_visited']+=round_stats['edges_visited']; graph_stats['rounds']=round_no
                 graph_stats['critical_edges_followed']+=round_stats['critical_edges_followed']
+                candidate_ids=[x.unit_id for x in expanded]
+                accepted_graph_ids=[]
                 if expanded:
                     expanded,removed_more=temporal_filter(expanded,analysis.query_date,strict=not allow_fallback,query_date_end=analysis.query_date_end); removed+=removed_more
                     expanded,authority_removed_more=authority_filter(expanded,strict=not self.cfg.provisional_mode); authority_removed+=authority_removed_more
                     expanded=observed('source_audit',deterministic_audit,self.store,expanded,analysis.query_date,allow_fallback,analysis.query_date_end,summary=lambda v:{'nguon_graph_vuot_kiem_tra':sum(x.verified for x in v),'co_loi_cung':sum(not x.verified for x in v)})
                     expanded,round_decisions,round_warnings=observed('auditor',self.applicability.audit,[x for x in expanded if x.verified],env.normalized_query,analysis.legal_issues,analysis.facts,audit_outcome,plan=plan,summary=audit_summary)
+                    accepted_graph_ids=[x.unit_id for x in expanded]
                     decisions+=round_decisions; warnings+=round_warnings
                     verified=rerank(list({x.unit_id:x for x in verified+expanded}.values()),self.cfg)
                     next_plan=extend_plan_for_evidence(plan,verified,analysis.facts,analysis.query_date)
@@ -495,6 +498,7 @@ class OnlinePipeline:
                 trace.evidence_gaps.append({'round':round_no,'missing':state.gaps,'coverage':state.coverage})
                 trace.graph_round_details.append({'round':round_no,'frontier':len(frontier),'added':round_stats['nodes_added'],
                   'edges_visited':round_stats['edges_visited'],'relations':round_stats['critical_edges_followed'],'gaps':state.gaps,
+                  'candidate_ids':candidate_ids,'accepted_ids':accepted_graph_ids,
                   'budget_stop_reason':round_stats['stop_reason']})
                 if round_stats['stop_reason'] in {'TIME_BUDGET','NODE_BUDGET','EDGE_BUDGET'}:
                     budget_reason=round_stats['stop_reason']; break

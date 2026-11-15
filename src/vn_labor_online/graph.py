@@ -1,5 +1,6 @@
 from __future__ import annotations
 import heapq,re,time
+from collections.abc import Mapping
 from collections import defaultdict
 from .artifact_store import ArtifactStore
 from .config import GraphConfig
@@ -87,6 +88,10 @@ class GraphExplorer:
         fixed=self.cfg.mode=='fixed'
         preferred=preferred_relations(gaps,requirement_slots)
         query_terms=_terms(query)
+        # Only missing planned locators influence ordering. This is a search
+        # hint: no candidate is verified here and source/time audit still follows.
+        missing_locators=[locator for gap in gaps for group in requirement_slots.get(gap,[]) for locator in group] if isinstance(requirement_slots,Mapping) else []
+        from .taxonomy import locator_matches
         from .runtime import checkpoint
         preparation_expired=False
         for source in frontier_ids:
@@ -98,14 +103,19 @@ class GraphExplorer:
                 if target in visited: continue
                 if not fixed and (not preferred or direction not in preferred.get(edge['type'],set())): continue
                 score,parts=self._score(edge,target,gaps,query,source,direction,_query_terms=query_terms,_preferred=preferred)
-                heapq.heappush(queue,(-score,serial,target,source,edge,direction,parts)); serial+=1
+                unit=self.store.units_by_id.get(target)
+                matches=bool(unit and any(locator_matches(unit,loc) for loc in missing_locators))
+                parts['missing_requirement_match']=float(matches)
+                # Lexicographic priority protects a missing cited rule from
+                # keyword-heavy neighbours when the node budget is small.
+                heapq.heappush(queue,(-int(matches),-score,serial,target,source,edge,direction,parts)); serial+=1
             if preparation_expired:break
         added=[]; new_frontier=[]; edge_count=0; followed=[]; stop_reason='TIME_BUDGET' if preparation_expired else None
         while queue and len(new_frontier)<remaining_nodes and edge_count<remaining_edges:
             checkpoint()
             if (time.monotonic()-started)*1000>=time_limit:
                 stop_reason='TIME_BUDGET'; break
-            neg,_,node_id,parent,edge,direction,parts=heapq.heappop(queue); edge_count+=1
+            _,neg,_,node_id,parent,edge,direction,parts=heapq.heappop(queue); edge_count+=1
             if node_id in visited: continue
             visited.add(node_id); new_frontier.append(node_id)
             if edge['type'] in preferred: followed.append(edge['type'])

@@ -18,6 +18,14 @@ _LOCAL_ARTICLE=re.compile(
     r'(?:bộ\s+luật|luật|nghị\s+định|thông\s+tư|văn\s+bản)\s+này\b',re.I)
 
 
+# Each entry must be a locator, followed only by a list separator. An explicit
+# local-document suffix binds the WHOLE list; named foreign laws cannot leak in.
+_LIST_ENTRY=r'(?:điểm\s+[a-zđ]\s+)?(?:khoản\s+\d+[a-zđ]?\s+)?điều\s+\d+[a-zđ]?'
+_LOCAL_LIST=re.compile(r'(?P<entries>'+_LIST_ENTRY+r'(?:\s*(?:,\s*(?:và\s+)?|và\s+)'+_LIST_ENTRY+r')+)'
+    r'\s+(?:của\s+)?(?:bộ\s+luật|luật|nghị\s+định|thông\s+tư|văn\s+bản)\s+này\b',re.I)
+_ENTRY=re.compile(r'(?:điểm\s+(?P<point>[a-zđ])\s+)?(?:khoản\s+(?P<clause>\d+[a-zđ]?)\s+)?điều\s+(?P<article>\d+[a-zđ]?)',re.I)
+
+
 def exception_locators(item):
     if item.kind!='PROVISION' or not item.document_number or not item.article_number:
         return []
@@ -33,4 +41,13 @@ def exception_locators(item):
         own=(str(item.article_number),str(item.clause_number or ''),str(item.point_number or ''))
         target=(locator.article,str(locator.clause or ''),str(locator.point or ''))
         if target!=own and locator not in locators:locators.append(locator)
+    for match in _LOCAL_LIST.finditer(source):
+        prefix=source[max(0,match.start()-160):match.start()]
+        if not re.search(r'(?:\btrừ\s+(?:các\s+)?(?:trường\s+hợp|hợp\s+đồng|đối\s+tượng|người)|ngoại\s+lệ)[^.;]{0,155}$',prefix,re.I):
+            continue
+        for entry in _ENTRY.finditer(match.group('entries')):
+            locator=LegalLocator(documents=[item.document_number],article=entry.group('article'),
+                clause=entry.group('clause'),point=entry.group('point'))
+            if (locator.article,str(locator.clause or ''),str(locator.point or ''))!=(str(item.article_number),str(item.clause_number or ''),str(item.point_number or '')) and locator not in locators:
+                locators.append(locator)
     return locators[:8]

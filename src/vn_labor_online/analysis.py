@@ -49,6 +49,7 @@ NOTICE_DAYS=re.compile(
 CONTRACT_TERM=re.compile(r'\bhợp đồng(?:\s+lao động)?[^.;?!]{0,80}?(?P<duration>\d+)\s*tháng\b',re.I)
 NO_NOTICE=re.compile(r'\b(?:không|chưa)\s+(?:hề\s+)?(?:báo|thông báo)\s*trước(?!\s*\d)|\bnghỉ\s+ngay\b',re.I)
 MONTH_NUMBER_WORDS={'một':1,'hai':2,'ba':3,'bốn':4,'năm':5,'sáu':6,'bảy':7,'tám':8,'chín':9,'mười':10,'mười một':11,'mười hai':12}
+COUNTED_WORK_MONTHS=re.compile(r'(?<!\w)(\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín)\s*tháng\s+(?:làm việc|công tác|được tính (?:nghỉ|phép))',re.I)
 WORKED_MONTHS=re.compile(r'làm(?:\s+việc)?[^.;?!]{0,50}?(\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín)\s*tháng',re.I)
 _YEAR_NUMBER=r'\d+|mười hai|mười một|mười|một|hai|ba|bốn|năm|sáu|bảy|tám|chín'
 _SERVICE_EMPLOYER=r'(?:công\s+ty(?:\s+này)?|doanh\s+nghiệp(?:\s+này)?|người\s+sử\s+dụng\s+lao\s+động|nsdlđ)'
@@ -128,7 +129,7 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     extracted_facts=_extract_facts(lower,query_date,imprecise_date)
     uncertain_fields=[]
     for field,pattern in (('notice_days',NOTICE_DAYS),('worked_months',WORKED_MONTHS)):
-        if pattern.search(q) and field not in extracted_facts:
+        if (pattern.search(q) or field=='worked_months' and COUNTED_WORK_MONTHS.search(q)) and field not in extracted_facts:
             uncertain_fields.append(field)
             facts.pop(field,None)
     for field in ('notice_date','termination_date'):
@@ -212,6 +213,13 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     if minor_employment:
         topics=list(dict.fromkeys(topics+detect_topics('lao động chưa thành niên')))
     issues=list(dict.fromkeys([item for item in issues if item!='GENERAL']+[topic.issue for topic in topics])) or ['GENERAL']
+    # Asking permission for family/annual leave is not ending employment.
+    # Retain termination when an independent resignation/dismissal is explicit.
+    leave_context=unpaid_family_event(lower) or any(t in lower for t in ('nghỉ việc riêng','nghỉ phép','nghỉ hằng năm','nghỉ hàng năm','nghỉ không lương','nghỉ không hưởng lương'))
+    explicit_exit=re.search(r'chấm dứt|sa thải|thôi việc|đơn phương|hết hạn hợp đồng|hợp đồng hết hạn|nghỉ việc(?!\s+riêng)|nghỉ hẳn|nghỉ chính thức|trợ cấp mất việc',lower)
+    if leave_context and not explicit_exit:
+        issues=[issue for issue in issues if issue!='TERMINATION']
+        topics=[topic for topic in topics if topic.issue!='TERMINATION']
     if ('job_transfer' in {topic.key for topic in topics}
             and not any(term in lower for term in ('nghỉ việc','chấm dứt','đơn phương','xin nghỉ','sa thải'))):
         # Notice about temporary reassignment is not resignation notice.
@@ -240,7 +248,8 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     termination_compensation_question='TERMINATION' in issues and any(
       term in lower for term in ('bồi thường','đền bù','hoàn trả chi phí')) and any(
       term in lower for term in ('có phải','phải trả','có trách nhiệm','chịu trách nhiệm'))
-    outcome='LOOKUP' if refs and any(w in lower for w in ('quy định gì','nội dung','tra cứu')) else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if termination_compensation_question or any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có hợp pháp','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường','có phải bồi thường','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
+    literal_lookup=bool(refs and (any(w in lower for w in ('quy định gì','tra cứu')) or re.search(r'nội dung\s+(?:của\s+)?(?:điều|khoản|điểm)\b|(?:điều|khoản|điểm)\s+\w+[^.,;?!]{0,40}nội dung',lower)))
+    outcome='LOOKUP' if literal_lookup else 'FIND_CASE' if 'bản án' in lower or 'án lệ' in lower else 'COMPARE' if any(term in lower for term in ('so sánh','phân biệt','khác nhau')) else 'ASSESS_LEGALITY' if termination_compensation_question or any(w in lower for w in ('đúng luật','trái luật','trái pháp luật','có hợp pháp','có được','có quyền','đúng quy định','có đúng','đúng không','hậu quả pháp lý','đánh giá yêu cầu','phải bồi thường','có phải bồi thường','bồi thường bao nhiêu','có phải báo trước','phải báo trước không')) else 'EXPLAIN'
     if re.search(r'có vi phạm|có vượt|hợp pháp không|vượt[^.;?!]{0,60}không|trái pháp luật không|có(?: thể)? (?:khẳng định|kết luận)',lower):
         outcome='ASSESS_LEGALITY'
     if re.search(r'^(?:khi nào|thế nào là|định nghĩa|khái niệm|trường hợp nào)',lower):
@@ -251,6 +260,11 @@ def analyze(env:QueryEnvelope,explicit_date:str|None=None,supplied_facts:dict|No
     if framework and not concrete_verdict: outcome='EXPLAIN'
     if re.search(r'(?:áp dụng|xử lý)[^.?!]{0,100}(?:giống|như)[^.?!]{0,100}(?:không|hay không)\s*[?!.]*$',lower):
         outcome='COMPARE'
+    conditional_framework=(not re.search(r'\b(?:tôi|chúng tôi|của mình)\b',lower)
+        and re.search(r'\b(?:nếu|khi|hết thời|trường hợp)\b',lower)
+        and re.search(r'quy định|quy tắc|theo điều|bộ luật',lower)
+        and not re.search(r'có hợp pháp|có đúng|trái luật|trái pháp luật|đúng hay sai|đã (?:sa thải|chấm dứt)',lower))
+    if conditional_framework and outcome=='ASSESS_LEGALITY':outcome='EXPLAIN'
     if annual_leave_combination_only(lower): outcome='EXPLAIN'
     if unemployment_framework: outcome='EXPLAIN'
     if _temporal_selection_only(lower):
@@ -372,8 +386,8 @@ def _probation_group_fact(query):
     from .fact_polarity import assertion_uncertain
     for group,pattern in (
       ('MANAGER',r'(?:công việc|vị trí) (?:của người )?quản lý doanh nghiệp|thuộc diện người quản lý doanh nghiệp'),
-      ('COLLEGE',r'(?:công việc|chức danh|vị trí)(?:\s+(?:nghề nghiệp|chuyên môn|này|của tôi)){0,2}\s+(?:cần|yêu cầu|đòi hỏi) (?:trình độ )?(?:chuyên môn,? kỹ thuật )?(?:từ )?cao đẳng(?: trở lên)?'),
-      ('INTERMEDIATE',r'(?:công việc|chức danh|vị trí)(?:\s+(?:nghề nghiệp|chuyên môn|này|của tôi)){0,2}\s+(?:cần|yêu cầu|đòi hỏi) (?:trình độ )?trung cấp|công nhân kỹ thuật|nhân viên nghiệp vụ'),
+      ('COLLEGE',r'(?:công việc|chức danh|vị trí)(?:\s+(?:nghề nghiệp|chuyên môn|tuyển dụng|đang tuyển|này|của tôi|của chúng tôi)){0,3}\s+(?:cần|yêu cầu|đòi hỏi) (?:trình độ )?(?:chuyên môn,? kỹ thuật )?(?:từ )?cao đẳng(?: trở lên)?'),
+      ('INTERMEDIATE',r'(?:công việc|chức danh|vị trí)(?:\s+(?:nghề nghiệp|chuyên môn|tuyển dụng|đang tuyển|này|của tôi|của chúng tôi)){0,3}\s+(?:cần|yêu cầu|đòi hỏi) (?:trình độ )?trung cấp|công nhân kỹ thuật|nhân viên nghiệp vụ'),
       ('OTHER',r'công việc khác|công việc phổ thông')):
         for match in re.finditer(pattern,q):
             if assertion_uncertain(q,match.start(),match.end()):continue
@@ -392,7 +406,7 @@ def _notice_exception_fact(query):
     pattern=re.compile(
         r'\b(?P<negative>(?:không|chưa|chẳng)(?:\s+(?:hề|phải|có|bất|kỳ|tình|tiết|nào)){0,7}\s+)?'
         r'(?P<membership>(?:thuộc|rơi vào)\s+(?:trường hợp|diện|nhóm)\s+)?'
-        r'(?:(?:được(?:\s+quyền)?\s+)?(?:nghỉ(?:\s+việc)?\s+)?không\s+(?:cần|phải)\s+báo trước'
+        r'(?:(?:được(?:\s+quyền)?\s+)?(?:nghỉ(?:\s+việc)?\s+)?không\s+(?(membership)(?:(?:cần|phải)\s+)?|(?:cần|phải)\s+)báo trước'
         r'|(?:được\s+)?miễn(?:\s+thời hạn)?\s+báo trước)',re.I)
     matches=[]
     for match in pattern.finditer(query):
@@ -525,7 +539,8 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
             isinstance(facts.get('worked_months'),int) and 0<=facts['worked_months']<60
             and re.search(r'\b(?:vừa|mới)(?:\s+(?:làm|việc|đủ|tròn|được|có)){0,5}\s+\d+\s+tháng\b',query,re.I)
             and not re.search(r'\b(?:trong năm|năm nay)\b',query,re.I))
-        base_only=deferred_topic(query.lower(),'thâm niên') or bool(re.search(
+        no_seniority_bonus=bool(re.search(r'\b(?:chưa|không)\s+(?:có|đủ)\s+thâm niên(?:\s+để)?\s+(?:tăng|được tăng|tính tăng)',query,re.I))
+        base_only=no_seniority_bonus or deferred_topic(query.lower(),'thâm niên') or bool(re.search(
             r'\b(?:chỉ\s+(?:hỏi|xét)|riêng)\s+(?:mức\s+)?cơ sở\b',query,re.I))
         if personal_leave_amount and not base_only and not first_service_period and not isinstance(facts.get('service_years'),int):
             missing.append('Bạn đã làm việc liên tục cho cùng người sử dụng lao động bao nhiêu năm để kiểm tra ngày nghỉ tăng theo thâm niên?')
@@ -685,8 +700,10 @@ def missing_fact_questions(issues:list[str],outcome:str,facts:dict,query:str,que
 def _notice_days_fact(query):
     from .fact_polarity import assertion_uncertain
     values={};uncertain=False
+    exemption,exemption_span=_notice_exception_fact(query)
     for pattern in (NO_NOTICE,NOTICE_DAYS):
         for match in pattern.finditer(query):
+            if pattern is NO_NOTICE and exemption_span is not None and exemption_span.start()<=match.start()<exemption_span.end():continue
             if assertion_uncertain(query,match.start(),match.end()):
                 uncertain=True;continue
             if pattern is NO_NOTICE and match.group().lower().startswith('nghỉ'):
@@ -705,8 +722,9 @@ def _notice_days_fact(query):
 def _worked_months_fact(query):
     from .fact_polarity import assertion_uncertain
     values={};uncertain=False
-    for match in WORKED_MONTHS.finditer(query):
-        prefix=query[match.start():match.start(1)]
+    extra=[m for m in COUNTED_WORK_MONTHS.finditer(query) if not any(t.start()<=m.start(1)<t.end() for t in CONTRACT_TERM.finditer(query))]
+    for match in sorted([*WORKED_MONTHS.finditer(query),*extra],key=lambda m:m.start()):
+        prefix=re.split(r'[.;?!,]',query[max(0,match.start()-45):match.start(1)])[-1]
         approximate=bool(re.search(r'(?:chưa\s+(?:đủ|tới)|dưới|hơn|trên|khoảng|gần|ít\s+nhất|tối\s+đa)\s*$',prefix,re.I))
         if approximate or assertion_uncertain(query,match.start(),match.end()):
             uncertain=True;continue

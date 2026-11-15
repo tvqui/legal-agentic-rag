@@ -105,7 +105,7 @@ def citations(items:list[Evidence])->list[Citation]:
     return [Citation(evidence_id=x.unit_id,title=x.document_title,document_number=x.document_number,
       article=x.article_number,clause=x.clause_number,point=x.point_number,
       law_version=' → '.join(v for v in (x.valid_from,x.valid_to) if v) or None,official_url=x.source_url,
-      instrument_number=x.document_number,source_span=x.provenance_span,
+      instrument_number=x.original_instrument_number or x.document_number,source_span=x.provenance_span,
       document_type=document_type(x.document_number,x.document_title,x.document_type),issuer=x.issuer) for x in items]
 def _norm_reference(value:str)->str:
     return re.sub(r'[^0-9A-ZĐ]','',value.upper())

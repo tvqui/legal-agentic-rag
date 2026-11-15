@@ -153,7 +153,7 @@ def deferred_topic(query,term):
     if not mentions:return False
     for match in mentions:
         prefix=re.split(r'[.;!?,:]|\b(?:nhưng|ngoài ra)\b',query.lower()[max(0,match.start()-100):match.start()])[-1]
-        deferred=re.search(r'\b(?:chưa\s+(?:tính|xét)|(?:không|chưa)\s+(?:hỏi|bàn|đánh giá)(?:\s+về)?)(?:\s+\w+){0,8}\s*$',prefix)
+        deferred=re.search(r'\b(?:(?:không|chưa)\s+(?:tính|xét)|(?:không|chưa)\s+(?:hỏi|bàn|đánh giá)(?:\s+về)?)(?:\s+\w+){0,8}\s*$',prefix)
         employer=re.search(r'\b(?:công ty|doanh nghiệp|người sử dụng lao động|nsdlđ)\b',prefix)
         if not deferred or employer:return False
     return True
@@ -328,7 +328,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         add('CONTRACT.PROBATION_EXCLUSION')
     probation_repeat=has('thử việc') and (has('hai lần','2 lần','nhiều lần','lần hai','lần thứ hai','lần thứ 2','thử việc lại')
       or bool(re.search(r'(?:thử việc[^.?!]{0,55}(?:thêm|tiếp|lại)[^.?!]{0,25}(?:lần|đợt)|thử việc[^.?!]{0,55}(?:lần|đợt)\s+nữa)',q)))
-    duration_request=bool(facts.get('probation_duration_value')) or has('tối đa','bao lâu','mấy ngày','mấy tháng','thời hạn thử việc','các nhóm thời gian thử việc') or probation_duration(query) is not None or bool(re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',q))
+    probation_context=' '.join(part for part in re.split(r'[.;?!]|\b(?:còn khi|khi chính|khi tôi|một ý riêng)\b',q) if any(term in part for term in ('thử việc','làm thử')))
+    duration_request=bool(facts.get('probation_duration_value')) or any(term in probation_context for term in ('tối đa','bao lâu','mấy ngày','mấy tháng','thời hạn thử việc','các nhóm thời gian thử việc')) or probation_duration(probation_context) is not None or bool(re.search(r'(?:thử việc[^.]{0,50}\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\b|\b(?:\d+|một|hai|ba)\s*(?:ngày|tháng)\s+thử việc)',probation_context))
     if has('thử việc') and duration_request:
         add('CONTRACT.PROBATION_DURATION')
     if probation_repeat:
@@ -375,7 +376,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
             add('WAGE.PAYMENT_DISPOSAL')
         if has('ngừng việc') and not has('đình công'):
             add('WAGE.DOWNTIME')
-    overtime=affirmative_phrase(q,('làm thêm','làm ngoài giờ','tăng ca'))
+    overtime=any(affirmative_phrase(q,(term,)) and not deferred_topic(q,term) for term in ('làm thêm','làm ngoài giờ','tăng ca'))
     night=has('ban đêm','làm đêm','ca đêm','giờ đêm')
     holiday_work=any(affirmative_phrase(q,(m.group(),)) for m in re.finditer(
         r'\b(?:đi\s+)?làm(?:\s+việc)?(?:\s+vào)?(?:\s+một)?(?:\s+ngày)?\s+(?:nghỉ\s+)?lễ\b',q))
@@ -402,7 +403,8 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
     stated_hours=bool(re.search(r'\b\d+\s*(?:giờ|tiếng)\s*(?:mỗi|một|trong (?:một|1)|/|1)\s*(?:ngày|tuần)',q))
     weekly_arrangement=bool(re.search(r'(?:bố trí|tổ chức|sắp xếp|tính|theo)[^.;?!]{0,55}\btuần\b',q))
     hours_assessment=has('vi phạm','hợp pháp','có đúng','đúng không','có vượt','quá giới hạn','khẳng định','kết luận')
-    if (((has('thời giờ làm việc bình thường','giờ làm việc bình thường')
+    if ((not overtime and has('thời gian làm việc','thời giờ làm việc','giờ làm') and has('bình thường','theo ngày') and bool(re.search(r'giới hạn|tối đa|(?:bao nhiêu|mấy)\s+(?:giờ|tiếng)',q)))
+        or ((has('thời giờ làm việc bình thường','giờ làm việc bình thường')
           or has('thời giờ bình thường','giờ bình thường')) and has('giới hạn','tối đa','bao nhiêu giờ','mấy giờ'))
         or (weekly_arrangement and has('giờ','tiếng') and (stated_hours or hours_assessment))
         or (stated_hours and hours_assessment and has('giờ làm việc bình thường','không có làm thêm','không làm thêm','không có thời gian làm thêm'))):
@@ -425,6 +427,7 @@ def classify_subissues(query: str, facts: dict, issues: list[str]) -> list[str]:
         ('ENTERPRISE_TRANSFER', ('sáp nhập', 'chia tách doanh nghiệp', 'chuyển quyền sở hữu doanh nghiệp')),
     ):
         mechanism=(facts.get('mutual_termination_agreement') is not False and affirmative_phrase(q,terms)) if label=='MUTUAL_AGREEMENT' else has(*terms)
+        if label=='EXPIRY':mechanism=mechanism or (contract_expiry_context(q) and not continues)
         if label=='DISMISSAL':
             from .termination_context import action_negated
             mechanism=any(not action_negated(q,m.start()) for m in re.finditer('sa thải',q))
@@ -740,6 +743,14 @@ def profile_requirements(analysis: QueryAnalysis) -> dict[str, list[list[LegalLo
                 if analysis.facts.get('special_occupation') is True:
                     require('special_notice_delegation', [loc('35', '1', 'd')])
                     require('special_notice_rule', [loc('7', '2', 'a', documents=['145/2020/NĐ-CP'])])
+            elif (not historical and analysis.facts.get('contract_type')=='FIXED_TERM'
+              and analysis.facts.get('special_occupation') is True
+              and isinstance(analysis.facts.get('contract_duration_months'),int)
+              and analysis.facts['contract_duration_months']>0):
+                require('employee_unilateral_rule',[loc('35','1','d')])
+                require('special_notice_delegation',[loc('35','1','d')])
+                require('special_notice_scope',[loc('7','1',documents=['145/2020/NĐ-CP'])])
+                require('special_notice_rule',[loc('7','2','a' if analysis.facts['contract_duration_months']>=12 else 'b',documents=['145/2020/NĐ-CP'])])
             elif (not historical and analysis.facts.get('contract_type') == 'FIXED_TERM'
               and analysis.facts.get('special_occupation') is not True
               and isinstance(analysis.facts.get('contract_duration_months'),int)

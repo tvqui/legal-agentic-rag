@@ -55,7 +55,7 @@ question's confirmed facts. When scope_exclusions is supplied, judge completenes
 Distinguish a CASE from a statutory PROVISION: a case narrative or holding alone does not establish a generally binding rule. Preserve its analogical role and source authority.
 Check actor, norm polarity (permission/obligation/prohibition), inherited article
 and clause context, scope, exceptions, prerequisites, dates, transitional rules,
-all quantities, their bases/units, and calculations. An event-triggered duty does not establish an advance deadline. A consequence under a conditional sentence cannot be stated as unconditional merely because the same source also contains an unconditional rule on another issue. Check the antecedent of that particular consequence against the confirmed facts or retain it explicitly in the claim. A rule about a specific job,
+all quantities, their bases/units, and calculations. Check ordinal event counts as well as cardinal counts. Preserve parentheses and aggregation in formulas. Do not omit a reporting duty paired with a permission. An event-triggered duty does not establish an advance deadline. A consequence under a conditional sentence cannot be stated as unconditional merely because the same source also contains an unconditional rule on another issue. Check the antecedent of that particular consequence against the confirmed facts or retain it explicitly in the claim. A rule about a specific job,
 training, arbitration, insurance, electronic platform or court procedure must
 not be generalized to all workers or unrelated rights. A heading, indirect
 definition or policy-setting factor is not the operative rule for an entitlement.
@@ -353,6 +353,14 @@ def reject_invalid_support(review,draft,pack):
             code=review_error_code(exc);rejected[decision.claim_id]=code
             decision.verdict='UNSUPPORTED';decision.grounding=[]
             decision.reason='Kiểm tra tại chỗ không xác nhận được mệnh đề hoặc toàn bộ nguồn đính kèm: '+code
+    from .claim_validation import omitted_coupled_reporting_duties
+    supported_claims=[by_claim[d.claim_id] for d in checked.claims if d.verdict=='SUPPORTED']
+    coupled=omitted_coupled_reporting_duties(supported_claims,pack.evidence)
+    for decision in checked.claims:
+        if decision.claim_id not in coupled:continue
+        rejected[decision.claim_id]=coupled[decision.claim_id]
+        decision.verdict='UNSUPPORTED';decision.grounding=[]
+        decision.reason='Quyền được viện dẫn đi kèm nghĩa vụ phải báo ngay cho người quản lý trong chính nguồn; cần nêu đủ điều kiện này. '+coupled[decision.claim_id]
     if rejected:
         checked.question_fully_addressed=False
         for part in checked.coverage:
@@ -578,7 +586,7 @@ def review_service_unavailable(report):
     return bool(re.fullmatch(r'(?:GEMINI|OLLAMA|HTTP_JSON)_(?:HTTP_5\d{2}|TIMEOUT|CONNECTION_ERROR)|TimeoutError|ConnectionError',code))
 
 
-def retain_task_grounded_claims(draft,review):
+def retain_task_grounded_claims(draft,review,pack=None):
     """A fully checked answer publishes the proof assigned to user tasks.
 
     This is exact ID accounting, not fuzzy paraphrase deletion. Independent
@@ -591,6 +599,20 @@ def retain_task_grounded_claims(draft,review):
     assigned={uid for part in review.coverage for uid in part.claim_ids}
     if not assigned:return draft,[]
     kept=[claim for claim in draft.claims if claim.claim_id in assigned]
+    if pack is not None:
+        # Minimal task accounting must not drop a mandatory qualifier that was
+        # independently supported but omitted from the model's coverage IDs.
+        from .claim_validation import omitted_coupled_reporting_duties
+        supported={decision.claim_id for decision in review.claims if decision.verdict=='SUPPORTED'}
+        missing=omitted_coupled_reporting_duties(kept,pack.evidence)
+        for extra in draft.claims:
+            if not missing:break
+            if extra.claim_id in assigned or extra.claim_id not in supported:continue
+            after=omitted_coupled_reporting_duties(kept+[extra],pack.evidence)
+            if len(after)<len(missing):
+                assigned.add(extra.claim_id);kept.append(extra);missing=after
+        if missing:raise StructuredOutputError('COUPLED_REPORTING_DUTY_OMITTED_AFTER_SELECTION')
+        kept=[claim for claim in draft.claims if claim.claim_id in assigned]
     removed=[claim.claim_id for claim in draft.claims if claim.claim_id not in assigned]
     return draft.model_copy(update={'claims':kept}),removed
 
@@ -620,6 +642,9 @@ def compose_answer(provider, draft, pack):
         'For a case assessment, state the conclusion limited to the facts and issue asked; quoting a rule alone is insufficient. '
         'Remove equivalent restatements and unrelated topics. Preserve EVERY distinct condition, exception, duty, consequence, '
         'quantity, temporal trigger and qualification needed by the question. Do not replace conditional rules with unconditional conclusions. '
+        'Keep numeric limits attached to their original trigger/base: an additional allowance after the first event is not a new allowance after the second. '
+        'Render formulas with explicit parentheses and multiplication signs; make the quantity multiplied by a count unambiguous. '
+        'When a permission carries an immediate reporting duty, state the duty and recipient in the same claim or a distinct cited claim. '
         'Do not invent missing premises, facts, sources, dates, URLs or legal locators; do not correct OCR by guessing. '
         'Keep enactment year distinct from effective year and consolidation number. '
         'Include the source instrument and precise Article/Clause/Point once per requested issue when supplied in metadata; '
@@ -689,7 +714,7 @@ def review_answer(provider, draft, pack, repair_attempts=1):
             missing = list(dict.fromkeys(review.missing_requirements + [t.missing for t in review.coverage
                 if t.status != 'ANSWERED']))
             if not rejected and review.question_fully_addressed:
-                checked,unassigned=retain_task_grounded_claims(candidate,review)
+                checked,unassigned=retain_task_grounded_claims(candidate,review,pack)
                 return checked.model_copy(update={'semantic_review':{'status':'PASS','iterations':reports,
                     **({'removed_unassigned_claim_ids':unassigned} if unassigned else {})}}), []
             # The reviewed subset already answers every task independently.
@@ -701,7 +726,7 @@ def review_answer(provider, draft, pack, repair_attempts=1):
             if (supported and rejected and set(rejected)<=irrelevant
                     and review.question_fully_addressed and not missing):
                 checked,unassigned=retain_task_grounded_claims(candidate.model_copy(update={
-                    'claims':[c for c in candidate.claims if c.claim_id in supported]}),review)
+                    'claims':[c for c in candidate.claims if c.claim_id in supported]}),review,pack)
                 return checked.model_copy(update={'semantic_review':{'status':'PASS','iterations':reports,
                         'rejected_claim_ids':rejected,'retained_review_index':len(reports)-1,
                         'removed_irrelevant_claims':True,
