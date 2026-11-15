@@ -38,6 +38,22 @@ class JudgingTests(unittest.TestCase):
         r,g,c,f,_=self.fixture();f['tasks']=[];provider=Mock();provider.structured.return_value=f
         with self.assertRaises(ValueError):grade(provider,r,g,c)
 
+    def test_display_quote_is_not_a_second_source_for_the_judge(self):
+        r,g,c,_,_=self.fixture()
+        r['response']['citations'][0]['source_text']='DISPLAY_ONLY_CANARY'
+        payload,status=faithful_payload(r,g['expected_tasks'],c)
+        self.assertEqual(status,'AVAILABLE')
+        self.assertNotIn('DISPLAY_ONLY_CANARY',json.dumps(payload))
+        self.assertEqual(payload['cited_sources'][0]['source_text'],'ACTUAL_SOURCE')
+
+    def test_stacked_formula_is_flagged_without_changing_ai_score(self):
+        from judging import local_answer_checks
+        r,g,c,f,s=self.fixture()
+        c['u']['source_text']='Tiền\nlương\n=\nMức\nlương\n*\nSố\ngiờ'
+        issues=local_answer_checks(r,c)
+        self.assertEqual(issues['status'],'CHECKED')
+        self.assertTrue(any('SOURCE_FORMULA_LAYOUT_REQUIRES_REVIEW' in i['codes'] for i in issues['issues']))
+
     def test_missing_actual_source_is_na_not_an_unsupported_claim(self):
         r,g,c,f,_=self.fixture();c['u'].pop('source_text');provider=Mock();provider.structured.return_value=f
         result=grade(provider,r,g,c)

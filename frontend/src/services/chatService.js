@@ -19,14 +19,7 @@ export class ApiError extends Error {
   }
 }
 
-function claimExcerpt(payload, evidenceId) {
-  return payload.claims
-    ?.filter((claim) => claim.evidence_ids?.includes(evidenceId))
-    .map((claim) => claim.text)
-    .join('\n') || 'Nội dung được dẫn chiếu trong câu trả lời.'
-}
-
-function mapCitation(citation, payload, index) {
+function mapCitation(citation, index) {
   const effectiveDate = citation.law_version?.split(' → ')[0] || null
   return {
     id: citation.evidence_id,
@@ -40,7 +33,10 @@ function mapCitation(citation, payload, index) {
     point: citation.point ? `Điểm ${citation.point}` : '',
     issuedDate: null,
     effectiveDate,
-    excerpt: claimExcerpt(payload, citation.evidence_id),
+    // Preserve the artifact text exactly, including whitespace and punctuation.
+    // An old backend must never turn generated claims into a source quotation.
+    excerpt: typeof citation.source_text === 'string' && citation.source_text.trim() ? citation.source_text : null,
+    excerptOrigin: typeof citation.source_text === 'string' && citation.source_text.trim() ? 'ARTIFACT_SOURCE_TEXT' : null,
     sourceUrl: citation.official_url || null,
     sourceSpan: citation.source_span || {},
   }
@@ -205,7 +201,7 @@ export const chatService = {
     if (typeof payload.answer !== 'string' || !['SUFFICIENT', 'PARTIAL_ALLOWED', 'NEED_MORE_FACTS', 'INSUFFICIENT_EVIDENCE', 'CONFLICTING_EVIDENCE', 'ABSTAIN', 'ERROR'].includes(payload.status) || !Array.isArray(payload.citations) || payload.citations.some(item => !item || typeof item.evidence_id !== 'string')) {
       throw new ApiError('Cấu trúc câu trả lời từ dịch vụ không hợp lệ.', 200, null, 'INVALID_RESPONSE')
     }
-    const citations = payload.citations.map((citation, index) => mapCitation(citation, payload, index))
+    const citations = payload.citations.map((citation, index) => mapCitation(citation, index))
     return {
       id: payload.query_id || crypto.randomUUID(),
       conversationId,

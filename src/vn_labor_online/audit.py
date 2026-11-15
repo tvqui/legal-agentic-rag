@@ -17,6 +17,8 @@ def deterministic_audit(store:ArtifactStore,items:list[Evidence],query_date:str|
         severe={'EMPTY_OR_DECORATIVE_TEXT','CORRUPTED_CHARACTERS','SUSPECT_OCR_WORD','SUSPECT_LEGAL_LOCATOR','SUSPECT_LEGAL_TERM'}
         issues+=['SOURCE_TEXT_QUALITY:'+code for code in language_issues(readable,allow_admin=True) if code in severe]
         if not source: issues.append('UNKNOWN_UNIT_ID')
+        if source and item.source_text!=source.get('source_text'):
+            issues.append('SOURCE_TEXT_NOT_FROM_UNIT')
         if item.document_id and item.document_id not in store.nodes_by_id: issues.append('UNKNOWN_DOCUMENT_NODE')
         if source and item.source_url!=(source.get('source_url') or None): issues.append('SOURCE_URL_NOT_FROM_UNIT')
         if source and item.original_instrument_number is not None and item.original_instrument_number!=(source.get('instrument_number') or source.get('document_number')):
@@ -106,7 +108,8 @@ def citations(items:list[Evidence])->list[Citation]:
       article=x.article_number,clause=x.clause_number,point=x.point_number,
       law_version=' → '.join(v for v in (x.valid_from,x.valid_to) if v) or None,official_url=x.source_url,
       instrument_number=x.original_instrument_number or x.document_number,source_span=x.provenance_span,
-      document_type=document_type(x.document_number,x.document_title,x.document_type),issuer=x.issuer) for x in items]
+      document_type=document_type(x.document_number,x.document_title,x.document_type),issuer=x.issuer,
+      source_text=x.source_text) for x in items]
 def _norm_reference(value:str)->str:
     return re.sub(r'[^0-9A-ZĐ]','',value.upper())
 def _relevance_text(text):
@@ -195,6 +198,7 @@ def reference_audit(answer:str,items:list[Evidence],refs:list[Citation],claims:l
         expected_version=' → '.join(v for v in (item.valid_from,item.valid_to) if v) or None
         if ref.law_version!=expected_version: problems.append('CITATION_VERSION_MISMATCH')
         if ref.source_span!=item.provenance_span: problems.append('CITATION_SOURCE_SPAN_MISMATCH')
+        if ref.source_text!=item.source_text: problems.append('CITATION_SOURCE_TEXT_MISMATCH')
     allowed_urls={x.source_url for x in items if x.source_url}
     for url in re.findall(r'https?://[^\s)\]>]+',answer):
         if url.rstrip('.,;') not in allowed_urls: problems.append('FABRICATED_URL_IN_ANSWER:'+url.rstrip('.,;'))

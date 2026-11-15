@@ -975,9 +975,18 @@ body,
 }
 
 .source-excerpt blockquote {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     font: 13px/1.65 var(--sans);
     margin: 9px 0 0;
     color: var(--muted)
+}
+
+.source-excerpt-note {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 12px 0 0
 }
 
 .source-metadata {

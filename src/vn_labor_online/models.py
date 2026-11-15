@@ -177,6 +177,8 @@ class Citation(BaseModel):
     clause:str|None=None; point:str|None=None; law_version:str|None=None; official_url:str|None=None
     instrument_number:str|None=None; source_span:dict[str,Any]=Field(default_factory=dict)
     document_type:str|None=None; issuer:str|None=None
+    # Exact artifact source text, never a generated claim or compressed view.
+    source_text:str|None=None
 class RuleProposition(BaseModel):
     model_config=ConfigDict(extra='forbid')
     predicate:Literal['PROBATION_LIMIT']

@@ -647,6 +647,8 @@ class LegalAdjudicator:
                         draft=observed('answer_quality',compose_answer,self.review_provider,draft,pack,
                             technology='Gemini · soạn câu trả lời gắn với nguồn',summary=lambda d:{'so_luan_diem':len(d.claims)})
                     warnings.append('ANSWER_COMPOSED_FOR_REVIEW')
+                    if draft.semantic_review.get('composition_rejected_claim_ids'):
+                        warnings.append('ANSWER_COMPOSITION_PARTIAL_CANDIDATE_FOR_REVIEW')
                 except OperationBudgetExceeded:
                     # A local budget limit is not a Gemini service failure.
                     # Use the remaining time to audit the unchanged candidate;

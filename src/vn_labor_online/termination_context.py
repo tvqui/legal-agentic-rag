@@ -72,6 +72,8 @@ def contract_continuation_facets(query):
     q=fold(query)
     repeat=bool(re.search(r'\b(?:hai|ba|2|3)\s+hop dong(?: lao dong)?[^.;?!]{0,35}(?:lien tiep|xac dinh thoi han)|'
         r'\b(?:so lan|may lan|ky them|ky lai|tai ky|hop dong thu ba|lan thu ba|lan thu 3|ky 3 lan)\b',q))
+    # Ordinals name the already executed contract, not a fresh renewal allowance.
+    repeat=repeat or bool(re.search(r'\b(?:hop dong(?: lao dong)?(?: xac dinh thoi han)?|hdld)(?: lan)? thu (?:hai|ba|tu|nam|sau|bay|tam|chin|muoi|[2-9]\d*)\b',q))
     continued=any(term in q for term in ('tiep tuc lam','van lam','van di lam','ky tiep','ky moi','hop dong moi','hop dong cu','loai hop dong','tro thanh','thuoc loai'))
     if not repeat and not (contract_expiry_context(q) and continued):return []
     rights=any(t in q for t in ('quyen loi','hop dong cu','tien luong trong','luong trong thoi gian'))

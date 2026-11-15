@@ -9,7 +9,7 @@ DEFAULTS=dict(device='cuda:0', cache='.cache/graph_qa', llm_model='qwen3:8b',
  ollama_url='http://127.0.0.1:11434/api/chat',review_model='gemini-3.1-flash-lite',
  semantic_review=True, request_timeout_seconds=180,provider_timeout_seconds=45,
  repetitions=1,seed=42,k=10,reranker_revision='953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e',
- judge_enabled=False,judge_model='gemini-3.1-flash-lite',judge_timeout_seconds=60)
+ service_recovery_enabled=False,judge_enabled=False,judge_model='gemini-3.1-flash-lite',judge_timeout_seconds=60)
 
 def sha(path):
     h=hashlib.sha256()
@@ -43,7 +43,7 @@ def settings(path):
         if type(s[field]) is not int or s[field]<0 or (field!='seed' and s[field]<1):raise ValueError('Invalid '+field)
     for field in ('request_timeout_seconds','provider_timeout_seconds','judge_timeout_seconds'):
         if type(s[field]) not in (int,float) or not 10<=s[field]<=(1800 if field=='request_timeout_seconds' else 180):raise ValueError('Invalid timeout')
-    for field in ('semantic_review','judge_enabled'):
+    for field in ('semantic_review','judge_enabled','service_recovery_enabled'):
         if type(s[field]) is not bool:raise ValueError('Invalid boolean')
     if s['judge_enabled']:raise ValueError('Judge runs separately AFTER generation; set judge_enabled=false')
     import re

@@ -41,10 +41,10 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(make_notebook.validate(self.nb),10)
         saved=json.loads((Path(__file__).parent/'Kaggle_Graph_QA.ipynb').read_text(encoding='utf-8'))
         self.assertEqual(saved,self.nb)
-    def test_default_uses_github_and_separate_v8_output(self):
+    def test_default_uses_github_and_separate_v9_output(self):
         scope={};exec(compile(''.join(self.nb['cells'][1]['source']),'<config>','exec'),scope)
         self.assertEqual(scope['SOURCE'],'github')
-        self.assertEqual(scope['RUN_NAME'],'graph_qa_v8')
+        self.assertEqual(scope['RUN_NAME'],'graph_qa_v9')
         self.assertEqual(scope['PROFILE'],'standard')
         self.assertEqual(scope['REVIEW_MODEL'],'gemini-3.5-flash-lite')
         self.assertFalse(scope['RESUME'])

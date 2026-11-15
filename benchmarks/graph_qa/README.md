@@ -1,4 +1,4 @@
-**Bản hiện tại: v8, SOURCE=github, PROFILE=standard.**
+**Bản hiện tại: v9, SOURCE=github, PROFILE=standard.**
 
 # Phép đo Graph QA theo cặp
 
@@ -168,3 +168,14 @@ Dùng `SOURCE='github'`, `RUN_NAME='graph_qa_v8'`, `PROFILE='standard'`; không 
 - Phân biệt từ có dấu “thưởng” với “thường”, bổ sung định vị căn cứ cho trách nhiệm thiệt hại dụng cụ và khấu trừ lương, kiểm tra biến thể điều kiện của mốc số lần. Đây là sửa cơ chế ONLINE chung, không viết đáp án theo ID câu hỏi.
 
 V7 chỉ một câu thực sự chạy mở rộng Graph; chênh lệch điểm ở các câu không mở rộng không chứng minh hiệu quả của bước mở rộng. V8 không ép Graph chạy khi đã đủ căn cứ, không sửa Gold và không bảo đảm Graph sẽ thắng. Cần đọc cả trace ứng viên, căn cứ được chấp nhận và câu trả lời, không chỉ điểm AI.
+
+
+## V9: đối chứng có ghi nhận phục hồi dịch vụ
+
+Notebook giữ SOURCE=github, PROFILE=standard, đổi RUN_NAME=graph_qa_v9; không resume v8 bằng mã mới. Model, 24 câu, Gold DRAFT và artifact không đổi. RECOVER_SERVICE_ERRORS=True được chốt trong settings trước khi đo: sau lịch ban đầu, chỉ cặp có câu bị chặn vì hậu kiểm Gemini HTTP 500/502/503/504 mới được đo lại cả hai nhánh một lần. Không thử lại thiếu căn cứ pháp lý, lỗi không rõ, quota hoặc timeout Ollama; không đổi key/model.
+
+Mọi lượt ban đầu nằm trong attempt_journal.jsonl và retry_history.jsonl. Bảng dùng lượt cuối phải được đọc cùng total_service_failure_attempts, service_recovery_attempts và toàn bộ thời gian trong attempt_history_summary.json. Không so sánh bảng đã phục hồi với bảng chưa phục hồi mà không công bố chính sách này. Khi crash làm kết quả yêu cầu chưa rõ, bộ đo dừng, không tự gửi lại.
+
+Sửa ONLINE chung: nhận diện thứ tự hợp đồng để định vị cơ chế ký tiếp; không xóa dấu =/* đơn lẻ trong nguồn; giữ dòng công thức thay vì ép thành văn xuôi; không đoán ngoặc hoặc sửa artifact. Cảnh báo bố cục công thức là yêu cầu đối chiếu, không tự hạ/nâng điểm AI. Phần soạn đáp án có một ý sai không còn làm mất toàn bộ các ý khác: giữ ứng viên còn lại nhưng vẫn bắt buộc hậu kiểm và kiểm tra độ đủ.
+
+Các sửa nguyên văn source-excerpt và chọn tên Secret thủ công được giữ; không luân phiên key. Không ép Graph chạy, không thay Gold và không cam kết lần đo mới chứng minh lợi ích Graph.

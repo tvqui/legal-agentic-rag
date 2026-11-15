@@ -23,7 +23,7 @@ _POLARITY = re.compile(
 _ADMIN_QUERY = re.compile(r"kính\s+gửi|nơi\s+nhận", re.I)
 
 
-def clean_display(text: str, *, allow_admin: bool = False) -> str:
+def clean_display(text: str, *, allow_admin: bool = False, keep_source_symbols: bool = False) -> str:
     """Remove layout-only lines/control bytes; leave quoted text untouched."""
     quotes = []
     def protect(match):
@@ -35,7 +35,7 @@ def clean_display(text: str, *, allow_admin: bool = False) -> str:
     lines = []
     for line in value.splitlines():
         line = re.sub(r'[ \t]+', ' ', line).strip()
-        if line and _SEPARATOR.fullmatch(line):
+        if line and _SEPARATOR.fullmatch(line) and not (keep_source_symbols and line in {'=','+','-','*','×','÷','/','·'}):
             continue
         if not allow_admin and _ADMIN.match(line):
             continue
@@ -47,7 +47,16 @@ def clean_display(text: str, *, allow_admin: bool = False) -> str:
 
 
 def clean_source_excerpt(text: str, query: str) -> str:
-    return clean_display(text, allow_admin=bool(_ADMIN_QUERY.search(query)))
+    return clean_display(text, allow_admin=bool(_ADMIN_QUERY.search(query)), keep_source_symbols=True)
+
+
+def source_layout_issues(text: str) -> list[str]:
+    """Flag PDF-style formula columns; do not infer missing grouping or rates."""
+    if re.search(r'(?m)^\s*=\s*$',text or ''):
+        fragments=sum(bool(re.fullmatch(r'[^\W\d_]+',line.strip(),re.UNICODE))
+                      for line in text.splitlines())
+        if fragments>=5:return ['SOURCE_FORMULA_LAYOUT_REQUIRES_REVIEW']
+    return []
 
 
 def _notice_claim_signature(text: str):

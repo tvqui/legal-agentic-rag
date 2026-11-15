@@ -36,7 +36,7 @@ def reference_payload(record,gold):
 def faithful_payload(record,tasks,corpus):
     response=record['response'];chosen=selected_ids(response)
     payload={'question':record['question'],'date':record['query_date'],'tasks':tasks,'answer':response.get('answer'),
-        'claims':response.get('claims',[]),'citations':response.get('citations',[]),'cited_sources':[], 'citation_resolution_errors':[]}
+        'claims':response.get('claims',[]),'citations':[{k:v for k,v in c.items() if k!='source_text'} for c in response.get('citations',[])],'cited_sources':[], 'citation_resolution_errors':[]}
     if chosen is None:return payload,'MISSING_SELECTED_CONTEXT'
     allowed=set(chosen)
     fields=('unit_id','document_number','instrument_number','article_number','clause_number','point_number',
@@ -75,6 +75,10 @@ def local_answer_checks(record,corpus):
                 sources[uid]=source;attached.append(source)
             codes=semantic_issues(claim.text,attached,context_query=record['question'])
             if codes:issues.append({'claim_id':claim.claim_id,'codes':codes})
+        from vn_labor_online.answer_quality import source_layout_issues
+        for uid in sources:
+            codes=source_layout_issues(corpus[uid].get('source_text') or '')
+            if codes:issues.append({'claim_id':None,'evidence_id':uid,'codes':codes})
         issues.extend({'claim_id':cid,'codes':[code]} for cid,code in omitted_coupled_reporting_duties(claims,list(sources.values())).items())
         if missing_automatic_conclusion(record['question'],claims):
             issues.append({'claim_id':None,'codes':['EXPLICIT_AUTOMATIC_CONCLUSION_MISSING']})
