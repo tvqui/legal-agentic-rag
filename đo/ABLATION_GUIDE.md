@@ -12,7 +12,7 @@ File: `Kaggle_Ablation_Evaluation.ipynb`. Không cần chạy retrieval hay naiv
 
 ## Chạy từng cấu hình
 
-Chạy các cell chuẩn bị 1–4, sau đó cell tương ứng. Sửa RUN_CONFIGURATIONS trong cell cấu hình, chạy lại cell cấu hình trước khi chọn cell chạy.
+Chạy các cell chuẩn bị 1–4, sau đó cell tương ứng. Run All mặc định giữ Ollama hoạt động để có thể chạy tiếp từng cell; khi kết thúc, đặt CLEANUP_OLLAMA=True và chạy cell dọn dịch vụ cuối. Sửa RUN_CONFIGURATIONS trong cell cấu hình, chạy lại cell cấu hình trước khi chọn cell chạy.
 
 | Giá trị | Nội dung |
 |---|---|

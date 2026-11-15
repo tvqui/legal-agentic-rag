@@ -61,6 +61,16 @@ class AblationNotebookTests(unittest.TestCase):
                     self.assertEqual(cfg.adjudication.model,'qwen3:8b')
                     self.assertEqual((cfg.applicability.mode,cfg.applicability.provider,cfg.applicability.model),('hybrid','ollama','qwen3:8b'))
                 self.assertEqual(dict(os.environ),{'GEMINI_API_KEY':'PREVIOUS','VN_LABOR_RESEARCHER_API_KEY':'STALE_ROLE_KEY'})
+    def test_run_all_keeps_ollama_for_later_independent_cells(self):
+        scope=notebook_scope();self.assertFalse(scope['CLEANUP_OLLAMA'])
+        source=''.join(cells()[-1]['source']);owned=Mock();owned.poll.return_value=None;log=Mock()
+        scope.update(OWN_OLLAMA=owned,OLLAMA_LOG=log)
+        with contextlib.redirect_stdout(io.StringIO()):exec(compile(source,'<cleanup>','exec'),scope)
+        owned.terminate.assert_not_called();log.close.assert_not_called()
+        scope['CLEANUP_OLLAMA']=True
+        with contextlib.redirect_stdout(io.StringIO()):exec(compile(source,'<cleanup>','exec'),scope)
+        owned.terminate.assert_called_once();log.close.assert_called_once()
+
     def test_unselected_cells_make_no_calls(self):
         scope=notebook_scope()
         with contextlib.redirect_stdout(io.StringIO()):
