@@ -57,6 +57,31 @@ def faithful_payload(record,tasks,corpus):
         return payload,'NO_CITED_CLAIMS'
     return payload,'NO_SUPPORTED_CITATIONS'
 
+def local_answer_checks(record,corpus):
+    """Independent diagnostics; never clamp or manufacture an AI/human score."""
+    from vn_labor_online.models import Claim
+    from vn_labor_online.retrieval import as_evidence
+    from vn_labor_online.claim_validation import semantic_issues,omitted_coupled_reporting_duties
+    from vn_labor_online.answer_review import missing_automatic_conclusion
+    response=record['response'];issues=[];sources={}
+    try:
+        claims=[Claim.model_validate(c) for c in response.get('claims',[])]
+        for claim in claims:
+            attached=[]
+            for uid in claim.evidence_ids:
+                unit=corpus.get(uid)
+                if unit is None or not unit.get('source_text'):return {'status':'UNAVAILABLE','issues':[]}
+                source=as_evidence({**unit,'text':unit.get('text') or unit['source_text']},0,'diagnostic',0)
+                sources[uid]=source;attached.append(source)
+            codes=semantic_issues(claim.text,attached,context_query=record['question'])
+            if codes:issues.append({'claim_id':claim.claim_id,'codes':codes})
+        issues.extend({'claim_id':cid,'codes':[code]} for cid,code in omitted_coupled_reporting_duties(claims,list(sources.values())).items())
+        if missing_automatic_conclusion(record['question'],claims):
+            issues.append({'claim_id':None,'codes':['EXPLICIT_AUTOMATIC_CONCLUSION_MISSING']})
+        return {'status':'CHECKED','issues':issues}
+    except (ValueError,TypeError,KeyError,AttributeError):return {'status':'UNAVAILABLE','issues':[]}
+
+
 def grade(provider,record,gold,corpus):
     reference=reference_payload(record,gold);tasks=gold['expected_tasks']
     factual=provider.structured(REFERENCE_SYSTEM,canonical(reference),REF_SCHEMA)
@@ -76,4 +101,5 @@ def grade(provider,record,gold,corpus):
         'notes':factual['notes'],'faithfulness_notes':support['notes'],
         'tasks':[{**t,'evidence_supported':byid[t['task_id']]['evidence_supported']} for t in factual['tasks']],
         'protocol_version':VERSION,'reference_input_sha256':fingerprint(reference),
-        'faithfulness_input_sha256':fingerprint(actual),'actual_cited_source_count':len(actual['cited_sources']),'judge_stages':stages}
+        'faithfulness_input_sha256':fingerprint(actual),'actual_cited_source_count':len(actual['cited_sources']),'judge_stages':stages,
+        'local_answer_checks':local_answer_checks(record,corpus)}

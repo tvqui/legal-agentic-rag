@@ -1,3 +1,5 @@
+**Bản hiện tại: v7, SOURCE=github, PROFILE=standard.**
+
 # Phép đo Graph QA theo cặp
 
 Bộ đo riêng này kiểm tra **khi nào mở rộng đồ thị giúp tìm đủ căn cứ và trả lời tốt hơn**. Không thay notebook đánh giá cũ, không chạy backend HTTP và không sửa logic ONLINE.
@@ -146,3 +148,12 @@ Notebook mới mặc định `SOURCE='github'`, `RUN_NAME='graph_qa_v6'`, Qwen3:
 Các sửa dùng chung ONLINE gồm: kiểm tra mốc số lần với số thứ tự, công thức diễn đạt thiếu nhóm phép toán, nghĩa vụ báo ngay đi kèm quyền và bảo toàn nghĩa vụ đó khi rút gọn câu trả lời. Kế hoạch căn cứ giữ riêng nguyên tắc trả lương, quyền chi tiêu lương, cơ sở thưởng, thủ tục quy chế thưởng và danh sách hành vi được yêu cầu giải thích. Không đổi Gold hoặc ép Graph chạy khi đã đủ căn cứ.
 
 Các bộ đo khác lấy cùng GitHub sẽ dùng những sửa ONLINE này khi cập nhật code. Không gộp kết quả trước/sau thành một lượt đo; ghi phiên bản và các hash của từng lần chạy. Các sửa này không bảo đảm lần chạy tiếp theo không còn lỗi; kiểm thử local và chạy lại kiểm tra trên đáp án cũ không thay thế QA inference thật.
+
+
+## V7: kiểm tra cấu trúc trước khi đo tiếp
+
+Giữ nguyên 24 câu, Gold DRAFT, corpus, hai nhánh và model. Dùng `RUN_NAME='graph_qa_v7'`, không resume v6. Notebook mặc định GitHub và standard; không cần ZIP code hoặc chạy lại OFFLINE. Nếu đổi môi trường/model thì chạy smoke riêng trước.
+
+Sửa chung ONLINE: nhận các biến thể số thứ tự/động từ giao kết; kiểm tra biểu thức lương theo đơn vị với bộ AST nhỏ không eval (ngoặc có mặt chưa có nghĩa đặt đúng); giữ căn cứ cấm xử lý kỷ luật trong lúc chờ xác minh cùng nội dung điều được dẫn chiếu; yêu cầu kết luận công khai khi người dùng hỏi một hệ quả có tự động xảy ra hay không. Kiểm tra đơn vị không chứng minh tỷ lệ, mức tiền hay áp dụng pháp luật đúng; semantic review và nguồn vẫn bắt buộc.
+
+Kết quả chấm có thêm `local_answer_checks`, per_attempt_metrics có cảnh báo tương ứng, bảng có cột Local warnings. Các cảnh báo này độc lập với AI Judge, không tự hạ/nâng điểm AI hoặc biến thành human review. Khi AI chấm tối đa mà còn cảnh báo, phải đọc lại câu/nguồn thay vì coi là đúng tuyệt đối. Không tự sửa kết quả cũ, Gold hoặc lựa câu có lợi cho Graph.

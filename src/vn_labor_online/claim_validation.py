@@ -127,18 +127,18 @@ def _renewal_base_shift(claim,source):
     if (re.search(r'nhieu lan[^.;]{0,100}hop dong|hop dong[^.;]{0,100}nhieu lan',source)
             and re.search(r'\b(?:theo|trong)\s+(?:ngoai le|truong hop ngoai le)\b',claim)):
         return False
-    limits=[_integer(m.group(1)) for m in re.finditer(rf'\bchi duoc ky them ({_NUMBER})\s+lan\b',source)]
+    limits=[_integer(m.group(1)) for m in re.finditer(rf'\bchi duoc (?:ky(?: ket)?|giao ket) them ({_NUMBER})\s+lan\b',source)]
     limits=[value for value in limits if value is not None]
     if len(set(limits))!=1:return False
     prior=re.search(rf'\bsau(?: khi)?\s+({_NUMBER})\s+hop dong\b',claim)
     if not prior:
-        prior=re.search(rf'\b(?:sau(?: khi)?|khi)\b[^.;]{{0,100}}?\bhop dong(?: lao dong)?(?: xac dinh thoi han)?\s+thu\s+({_NUMBER}|nhat)\b',claim)
+        prior=re.search(rf'\b(?:sau(?: khi)?|khi)\b[^.;]{{0,100}}?\bhop dong(?: lao dong)?(?: xac dinh thoi han)?(?: lan)?\s+thu\s+({_NUMBER}|nhat)\b',claim)
     if not prior:return False
     prior_count=1 if prior.group(1)=='nhat' else _integer(prior.group(1))
     if prior_count is None:return False
-    for addition in re.finditer(rf'\b(?:duoc|co the)(?: tiep tuc)? ky them (?:toi da |it nhat )?({_NUMBER})\s*(?:lan|hop dong)\b',claim):
+    for addition in re.finditer(rf'\b(?:duoc|co the)(?: tiep tuc)? (?:ky(?: ket)?|giao ket) them (?:toi da |it nhat )?({_NUMBER})\s*(?:lan|hop dong)\b',claim):
         prefix=claim[max(0,addition.start()-35):addition.start()]
-        if re.search(r'\b(?:khong|chua)(?:\s+(?:the|co|phai)){0,3}\s*$',prefix):continue
+        if re.search(r'\b(?:khong|chua)(?:\s+(?:the|co|phai|con)){0,3}\s*$',prefix):continue
         extra=_integer(addition.group(1))
         if extra is not None and prior_count+extra>1+limits[0]:return True
     return False
@@ -151,6 +151,8 @@ def ambiguous_formula_grouping(claim,source):
     and explicitly grouped expressions remain for the semantic reviewer.
     """
     if claim in source:return False
+    from .formula_validation import hourly_formula_status
+    if hourly_formula_status(claim,source)=='VALID':return False
     if 'cong thuc' not in claim or '+' not in source or '=' not in source:return False
     if not re.search(r'\b(?:so gio|so ngay|so thang|so san pham)\b',claim):return False
     verbal=' cong ' in claim and ' nhan ' in claim
@@ -373,6 +375,10 @@ def semantic_issues(text, items, *, context_query=''):
         if not caution and not explicit_advance:problems.append('CLAIM_NOTIFICATION_ADVANCE_NOT_GROUNDED')
     if _renewal_base_shift(q,form_source):problems.append('CLAIM_RENEWAL_COUNT_BASE_SHIFT')
     if ambiguous_formula_grouping(q,form_source):problems.append('CLAIM_AMBIGUOUS_FORMULA_GROUPING')
+    from .formula_validation import hourly_formula_status
+    formula_status=hourly_formula_status(q,form_source)
+    if formula_status=='UNIT_MISMATCH':problems.append('CLAIM_FORMULA_UNIT_MISMATCH')
+    elif formula_status=='UNKNOWN':problems.append('CLAIM_FORMULA_STRUCTURE_UNRESOLVED')
     no_change=re.search(r'\bkhong (?:co (?:bat ky |bat cu )?(?:quy dinh )?)?(?:thay doi|sua doi|bo sung)',q)
     interval_scope=re.search(r'trong (?:suot|khoang)|tu \d[^.;]{0,30}den \d',q)
     if no_change and interval_scope and q not in form_source:

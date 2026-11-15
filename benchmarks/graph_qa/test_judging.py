@@ -51,4 +51,18 @@ class JudgingTests(unittest.TestCase):
         scores=score_record(r,g,c)
         self.assertIsNone(scores['ai_evidence_support']);self.assertIsNone(scores['ai_task_supported_fraction'])
 
+    def test_local_warning_does_not_fabricate_or_clamp_ai_scores(self):
+        r,g,c,f,s=self.fixture()
+        c['u']['source_text']='Công thức tiền = (lương giờ + lương giờ × 30%) × số giờ.'
+        r['response']['claims'][0]['text']='Công thức tiền lương = lương giờ + (lương giờ × 30% × số giờ).'
+        f['correctness']=f['completeness']=1.;s['evidence_support']=1.
+        provider=Mock();provider.structured.side_effect=[f,s]
+        result=grade(provider,r,g,c)
+        self.assertEqual(result['correctness'],1.)
+        self.assertIn('CLAIM_FORMULA_UNIT_MISMATCH',result['local_answer_checks']['issues'][0]['codes'])
+        from scoring import score_record
+        r.update(status='OK',judge={'status':'AI_JUDGED',**result});g.update(required_groups=[['u']],query_date=r['query_date'])
+        scored=score_record(r,g,c)
+        self.assertTrue(scored['ai_full_score_with_local_warning'])
+
 if __name__=='__main__':unittest.main()

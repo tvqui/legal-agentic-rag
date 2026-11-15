@@ -69,6 +69,8 @@ def extra_requirements(analysis):
             clauses('bonus_basis',104,[1])
         if has('quy che','cong bo','tham khao','thu tuc'):
             clauses('bonus_regulation_procedure',104,[2])
+    if not old and has('ky luat') and has('xac minh','dieu tra') and has('cho','dang doi'):
+        out['pending_discipline_waiting_rule']=[[loc(122,4,'c')]]
     if not old and has('ky luat') and has('xac minh','dieu tra') and has('dan chieu','nhom hanh vi','gom nhung','hanh vi nao'):
         clauses('pending_discipline_cross_reference',125,[1,2])
     from .dispute_context import individual_mediation_requested,mediation_only

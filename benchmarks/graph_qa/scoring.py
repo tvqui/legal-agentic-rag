@@ -146,6 +146,11 @@ def score_record(record,gold,corpus,k=10):
         if expected and len(tasks)==len(expected) and {t.get('task_id') for t in tasks}==expected:
             result['ai_task_addressed_fraction']=average(float(t.get('addressed') is True) for t in tasks)
             result['ai_task_supported_fraction']=average(float(t['evidence_supported']) for t in tasks if type(t.get('evidence_supported')) is bool)
+    checks=judge.get('local_answer_checks') or {}
+    result['local_check_status']=checks.get('status','NOT_EVALUATED')
+    result['local_validation_issues']=checks.get('issues',[])
+    result['ai_full_score_with_local_warning']=bool(checks.get('status')=='CHECKED' and checks.get('issues')
+        and judge.get('correctness')==1 and judge.get('completeness')==1)
     parts=response.get('parts') or []
     result['self_reported_part_answered_fraction']=average(float(p.get('answer_status')=='ANSWERED') for p in parts)
     result.update(reviewed_scores(record))
@@ -189,6 +194,8 @@ def build_report(gold_rows,records,corpus,manifest,k=10):
                   'ai_judged_attempts':sum((r.get('judge') or {}).get('status')=='AI_JUDGED' for r in rows),
                   'human_reviewed_attempts':sum((r.get('human_review') or {}).get('status')=='REVIEWED' and bool((r.get('human_review') or {}).get('reviewer')) and bool((r.get('human_review') or {}).get('reviewed_at')) for r in rows),
                   'graph_used_attempts':sum(r['metrics']['graph_used'] is True for r in ok)}
+            item['local_warning_attempts']=sum(bool(r['metrics'].get('local_validation_issues')) for r in ok)
+            item['ai_full_score_with_local_warning']=sum(r['metrics'].get('ai_full_score_with_local_warning',False) for r in ok)
             for outcome in ('SUFFICIENT','PARTIAL_ALLOWED','NEED_MORE_FACTS','INSUFFICIENT_EVIDENCE','CONFLICTING_EVIDENCE','ABSTAIN','ERROR'):
                 item['answer_'+outcome.lower()]=sum((r.get('response') or {}).get('status')==outcome for r in ok)
             times=sorted(r['elapsed_ms'] for r in rows if type(r.get('elapsed_ms')) in (int,float) and math.isfinite(r['elapsed_ms']))
@@ -271,10 +278,10 @@ def report(run_dir):
         **{k:v for k,v in r['metrics'].items() if k not in {'citation_details','selection_ids','missing_citation_groups'}}} for r in result['records']])
     text=['# Đối chứng Graph QA','',f"Trạng thái thực thi: {result['execution_status']}; cặp thành công {result['successful_pairs']}/{result['expected_pairs']}.",'',
         'Các điểm retrieval/metadata không phải độ đúng pháp lý. N/A là chưa có đánh giá tương ứng.','',
-        '| Nhóm | Nhánh | Lượt OK / dự kiến | Lỗi | Selected group recall | Citation group recall | Citation metadata | AI correctness | Human correctness | Mean ms |',
-        '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|']
+        '| Nhóm | Nhánh | Lượt OK / dự kiến | Lỗi | Selected group recall | Citation group recall | Citation metadata | AI correctness | Local warnings | Human correctness | Mean ms |',
+        '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
     for r in result['tables']:
-        text.append('| '+ ' | '.join([str(r['group']),r['arm'],f"{r['successful_attempts']}/{r['expected_attempts']}",str(r['errors']),show(r['selected_group_recall']),show(r['citation_group_recall']),show(r['citation_metadata_accuracy']),show(r['ai_correctness']),show(r['human_correctness']),show(r['mean_ms_all_completed'])])+' |')
+        text.append('| '+ ' | '.join([str(r['group']),r['arm'],f"{r['successful_attempts']}/{r['expected_attempts']}",str(r['errors']),show(r['selected_group_recall']),show(r['citation_group_recall']),show(r['citation_metadata_accuracy']),show(r['ai_correctness']),str(r['local_warning_attempts']),show(r['human_correctness']),show(r['mean_ms_all_completed'])])+' |')
     text+=['','## Giới hạn']+['- '+w for w in result['warnings']]
     (path/'comparison.md').write_text('\n'.join(text)+'\n',encoding='utf8')
     gold_by_id={q['id']:q for q in gold};detail=['# Câu hỏi và câu trả lời từng lượt','']

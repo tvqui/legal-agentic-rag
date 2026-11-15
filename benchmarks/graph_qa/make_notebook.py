@@ -19,13 +19,13 @@ def notebook():
 # Pháp Điển AI — Graph QA đối chứng trên Kaggle
 
 Mục tiêu: kiểm tra **khi nào mở rộng Graph giúp tìm đủ căn cứ và trả lời tốt hơn**.
-Bản v6 bổ sung kiểm tra mốc số lần, công thức, điều kiện đi kèm và độ đủ các ý độc lập; tách chấm theo Gold và kiểm chứng bằng nguồn thực, dùng Auditor hybrid theo nhóm và warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
+Bản v7 kiểm tra cấu trúc biểu thức theo đơn vị, các biến thể mốc số lần và kết luận được hỏi trực tiếp; tách chấm theo Gold và kiểm chứng bằng nguồn thực, dùng Auditor hybrid theo nhóm và warmup riêng và ghim ngân sách 360 giây/câu, 120 giây/lần gọi; không gộp với run v1 có ngân sách cũ. Hai nhánh chỉ khác `graph.enabled`; không gộp kết quả với phép đo BM25 hoặc replay cũ.
 Artifact hiện chốt đến **15/09/2026**; giữ đúng query_date đã ghim, không tự đổi thành ngày chạy. Bộ nhãn được đóng băng trước khi suy luận. Nhãn kiểm bằng artifact vẫn là **DRAFT**, không tự coi là đã duyệt pháp lý.
 
-**Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối. Bản v6 mặc định lấy code GitHub đã push; chỉ cần thêm artifact OFFLINE. Không cần ZIP code.
+**Trước Run All:** bật Internet, chọn GPU T4 ×2; Add Input một artifact OFFLINE cuối. Bản v7 mặc định lấy code GitHub đã push; chỉ cần thêm artifact OFFLINE. Không cần ZIP code.
 Bật Secret `GEMINI_API_KEY` nếu giữ semantic review hoặc AI-judge; `HF_TOKEN` tùy chọn. Không cần Groq/coding-team key, frontend, ngrok hay Neo4j.
 Dừng backend và workload khác dùng GPU hoặc quota trước khi đo.
-Bắt đầu `PROFILE='smoke'`. Sau smoke, đặt `PROFILE='standard'` và giữ thư mục output riêng.
+Mặc định `PROFILE='standard'` cho môi trường đã chạy v6. Nếu đổi GPU/model/môi trường, có thể chọn smoke trước.
 """),code(r"""
 from pathlib import Path
 SOURCE = 'github'       # github | attached_zip
@@ -33,8 +33,8 @@ CODE_ZIP = 'auto'            # hoặc đường dẫn ZIP / thư mục chứa pa
 REPO_URL = 'https://github.com/tvqui/legal-agentic-rag.git'
 CODE_ROOT = Path('/kaggle/working/graph_qa_code')
 WORK = Path('/kaggle/working/graph_qa_evaluation')
-PROFILE = 'smoke'            # smoke | standard
-RUN_NAME = 'graph_qa_v6'
+PROFILE = 'standard'         # standard | smoke (nếu đổi môi trường)
+RUN_NAME = 'graph_qa_v7'
 ARTIFACT = 'auto'            # hoặc đường dẫn ZIP / thư mục artifacts trong /kaggle/input
 RESUME = False               # True chỉ khi code/data/settings/model vẫn y nguyên
 RETRY_ERRORS = False         # không tự đo lại câu từ chối/partial

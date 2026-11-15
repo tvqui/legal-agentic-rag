@@ -196,6 +196,18 @@ def repair_required_computations(draft, pack, tasks):
     return candidate
 
 
+def missing_automatic_conclusion(query,claims):
+    """Coverage only: request an explicit conclusion, never infer its truth."""
+    requested=False
+    for sentence in re.split(r'(?<=[?!.])\s+',fold(query)):
+        if re.search(r'(?:khong|chua)\s+(?:hoi|xet|ban|de cap)[^?!.]{0,120}(?:tu dong|duong nhien|mac nhien)',sentence):
+            continue
+        if re.search(r'\b(?:tu dong|duong nhien|mac nhien)\b[^?!.]{0,140}\bkhong\s*\?',sentence):
+            requested=True;break
+    if not requested:return False
+    return not any(re.search(r'\b(?:tu dong|duong nhien|mac nhien)\b',fold(c.text)) for c in claims)
+
+
 def validate_review(review, draft, pack, tasks):
     expected = {c.claim_id for c in draft.claims}
     actual = [c.claim_id for c in review.claims]
@@ -234,6 +246,11 @@ def validate_review(review, draft, pack, tasks):
             raise StructuredOutputError('invalid answered task')
         if coverage.status != 'ANSWERED' and not coverage.missing:
             raise StructuredOutputError('unanswered task requires explanation')
+    public_supported=[by_claim[uid] for uid in supported]
+    if missing_automatic_conclusion(getattr(pack,'query',''),public_supported):
+        review.question_fully_addressed=False
+        message='Chưa trả lời trực tiếp câu hỏi kết quả có tự động phát sinh hay không; cần nêu kết luận có điều kiện dựa trên nguồn, không chỉ chép quy định.'
+        review.missing_requirements=list(dict.fromkeys(review.missing_requirements+[message]))
     # Preserve independently supported claims, but never call a dependent task
     # complete while its prerequisite is missing or only partially answered.
     by_task={item.task_id:item for item in review.coverage}
@@ -643,7 +660,11 @@ def compose_answer(provider, draft, pack):
         'Remove equivalent restatements and unrelated topics. Preserve EVERY distinct condition, exception, duty, consequence, '
         'quantity, temporal trigger and qualification needed by the question. Do not replace conditional rules with unconditional conclusions. '
         'Keep numeric limits attached to their original trigger/base: an additional allowance after the first event is not a new allowance after the second. '
-        'Render formulas with explicit parentheses and multiplication signs; make the quantity multiplied by a count unambiguous. '
+        'Render formulas with explicit parentheses and multiplication signs; check the scope of each multiplier, not just the presence of parentheses. '
+        'For hourly-pay totals, every added term must have money units: an hourly rate alone cannot be added to a money total. '
+        'For each explicit yes/no request state a public, source-qualified conclusion, even in EXPLAIN mode. '
+        'If asked whether an outcome is automatic, explicitly address automaticity; quoting expiry or priority rules alone is insufficient. '
+
         'When a permission carries an immediate reporting duty, state the duty and recipient in the same claim or a distinct cited claim. '
         'Do not invent missing premises, facts, sources, dates, URLs or legal locators; do not correct OCR by guessing. '
         'Keep enactment year distinct from effective year and consolidation number. '
