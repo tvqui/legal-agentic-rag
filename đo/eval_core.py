@@ -149,6 +149,22 @@ def environment():
             'hardware_id': os.getenv('EVAL_HARDWARE_ID')}
 
 
+def comparison_hardware(env,scope='EXACT_DEVICE'):
+    """Explicit equivalence policy; keep actual device UUIDs in environment logs."""
+    hardware={k:env[k] for k in ('platform','machine','processor','cpu_count','gpu','hardware_id')}
+    if scope=='EXACT_DEVICE':return hardware
+    if scope!='GPU_SPEC':raise ValueError('Unknown hardware comparison scope')
+    import csv,io
+    if not isinstance(env.get('gpu'),str) or not env['gpu'].strip():raise ValueError('GPU_SPEC requires complete GPU metadata')
+    parsed=[]
+    for row in csv.reader(io.StringIO(env['gpu'])):
+        if len(row)!=4 or any(not value.strip() for value in row):raise ValueError('GPU_SPEC requires name, UUID, memory, driver')
+        parsed.append({'name':row[0].strip(),'memory':row[2].strip(),'driver':row[3].strip()})
+    hardware['gpu']=parsed
+    hardware['comparison_scope']='GPU_SPEC_NOT_SAME_PHYSICAL_DEVICE'
+    return hardware
+
+
 def provider_identities(settings, effective, probe_local=False):
     """Freeze local model digests when available; cloud aliases remain declared."""
     identities = {'reader': settings.get('reader'), 'judge': settings.get('judge'),
@@ -531,7 +547,8 @@ def report_runs(dirs, out):
     lines += ['', 'COMPLETE chỉ là lịch inference hoàn tất; xem ai_judged_attempts/ai_judge_errors và mẫu số từng metric trong JSON/CSV để biết mức chấm QA.',
               'Chỉ so các dòng có cùng comparison_key. Cột trích dẫn chỉ kiểm metadata; không chứng nhận lập luận đúng luật.',
               'CI bootstrap theo câu hỏi, không coi các lần lặp là câu độc lập. Độ trễ không gồm judge, chuẩn bị chỉ mục và đo GPU sau phản hồi.',
-              'Xem paired_deltas.json, phạm vi Gold, lỗi, số câu chung và component_exposure trước khi kết luận thành phần có ích hoặc gây hại.']
+              'Xem paired_deltas.json, phạm vi Gold, lỗi, số câu chung và component_exposure trước khi kết luận thành phần có ích hoặc gây hại.',
+              'Nếu hardware_comparison_scope=GPU_SPEC: cùng loại GPU/VRAM/driver, cho phép khác UUID thiết bị; không khẳng định cùng GPU vật lý hoặc độ trễ cloud giống hệt. Xem run_manifest và resume_environments.jsonl.']
     (out / 'comparison.md').write_text('\n'.join(lines), encoding='utf-8')
     dump(out / 'comparison_groups.json', {'groups': dict(Counter(t['comparison_key'] for t in table)),
          'warning': 'Different keys MUST NOT be pooled. Equal keys are controlled settings, not proof of legal validity.'})
@@ -574,8 +591,10 @@ def base_parser(description):
     run.add_argument('--allow-llm', action='store_true'); run.add_argument('--allow-draft', action='store_true')
     run.add_argument('--limit', type=int); run.add_argument('--repeats', type=int, default=1); run.add_argument('--k', type=int, default=10)
     run.add_argument('--seed', type=int, default=42); run.add_argument('--judge', action='store_true')
+    run.add_argument('--max-new-questions',type=int,help='Pause after this many NEW attempts; keep the full frozen question selection')
     report = sub.add_parser('report'); report.add_argument('--runs', nargs='+', required=True); report.add_argument('--out', required=True)
     judge = sub.add_parser('judge'); judge.add_argument('--run', required=True); judge.add_argument('--allow-llm', action='store_true')
+    judge.add_argument('--max-new-judgments',type=int,help='Pause after this many new post-hoc model calls')
     return parser
 
 
@@ -613,6 +632,8 @@ def execute(args, baseline=False):
         raise ValueError('Invalid or duplicate methods: ' + ','.join(methods))
     if not args.allow_llm and (args.task == 'qa' or any(m not in RETRIEVAL and not m.startswith('naive_') for m in methods)):
         raise ValueError('QA / graph-baseline construction may call LLMs; pass --allow-llm explicitly')
+    max_new=getattr(args,'max_new_questions',None)
+    if max_new is not None and (type(max_new) is not int or max_new<1):raise ValueError('max-new-questions must be positive')
     selected = [r for r in questions if args.task != 'retrieval' or r.get('retrieval_eligible', True)]
     # One frozen selection for every method. Limit follows sorted IDs, never
     # selection by which method answered correctly. Record exact IDs below.
@@ -639,7 +660,7 @@ def execute(args, baseline=False):
                'ids': [r['id'] for r in selected], 'task': args.task, 'k': args.k, 'repeats': args.repeats, 'seed': args.seed,
                'settings': {k: v for k, v in settings.items() if k not in ('cache', 'bundle_corpus', 'baselines', 'online_config')},
                'effective_online': {k: v for k, v in effective.items() if k not in ('cache_dir', 'trace_dir', 'artifact_source')},
-               'hardware': {k: env[k] for k in ('platform', 'machine', 'processor', 'cpu_count', 'gpu', 'hardware_id')},
+               'hardware': comparison_hardware(env,settings.get('hardware_comparison_scope','EXACT_DEVICE')),
                'packages': env['packages'], 'source_tree': source_tree(),
                'provider_identities': provider_identities(settings, effective, args.task == 'qa')}
     identity = {'protocol': VERSION, 'task': args.task, 'methods': methods, 'repeats': args.repeats, 'k': args.k,
@@ -657,6 +678,8 @@ def execute(args, baseline=False):
         for key in ('protocol', 'task', 'methods', 'repeats', 'k', 'seed', 'selected_ids', 'source_tree', 'settings', 'external_environments', 'comparison_key'):
             if old[key] != identity[key]:
                 raise ValueError('Unsafe resume, changed ' + key + '; start a NEW output directory')
+        if old.get('environment')!=env:
+            with (out/'resume_environments.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(env,ensure_ascii=False)+'\n')
         identity = old
     else:
         if args.resume:
@@ -678,7 +701,7 @@ def execute(args, baseline=False):
         records = [r for r in records if r['status'] != 'ERROR']
         write_rows(path, records)
     done = {key(r) for r in records}
-    paused = None
+    paused = None;new_attempts=0
     try:
         for repeat in range(args.repeats):
             order = methods[repeat % len(methods):] + methods[:repeat % len(methods)]
@@ -740,6 +763,9 @@ def execute(args, baseline=False):
                     if r['status'] == 'ERROR':
                         with (out / 'errors.jsonl').open('a', encoding='utf-8') as f:
                             f.write(json.dumps({k: r.get(k) for k in ('id', 'method', 'repeat', 'error', 'reason')}) + '\n')
+                    new_attempts+=1
+                    if not paused and max_new is not None and new_attempts>=max_new and len(done)<len(expected_keys):
+                        paused='BATCH_LIMIT'
                     if paused:
                         break
                 if adapter:
@@ -762,11 +788,13 @@ def execute(args, baseline=False):
     return 0 if len(records) == len(expected_keys) and all(r['status'] == 'OK' for r in records) else 2
 
 
-def judge_run(directory):
+def judge_run(directory,max_new_judgments=None):
     """Post-hoc independent scoring; never send Gold to a system's inference."""
     from adapters import reader
     from vn_labor_online.runtime import request_budget
     from protocol import capacity_error
+    if max_new_judgments is not None and (type(max_new_judgments) is not int or max_new_judgments<1):raise ValueError('max-new-judgments must be positive')
+    judged_now=0;judge_errors_now=0;judge_paused=None
     directory = Path(directory)
     m = read(directory / 'run_manifest.json')
     if m['task'] != 'qa':
@@ -807,7 +835,7 @@ def judge_run(directory):
                        'expected_disposition': q.get('expected_status'), 'expected_missing_facts': q.get('missing_facts', []),
                        'tasks': q.get('gold_tasks', []), 'sources': evidence,
                        'answer': result.get('answer'), 'clarification_questions': result.get('questions', []),
-                       'claims': result.get('claims'), 'citations': result.get('citations')}
+                       'claims': result.get('claims'), 'citations': [{k:v for k,v in c.items() if k!='source_text'} for c in result.get('citations',[])]}
             serialized = json.dumps(payload, ensure_ascii=False)
             if len(serialized) > settings.get('judge_context_char_limit', 60000):
                 r['judge'] = {'status': 'N/A', 'reason': 'JUDGE_CONTEXT_LIMIT_EXCEEDED_NO_SOURCE_TRUNCATION'}
@@ -838,14 +866,22 @@ def judge_run(directory):
                 r['metrics']['ai_annotated_task_coverage'] = mean([t['score'] for t in verdict['task_scores']])
             except Exception as exc:
                 r['judge'] = {'status': 'ERROR', 'error': safe_error(exc)}
-                if capacity_error(exc):
-                    write_rows(directory / 'responses.jsonl', records)
-                    break
+                judge_errors_now+=1
+                if capacity_error(exc):judge_paused='UPSTREAM_CAPACITY_OR_CONFIGURATION'
             r['judge_ms'] = (time.perf_counter() - start) * 1000
             write_rows(directory / 'responses.jsonl', records)
+            judged_now+=1
+            if judge_paused:break
+            if max_new_judgments is not None and judged_now>=max_new_judgments:
+                judge_paused='BATCH_LIMIT';break
     finally:
         provider.close()
+        pending=sum(r['status']=='OK' and r.get('judge',{}).get('status') not in {'AI_JUDGED','N/A'} for r in records)
+        progress={'saved_attempts':len(records),'new_judge_attempts':judged_now,'new_judge_errors':judge_errors_now,'pending_saved_answers':pending,
+                  'paused':judge_paused,'complete_for_saved_answers':pending==0}
+        dump(directory/'judge_progress.json',progress)
         report_runs([directory], directory / 'report')
+    return progress
 
 
 def main(baseline=False):
@@ -859,5 +895,6 @@ def main(baseline=False):
     if args.action == 'judge':
         if not args.allow_llm:
             parser.error('Judge calls an external/local model; pass --allow-llm')
-        judge_run(args.run); return 0
+        progress=judge_run(args.run,getattr(args,'max_new_judgments',None))
+        return 0 if not progress['new_judge_errors'] and (progress['complete_for_saved_answers'] or progress['paused']=='BATCH_LIMIT') else 2
     return execute(args, baseline)
