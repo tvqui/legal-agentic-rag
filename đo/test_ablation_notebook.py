@@ -22,10 +22,12 @@ class AblationNotebookTests(unittest.TestCase):
     def test_cells_parse_and_configurations_are_separate(self):
         content=cells();source=[''.join(c['source']) for c in content if c['cell_type']=='code']
         for s in source:ast.parse(s)
-        expected={'full','without_graph','without_reranker','without_auditor','without_review'}
-        self.assertEqual({s.split("'")[1] for s in source if s.startswith('run_configuration(')},expected)
-        self.assertEqual({s.split("'")[1] for s in source if s.startswith('judge_configuration(')},expected)
-        scope=notebook_scope();self.assertEqual(scope['RUN_CONFIGURATIONS'],['full']);self.assertEqual(scope['JUDGE_CONFIGURATIONS'],[])
+        self.assertEqual([s for s in source if s.startswith('run_configuration(')],['run_configuration(ABLATION_CONFIG)'])
+        self.assertEqual([s for s in source if s.startswith('judge_configuration(')],['judge_configuration(ABLATION_CONFIG)'])
+        scope=notebook_scope();self.assertEqual(scope['ABLATION_CONFIG'],'full')
+        self.assertEqual(scope['ACTION'],'run_and_judge')
+        self.assertIsNone(scope['MAX_NEW_QUESTIONS']);self.assertIsNone(scope['MAX_NEW_JUDGMENTS'])
+        self.assertEqual(scope['OUT'].name,'full')
         self.assertEqual(scope['BACKEND_GEMINI_MODEL'],'gemini-3.1-flash-lite')
         self.assertEqual(scope['JUDGE_GEMINI_MODEL'],'gemini-3.5-flash-lite')
     def test_checkpoint_restore_rejects_paths_outside_output(self):
@@ -62,7 +64,7 @@ class AblationNotebookTests(unittest.TestCase):
                     self.assertEqual((cfg.applicability.mode,cfg.applicability.provider,cfg.applicability.model),('hybrid','ollama','qwen3:8b'))
                 self.assertEqual(dict(os.environ),{'GEMINI_API_KEY':'PREVIOUS','VN_LABOR_RESEARCHER_API_KEY':'STALE_ROLE_KEY'})
     def test_run_all_keeps_ollama_for_later_independent_cells(self):
-        scope=notebook_scope();self.assertFalse(scope['CLEANUP_OLLAMA'])
+        scope=notebook_scope();self.assertTrue(scope['CLEANUP_OLLAMA']);scope['CLEANUP_OLLAMA']=False
         source=''.join(cells()[-1]['source']);owned=Mock();owned.poll.return_value=None;log=Mock()
         scope.update(OWN_OLLAMA=owned,OLLAMA_LOG=log)
         with contextlib.redirect_stdout(io.StringIO()):exec(compile(source,'<cleanup>','exec'),scope)
@@ -74,7 +76,7 @@ class AblationNotebookTests(unittest.TestCase):
     def test_unselected_cells_make_no_calls(self):
         scope=notebook_scope()
         with contextlib.redirect_stdout(io.StringIO()):
-            scope['run_configuration']('without_graph');scope['judge_configuration']('full')
+            scope['run_configuration']('without_graph');scope['ACTION']='generate_only';scope['judge_configuration']('full')
         scope['subprocess'].run.assert_not_called()
     def test_backend_and_judge_commands_do_not_cross_stages(self):
         scope=notebook_scope()
@@ -83,13 +85,13 @@ class AblationNotebookTests(unittest.TestCase):
             (run/'run_manifest.json').write_text('{}')
             (run/'responses.jsonl').write_text('')
             scope.update(OUT=out,BUNDLE=out/'bundle120',SETTINGS=out/'settings.json',ROOT=root,
-                         model_environment=lambda _:contextlib.nullcontext(),export_checkpoint=Mock())
+                         model_environment=lambda _:contextlib.nullcontext(),export_checkpoint=Mock(),MAX_NEW_QUESTIONS=20,MAX_NEW_JUDGMENTS=20)
             scope['subprocess'].run.return_value=SimpleNamespace(returncode=0)
             scope['run_configuration']('full')
             args=scope['subprocess'].run.call_args.args[0]
             self.assertIn('--max-new-questions',args);self.assertIn('--resume',args);self.assertNotIn('--judge',args)
             self.assertNotIn('--limit',args)
-            scope['JUDGE_CONFIGURATIONS']=['full'];scope['judge_configuration']('full')
+            scope['ACTION']='judge_only';scope['judge_configuration']('full')
             args=scope['subprocess'].run.call_args.args[0]
             self.assertIn('judge',args);self.assertNotIn('run',args);self.assertIn('--max-new-judgments',args)
             self.assertEqual(scope['export_checkpoint'].call_count,2)

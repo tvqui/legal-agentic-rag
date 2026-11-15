@@ -1,53 +1,60 @@
-# Chạy ablation riêng trên Kaggle
+# Ablation: một lần chạy = một cấu hình = một ZIP
 
-File: `Kaggle_Ablation_Evaluation.ipynb`. Không cần chạy retrieval hay naive_qa trước. Backend phục vụ website không cần mở; hãy dừng workload khác dùng GPU/quota.
+Notebook: `Kaggle_Ablation_Evaluation.ipynb`. Cách chọn giống PHASE trong notebook retrieval/ablation/naive_qa, nhưng ở đây dùng **ABLATION_CONFIG**. Không có danh sách chạy nhiều cấu hình cùng lúc.
 
-## Chuẩn bị
+## 1. Chọn một cấu hình rồi Run All
 
-1. Đưa code mới lên GitHub, import notebook này vào Kaggle; bật Internet và GPU T4 ×2.
-2. Add Input artifact OFFLINE cuối. Bật `GEMINI_API_KEY` (hoặc tên Secret đã chọn); `HF_TOKEN` tùy chọn. Không cần ngrok/Neo4j/Groq.
-3. Giữ `BACKEND_GEMINI_MODEL='gemini-3.1-flash-lite'` và `JUDGE_GEMINI_MODEL='gemini-3.5-flash-lite'`. Qwen3:8b/Ollama vẫn là model sinh chính; 3.1 dùng cho những vai trò Gemini được bật trong pipeline. 3.5 chỉ chấm sau.
-4. Có thể dùng cùng Secret hoặc chọn riêng `BACKEND_GEMINI_SECRET_NAME`, `JUDGE_GEMINI_SECRET_NAME`. Chỉ nhập tên, không nhập key. Không tự xoay key khi quota hết.
-5. Mặc định `RUN_CONFIGURATIONS=['full']`, `JUDGE_CONFIGURATIONS=[]`, mỗi cell xử lý tối đa 20 lượt mới. Run All không chạy cả 600 lượt.
-
-## Chạy từng cấu hình
-
-Chạy các cell chuẩn bị 1–4, sau đó cell tương ứng. Run All mặc định giữ Ollama hoạt động để có thể chạy tiếp từng cell; khi kết thúc, đặt CLEANUP_OLLAMA=True và chạy cell dọn dịch vụ cuối. Sửa RUN_CONFIGURATIONS trong cell cấu hình, chạy lại cell cấu hình trước khi chọn cell chạy.
-
-| Giá trị | Nội dung |
-|---|---|
-| `full` | Đủ thành phần |
-| `without_graph` | Bỏ Graph và các kênh graph thuộc phép ablation |
-| `without_reranker` | Bỏ reranker |
-| `without_auditor` | Bỏ Auditor theo adapter thí nghiệm, không giả lập PASS |
-| `without_review` | Bỏ hậu kiểm trong pipeline; vẫn được AI judge chấm sau |
-
-Mỗi cấu hình có `runs/<tên>/` riêng, 120 câu dự kiến, một lần lặp. Chạy lại cùng cell để làm tiếp tối đa 20 câu chưa lưu. `MAX_NEW_QUESTIONS=None` mới chạy hết phần còn lại. **20 câu không đồng nghĩa 20 API request**: Researcher, soạn, hậu kiểm, sửa và retry có thể gọi nhiều lần. Chia lô không làm giảm tổng request; nó giúp chủ động dừng và giữ tiến độ.
-
-Dừng theo lô là `BATCH_LIMIT`, không phải lỗi. Nếu quota/dịch vụ lỗi: checkpoint vẫn được xuất; không tiếp tục gọi các cấu hình khác để thử vận may. Khi dịch vụ phục hồi, có thể bật `RETRY_ERRORS=True` để đo lại lượt ERROR (lịch sử giữ trong attempt_history), sau đó tắt lại. Không thay code/model/dữ liệu trong run đã chốt.
-
-## Chấm riêng bằng 3.5
-
-Đặt `RUN_CONFIGURATIONS=[]`, ví dụ `JUDGE_CONFIGURATIONS=['full']`; chạy cell cấu hình rồi cell “Chấm Full”. Model được lấy từ settings đã chốt trước generation, không lấy nhầm model backend. Mỗi lần chấm tối đa `MAX_NEW_JUDGMENTS=20` đáp án đã lưu và chưa chấm; chạy lại cell để tiếp tục. Không sinh lại đáp án. Có thể chấm từng phần, nhưng chỉ diễn giải bảng cuối sau khi kiểm tra đủ lượt generation và AI_JUDGED.
-
-## Checkpoint, phiên khác và kết quả
-
-- Sau mỗi cell chạy/chấm đều có link ZIP `..._ablation_results.zip`. Tải xuống ngay; lưu trong /kaggle/working không bảo đảm sống sau khi session kết thúc.
-- Sang phiên mới: Add Input ZIP checkpoint và artifact, đặt CHECKPOINT_ARCHIVE tới ZIP, giữ RUN_NAME/PROFILE và CODE_REF là SHA code đã dùng. Notebook kiểm hash/settings trước resume; không sửa fingerprint để ép chạy.
-- Notebook chốt `GPU_SPEC`: có thể khác UUID GPU nhưng phải cùng loại GPU, VRAM, driver và các điều kiện CPU/package/code/model được kiểm soát. UUID thật vẫn nằm trong manifest/môi trường phiên resume. Đây không phải khẳng định cùng thiết bị vật lý hay latency cloud giống hệt. Chạy cấu hình khác trong cùng phiên khi có thể; công bố phiên đo khi báo cáo.
-- Khác điều kiện kiểm soát thì tạo RUN_NAME mới; report tách comparison_key không tương đương. Không gộp điểm bằng tay để tạo kết luận.
-- Cell “Tổng hợp” ghép các cấu hình tương thích đã có, xuất JSON/CSV/bảng/biểu đồ. Gold v0.2 vẫn DRAFT; AI judge không phải phê duyệt pháp lý.
-
-## Lệnh tương đương
-
-```text
-python đo/evaluate_project.py run --bundle BUNDLE --config SETTINGS --out OUT/runs/full --task qa --methods full --repeats 1 --k 10 --allow-draft --allow-llm --max-new-questions 20
+```python
+ABLATION_CONFIG = 'full'
+ACTION = 'run_and_judge'
 ```
 
-Lần sau thêm `--resume`; đừng dùng `--limit 20` để chia lô standard vì limit thay đổi tập câu hỏi. Chấm tiếp:
+| ABLATION_CONFIG | Nội dung | Kết quả tải riêng |
+|---|---|---|
+| `full` | Đủ thành phần | `full_ablation_results.zip` |
+| `without_graph` | Bỏ Graph và các kênh graph thuộc phép ablation | `without_graph_ablation_results.zip` |
+| `without_reranker` | Bỏ reranker | `without_reranker_ablation_results.zip` |
+| `without_auditor` | Bỏ Auditor theo adapter thí nghiệm, không giả lập PASS | `without_auditor_ablation_results.zip` |
+| `without_review` | Bỏ hậu kiểm trong pipeline; vẫn chấm bằng AI judge sau | `without_review_ablation_results.zip` |
 
-```text
-python đo/evaluate_project.py judge --run OUT/runs/full --allow-llm --max-new-judgments 20
+Mỗi cấu hình dự kiến 120 câu, một lần lặp. Mặc định MAX_NEW_QUESTIONS=None và MAX_NEW_JUDGMENTS=None: chạy hết DUY NHẤT cấu hình đã chọn, rồi chấm cấu hình đó. Chạy xong Full, tải ZIP; lần tiếp theo đổi ABLATION_CONFIG sang without_graph và Run All, v.v. Mỗi cấu hình ở thư mục riêng, không ghi đè cấu hình trước. Chưa gom so sánh trong lượt đo riêng này.
+
+## 2. Model và Secrets
+
+- Gemini trong pipeline: `BACKEND_GEMINI_MODEL='gemini-3.1-flash-lite'`.
+- AI judge: `JUDGE_GEMINI_MODEL='gemini-3.5-flash-lite'`.
+- Qwen3:8b/Ollama vẫn giữ vai trò sinh chính/Auditor theo cấu hình; không phải toàn bộ backend đổi sang Gemini.
+- Chọn BACKEND_GEMINI_SECRET_NAME và JUDGE_GEMINI_SECRET_NAME; mặc định cùng tên GEMINI_API_KEY, có thể chọn GEMINI_API_KEY.2, .3... Chỉ nhập tên Secret, không nhập giá trị. Không tự luân phiên key.
+- GPU T4 ×2, Internet, Add Input artifact OFFLINE cuối; HF_TOKEN tùy chọn. Không cần chạy backend website; dừng workload khác dùng GPU/quota.
+
+## 3. Nếu chỉ muốn chạy hoặc chấm
+
+```python
+ACTION = 'generate_only'  # chỉ tạo câu trả lời của cấu hình đã chọn
+# hoặc
+ACTION = 'judge_only'     # chỉ chấm đáp án đã lưu, bỏ qua khởi động Ollama
 ```
 
-Các lệnh cần đúng biến môi trường và settings model; notebook đã cô lập và khôi phục chúng theo từng giai đoạn.
+Chốt cả model backend và judge từ đầu; không đổi settings sau khi đo. Đổi ACTION không đổi model hay tập câu hỏi. Run All mặc định dọn Ollama do notebook sở hữu sau khi cấu hình kết thúc; có thể CLEANUP_OLLAMA=False nếu muốn giữ dịch vụ.
+
+## 4. Quota và checkpoint
+
+120 câu không đồng nghĩa 120 API request: mỗi câu có thể gọi Gemini nhiều lần. Hết quota/dịch vụ lỗi thì dừng, giữ checkpoint; không bảo đảm một cấu hình nằm dưới 500 request. Không tự gọi cấu hình khác để thử quota.
+
+Sau mỗi bước chạy/chấm đều có ZIP checkpoint. Tải ngay trước khi Kaggle hết session. Có quota lại: giữ cùng ABLATION_CONFIG, RUN_NAME, PROFILE, model, code/data/settings; chạy tiếp bỏ qua câu đã lưu. Chỉ bật RETRY_ERRORS=True nếu cần đo lại ERROR, lịch sử được giữ.
+
+Có thể đặt MAX_NEW_QUESTIONS hoặc MAX_NEW_JUDGMENTS thành số dương để tạm chia lô nếu muốn; đây là tùy chọn, không phải cách chạy mặc định. Đừng dùng --limit để chia lô standard vì limit thay tập câu hỏi.
+
+Phiên mới: thêm ZIP checkpoint cùng artifact làm Input, đặt CHECKPOINT_ARCHIVE tới ZIP. Pin CODE_REF bằng SHA đã dùng. Notebook chốt GPU_SPEC: cùng loại GPU/VRAM/driver và các điều kiện CPU/package/code/model; cho phép khác UUID nhưng vẫn lưu UUID thật và môi trường phiên resume. Không khẳng định cùng GPU vật lý hoặc latency cloud giống hệt. Khác điều kiện thì bộ đo chặn resume/tách comparison_key; không sửa fingerprint để ép gộp.
+
+## 5. Gom sau khi các cấu hình đã chạy xong
+
+Đặt năm ZIP vào một thư mục, chạy trên máy local (không gọi API/model, không sinh lại đáp án):
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 đo/compare_ablation_results.py --inputs full_ablation_results.zip without_graph_ablation_results.zip without_reranker_ablation_results.zip without_auditor_ablation_results.zip without_review_ablation_results.zip --out comparison_ablation_final
+```
+
+Có thể chỉ đưa hai ZIP để so trước. Output có bảng Markdown/CSV/JSON, paired deltas, biểu đồ và SHA256 ZIP đầu vào. Chỉ so sánh các run cùng comparison_key; khác model/điều kiện sẽ tách nhóm. Không trộn hai checkpoint của cùng cấu hình trong cùng nhóm; dùng đúng một ZIP cuối. File lỗi hoặc kết quả chưa hoàn tất không được biến thành điểm 0 hay bị âm thầm xóa. Chọn thư mục output mới để giữ nguyên kết quả gốc.
+
+Gold vẫn DRAFT; AI judge không phải phê duyệt pháp lý. Đọc số câu hoàn tất, số câu được chấm và lỗi trước khi đưa bảng vào báo cáo.
