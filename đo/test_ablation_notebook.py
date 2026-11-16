@@ -30,6 +30,18 @@ class AblationNotebookTests(unittest.TestCase):
         self.assertEqual(scope['OUT'].name,'full')
         self.assertEqual(scope['BACKEND_GEMINI_MODEL'],'gemini-3.1-flash-lite')
         self.assertEqual(scope['JUDGE_GEMINI_MODEL'],'gemini-3.5-flash-lite')
+    def test_timeout_policy_probe_executes_against_actual_config(self):
+        import subprocess,sys
+        source=next(''.join(c['source']) for c in cells() if c['cell_type']=='code' and 'guard_probe=' in ''.join(c['source']))
+        assignment=next(n for n in ast.walk(ast.parse(source)) if isinstance(n,ast.Assign)
+            and any(isinstance(t,ast.Name) and t.id=='guard_probe' for t in n.targets))
+        probe=ast.literal_eval(assignment.value)
+        # Execute the nested script, not only parse its containing cell.
+        result=subprocess.run([sys.executable,'-X','utf8','-c',probe],
+            cwd=NB.resolve().parents[1],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('TIMEOUT_POLICY_VERIFIED',result.stdout)
+
     def test_checkpoint_restore_rejects_paths_outside_output(self):
         import stat
         from unittest.mock import MagicMock
