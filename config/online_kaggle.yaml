@@ -60,6 +60,10 @@ online:
     max_queries: 4
     max_output_tokens: 4096
   applicability:
+    # Same Ollama context as generation; avoid stage-dependent model reloads.
+    context_tokens: 32768
+    minimum_call_seconds: 25
+    batch_prompt_tokens: 7000
     unresolved_provider: gemini
     unresolved_max_items: 4
     unresolved_timeout_seconds: 20
@@ -71,9 +75,10 @@ online:
     timeout_seconds: 300
     max_items: 8
     max_batches: 6
-    max_output_tokens: 4096
+    max_output_tokens: 1536
     fail_closed: true
   adjudication:
+    minimum_call_seconds: 20
     context_tokens: 32768
     semantic_review: true
     semantic_repair_attempts: 1

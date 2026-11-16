@@ -12,7 +12,7 @@ def cells():return json.loads(NB.read_text(encoding='utf8'))['cells']
 
 def notebook_scope():
     scope={};exec(compile(''.join(cells()[1]['source']),'<config>','exec'),scope)
-    scope.update(os=os,subprocess=Mock(),PYTHON='synthetic-python')
+    scope.update(os=os,json=json,subprocess=Mock(),PYTHON='synthetic-python')
     display=ModuleType('IPython.display');display.display=Mock();display.FileLink=str
     source=next(''.join(c['source']) for c in cells() if c['cell_type']=='code' and 'def model_environment' in ''.join(c['source']))
     with patch.dict('sys.modules',{'IPython.display':display}):exec(compile(source,'<helpers>','exec'),scope)
@@ -95,6 +95,58 @@ class AblationNotebookTests(unittest.TestCase):
             args=scope['subprocess'].run.call_args.args[0]
             self.assertIn('judge',args);self.assertNotIn('run',args);self.assertIn('--max-new-judgments',args)
             self.assertEqual(scope['export_checkpoint'].call_count,2)
+
+class AblationCompletedWithErrorsTests(unittest.TestCase):
+    def test_finished_schedule_with_error_does_not_skip_judge_cell(self):
+        scope=notebook_scope()
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp);destination=out/'runs/full';destination.mkdir(parents=True)
+            (destination/'progress.json').write_text(json.dumps({'expected':120,'saved':120,'paused':None,'complete':False}))
+            scope.update(OUT=out,BUNDLE=out/'bundle120',SETTINGS=out/'settings.json',ROOT=out,
+                model_environment=lambda _:contextlib.nullcontext(),export_checkpoint=Mock())
+            scope['subprocess'].run.return_value=SimpleNamespace(returncode=2)
+            with contextlib.redirect_stdout(io.StringIO()):scope['run_configuration']('full')
+            scope['export_checkpoint'].assert_called_once()
+
+    def test_capacity_pause_still_stops_before_judge(self):
+        scope=notebook_scope()
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp);destination=out/'runs/full';destination.mkdir(parents=True)
+            (destination/'progress.json').write_text(json.dumps({'expected':120,'saved':39,'paused':'UPSTREAM_CAPACITY_OR_CONFIGURATION','complete':False}))
+            scope.update(OUT=out,BUNDLE=out/'bundle120',SETTINGS=out/'settings.json',ROOT=out,
+                model_environment=lambda _:contextlib.nullcontext(),export_checkpoint=Mock())
+            scope['subprocess'].run.return_value=SimpleNamespace(returncode=2)
+            with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(RuntimeError):scope['run_configuration']('full')
+            scope['export_checkpoint'].assert_called_once()
+
+    def test_budget_skip_without_content_is_not_a_successful_legal_refusal(self):
+        result={'claims':[],'warnings':['APPLICABILITY_COMPONENT_BUDGET_EXHAUSTED']}
+        self.assertEqual(e.infrastructure_failure(result),'COMPONENT_TIME_BUDGET_EXHAUSTED')
+        result['claims']=[{'text':'Independently verified content'}]
+        self.assertIsNone(e.infrastructure_failure(result))
+
+    def test_synthetic_warmup_checks_gpu_before_measured_queries(self):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        source=next(''.join(c['source']) for c in cells() if c['cell_type']=='code' and 'def warm_ollama' in ''.join(c['source']))
+        node=next(n for n in ast.walk(ast.parse(source)) if isinstance(n,ast.FunctionDef) and n.name=='warm_ollama')
+        with tempfile.TemporaryDirectory() as tmp:
+            body={'done':True,'message':{'content':'{"ready":true}'}}
+            response=MagicMock();response.__enter__.return_value=io.StringIO(json.dumps(body))
+            request=Mock(return_value='SYNTHETIC_REQUEST');open_request=Mock(return_value=response)
+            models=Mock(return_value={'models':[{'name':'qwen3:8b','size_vram':1024,'size':1024}]})
+            scope=dict(urllib=SimpleNamespace(request=SimpleNamespace(Request=request,urlopen=open_request)),
+                json=json,time=__import__('time'),WORK=Path(tmp),ollama_json=models)
+            exec(compile(ast.Module(body=[node],type_ignores=[]),'<warmup>','exec'),scope)
+            with contextlib.redirect_stdout(io.StringIO()):status=scope['warm_ollama']()
+            self.assertEqual(status['status'],'READY')
+            payload=json.loads(request.call_args.kwargs['data'])
+            self.assertEqual(payload['options']['num_ctx'],32768)
+            self.assertFalse(payload['think']);self.assertEqual(open_request.call_count,1)
+            self.assertEqual(payload['messages'][0]['content'],'Return a JSON object with ready equal to true.')
+            response.__enter__.return_value=io.StringIO(json.dumps(body))
+            models.return_value={'models':[{'name':'qwen3:8b','size_vram':0}]}
+            with self.assertRaises(RuntimeError):scope['warm_ollama']()
 
 class EvaluationBatchTests(unittest.TestCase):
     def bundle(self,root):

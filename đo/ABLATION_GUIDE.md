@@ -19,6 +19,15 @@ ACTION = 'run_and_judge'
 
 Mỗi cấu hình dự kiến 120 câu, một lần lặp. Mặc định MAX_NEW_QUESTIONS=None và MAX_NEW_JUDGMENTS=None: chạy hết DUY NHẤT cấu hình đã chọn, rồi chấm cấu hình đó. Chạy xong Full, tải ZIP; lần tiếp theo đổi ABLATION_CONFIG sang without_graph và Run All, v.v. Mỗi cấu hình ở thư mục riêng, không ghi đè cấu hình trước. Chưa gom so sánh trong lượt đo riêng này.
 
+### Lần đo mới sau sửa timeout
+
+- Dùng `RUN_NAME='labor120_ablation_timeoutguard_v2'`; không resume kết quả cũ sau thay code/config.
+- Commit/push bản sửa trước khi Run All. Notebook sẽ dừng sớm nếu code/config trên GitHub chưa có ngưỡng thời gian và cấu hình context mới.
+- Trước khi đo, notebook gọi một yêu cầu JSON tổng hợp cố định để làm nóng Qwen context 32K và kiểm tra có dùng GPU. Không gửi Gold; thời gian khởi động ghi riêng trong `ollama_preflight.json`.
+- Auditor chia đợt theo kích thước đầu vào, giữ nguyên toàn văn và ngữ cảnh cha; không gửi primary khi cửa sổ còn dưới 25 giây. Bước sinh không gửi primary khi cửa sổ còn dưới 20 giây. Tổng ngân sách request và thời gian dành cho hậu kiểm vẫn được giữ.
+- Nếu đã lưu đủ lượt nhưng còn ERROR, notebook vẫn chấm các lượt OK. Lỗi còn nguyên trong ZIP; `complete=false` không tự đổi thành true.
+- Đổi model judge giữa các thí nghiệm khiến điểm không thể gộp trực tiếp. Nếu so với Naive đã chấm bằng 3.1, cần một đợt chấm thống nhất; không sửa manifest cũ để ép cùng điều kiện.
+
 ## 2. Model và Secrets
 
 - Gemini trong pipeline: `BACKEND_GEMINI_MODEL='gemini-3.1-flash-lite'`.

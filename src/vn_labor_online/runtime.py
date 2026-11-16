@@ -61,17 +61,20 @@ def _operation_remaining():
 
 
 @contextmanager
-def operation_budget(name, total_seconds, call_seconds, reserve_seconds=0):
+def operation_budget(name, total_seconds, call_seconds, reserve_seconds=0, *, minimum_call_seconds=0):
     """Bound repeated component calls cumulatively and reserve downstream work.
 
     Request cancellation/deadline always wins. A local timeout never verifies
     evidence or creates an answer; callers retain only decisions already checked.
+    The optional minimum is admission control, never an extension of any cap.
+    Skipped calls consume no component time and leave review reserves intact.
     """
     parent=_current.get()
     allowance=total_seconds-(parent.operation_spent.get(name,0) if parent else 0)
     if parent:allowance=min(allowance,parent.remaining()-reserve_seconds)
     allowance=min(allowance,call_seconds,_operation_remaining())
-    if allowance<=0:raise OperationBudgetExceeded('COMPONENT_TIME_BUDGET_EXHAUSTED')
+    if allowance<=0 or allowance<minimum_call_seconds:
+        raise OperationBudgetExceeded('COMPONENT_TIME_BUDGET_EXHAUSTED')
     started=time.monotonic()
     token=_operation.set((name,started+allowance))
     try:

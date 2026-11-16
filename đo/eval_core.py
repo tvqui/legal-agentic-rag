@@ -103,6 +103,11 @@ def infrastructure_failure(result):
             for item in value:
                 visit(item)
     visit(result.get('trace', {}))
+    # A budget admission refusal is not a legal-evidence verdict. Keep it an
+    # infrastructure error when no reviewed content answer survived, even
+    # though no provider call (and hence no model-call ERROR step) was made.
+    if 'APPLICABILITY_COMPONENT_BUDGET_EXHAUSTED' in result.get('warnings', []):
+        found.append('COMPONENT_TIME_BUDGET_EXHAUSTED')
     return next((c for c in found if c == 'GEMINI_HTTP_429'), found[0] if found else None)
 
 

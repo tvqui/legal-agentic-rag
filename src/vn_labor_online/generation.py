@@ -546,7 +546,8 @@ class LegalAdjudicator:
         reserve=(self.cfg.review_reserve_seconds if self.cfg.semantic_review
                  and self.cfg.mode!='deterministic' else 0)
         with operation_budget('adjudication_primary',self.cfg.primary_budget_seconds,
-                self.cfg.primary_budget_seconds,reserve):
+                self.cfg.primary_budget_seconds,reserve,
+                minimum_call_seconds=self.cfg.minimum_call_seconds):
             return self.provider.structured(system,user,schema)
 
     def _generation_structured(self,system,user,schema):
