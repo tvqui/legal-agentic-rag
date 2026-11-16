@@ -593,12 +593,14 @@ def base_parser(description):
     run.add_argument('--bundle', required=True); run.add_argument('--config', required=True); run.add_argument('--out', required=True)
     run.add_argument('--methods', nargs='+', default=['all']); run.add_argument('--task', choices=['retrieval', 'qa'], default='retrieval')
     run.add_argument('--resume', action='store_true'); run.add_argument('--retry-errors', action='store_true')
+    run.add_argument('--retry-error-codes',nargs='+',help='Retry only ERROR records with these provider codes')
     run.add_argument('--allow-llm', action='store_true'); run.add_argument('--allow-draft', action='store_true')
     run.add_argument('--limit', type=int); run.add_argument('--repeats', type=int, default=1); run.add_argument('--k', type=int, default=10)
     run.add_argument('--seed', type=int, default=42); run.add_argument('--judge', action='store_true')
     run.add_argument('--max-new-questions',type=int,help='Pause after this many NEW attempts; keep the full frozen question selection')
     report = sub.add_parser('report'); report.add_argument('--runs', nargs='+', required=True); report.add_argument('--out', required=True)
     judge = sub.add_parser('judge'); judge.add_argument('--run', required=True); judge.add_argument('--allow-llm', action='store_true')
+    judge.add_argument('--retry-error-codes',nargs='+',help='Retry only existing judge ERROR records with these codes')
     judge.add_argument('--max-new-judgments',type=int,help='Pause after this many new post-hoc model calls')
     return parser
 
@@ -607,6 +609,8 @@ def execute(args, baseline=False):
     from adapters import RETRIEVAL, ABLATIONS, BASELINES, create, NotApplicable, resolved_settings
     from vn_labor_online.runtime import request_budget
     from protocol import capacity_error
+    if getattr(args,'retry_error_codes',None) and not args.retry_errors:
+        raise ValueError('--retry-error-codes requires --retry-errors for generation')
     manifest, questions, corpus = load_bundle(args.bundle)
     settings = read(args.config)
     def reject_secrets(value):
@@ -699,11 +703,13 @@ def execute(args, baseline=False):
     if len({key(r) for r in records}) != len(records) or any(key(r) not in expected_keys for r in records):
         raise ValueError('Corrupt/foreign resume records')
     if args.retry_errors:
-        retry = [r for r in records if r['status'] == 'ERROR']
+        codes=getattr(args,'retry_error_codes',None)
+        retry = [r for r in records if r['status']=='ERROR' and (codes is None or (r.get('error') or {}).get('error_code') in codes)]
         with (out / 'attempt_history.jsonl').open('a', encoding='utf-8') as f:
             for r in retry:
                 f.write(json.dumps(r, ensure_ascii=False) + '\n')
-        records = [r for r in records if r['status'] != 'ERROR']
+        retry_keys={key(r) for r in retry}
+        records = [r for r in records if key(r) not in retry_keys]
         write_rows(path, records)
     done = {key(r) for r in records}
     paused = None;new_attempts=0
@@ -793,7 +799,7 @@ def execute(args, baseline=False):
     return 0 if len(records) == len(expected_keys) and all(r['status'] == 'OK' for r in records) else 2
 
 
-def judge_run(directory,max_new_judgments=None):
+def judge_run(directory,max_new_judgments=None,retry_error_codes=None):
     """Post-hoc independent scoring; never send Gold to a system's inference."""
     from adapters import reader
     from vn_labor_online.runtime import request_budget
@@ -826,6 +832,9 @@ def judge_run(directory,max_new_judgments=None):
     try:
         for r in records:
             if r['status'] != 'OK' or r.get('judge', {}).get('status') == 'AI_JUDGED':
+                continue
+            if (retry_error_codes is not None and r.get('judge',{}).get('status')=='ERROR'
+                and (r['judge'].get('error') or {}).get('error_code') not in retry_error_codes):
                 continue
             q, result = questions[r['id']], r['result']
             if not q.get('qa_judge_eligible', True):
@@ -900,6 +909,6 @@ def main(baseline=False):
     if args.action == 'judge':
         if not args.allow_llm:
             parser.error('Judge calls an external/local model; pass --allow-llm')
-        progress=judge_run(args.run,getattr(args,'max_new_judgments',None))
+        progress=judge_run(args.run,getattr(args,'max_new_judgments',None),getattr(args,'retry_error_codes',None))
         return 0 if not progress['new_judge_errors'] and (progress['complete_for_saved_answers'] or progress['paused']=='BATCH_LIMIT') else 2
     return execute(args, baseline)

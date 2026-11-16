@@ -67,3 +67,14 @@ Phiên mới: thêm ZIP checkpoint cùng artifact làm Input, đặt CHECKPOINT_
 Có thể chỉ đưa hai ZIP để so trước. Output có bảng Markdown/CSV/JSON, paired deltas, biểu đồ và SHA256 ZIP đầu vào. Chỉ so sánh các run cùng comparison_key; khác model/điều kiện sẽ tách nhóm. Không trộn hai checkpoint của cùng cấu hình trong cùng nhóm; dùng đúng một ZIP cuối. File lỗi hoặc kết quả chưa hoàn tất không được biến thành điểm 0 hay bị âm thầm xóa. Chọn thư mục output mới để giữ nguyên kết quả gốc.
 
 Gold vẫn DRAFT; AI judge không phải phê duyệt pháp lý. Đọc số câu hoàn tất, số câu được chấm và lỗi trước khi đưa bảng vào báo cáo.
+
+
+## Tự thử lại lỗi sau lượt đầu (retry v3)
+
+`RUN_NAME='labor120_ablation_retry_v3'`. Mặc định `AUTO_RETRY_ROUNDS=2`, `RETRY_BACKOFF_SECONDS=10`: sau khi lưu đủ lịch, chỉ chạy lại các lượt ERROR có mã lỗi hạ tầng cho phép; không chạy lại câu OK hoặc câu hỏi bổ sung/từ chối hợp lệ. Có thể đặt số vòng bằng 0 để tắt.
+
+- `failed_questions.json` là danh sách lỗi generation hiện còn; `failed_judgments.json` là lỗi chấm. Danh sách rỗng nghĩa không còn lỗi ở phần đó, không chứng minh nội dung đúng luật.
+- `first_pass_generation.jsonl` và `first_pass_judge.jsonl` giữ kết quả trước vòng phục hồi; lịch sử ở `attempt_history.jsonl` / `judge_attempt_history.jsonl`. `retry_costs.json` cộng cả thời gian generation thất bại; `*_retry_state.json` ghi số vòng và thời gian vòng phục hồi.
+- Giới hạn vòng được lưu qua lần chạy lại cell; không tự đặt lại số vòng hoặc đổi key/model. Lỗi quota/cấu hình API hoặc lịch đang gián đoạn thì dừng, xuất checkpoint. Lỗi không có mã hạ tầng rõ ràng được giữ để kiểm tra thủ công.
+- Ollama timeout chỉ tự thử lại khi notebook sở hữu server: dừng đúng server đó, khởi động và làm nóng lại trước khi gửi câu lỗi; không tắt server bên ngoài. Nếu không xác nhận được quyền sở hữu hoặc restart lỗi, giữ checkpoint để tiếp tục sau.
+- Phải dùng cùng chính sách retry khi so các cấu hình. Kết quả sau nhiều lần thử không tương đương baseline chỉ một lần; đối chiếu cả snapshot lượt đầu và tổng chi phí. Không trộn v3 với run cũ vì mã nguồn/cấu hình đã đổi.
