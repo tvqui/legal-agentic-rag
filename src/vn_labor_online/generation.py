@@ -625,6 +625,10 @@ class LegalAdjudicator:
     def generate(self,pack:VerifiedEvidencePack,partial:bool,assumptions:list[str]|None=None)->tuple[AdjudicationDraft,list[str]]:
         from .evidence_budget import generation_evidence
         pack=pack.model_copy(update={'evidence':generation_evidence(pack)})
+        if not pack.evidence:
+            return AdjudicationDraft(answer_summary='Không đủ bằng chứng đã xác minh để kết luận.',
+                claims=[],applicable_law_versions=[],assumptions=assumptions or [],
+                limitations=list(dict.fromkeys(pack.coverage_state.gaps+['no_eligible_evidence']))),['ADJUDICATION_NO_ELIGIBLE_EVIDENCE']
         literal=literal_lookup_draft(pack,partial,assumptions)
         if literal is not None:
             skip_step('answer_quality','Luồng trích nguyên văn có kiểm tra literal riêng')
@@ -764,6 +768,7 @@ class LegalAdjudicator:
             return render_claims(merged,partial),list(dict.fromkeys(warnings))
         shortcut_allowed=not any(t.origin=='RESEARCHER' for t in pack.answer_tasks) and (len(pack.answer_tasks)<=1 or all(t.legal_subissues for t in pack.answer_tasks))
         safe_fallback=lambda:adjudicate(pack,partial,assumptions)
+        if not pack.evidence:return safe_fallback(),['ADJUDICATION_NO_ELIGIBLE_EVIDENCE']
         historical_notice=_find(pack,'37','3',instrument='10/2012/QH13')
         if shortcut_allowed and historical_notice and all(item.instrument_number=='10/2012/QH13' and item.article in {'37','156'} for item in pack.evidence):
             return safe_fallback(),[]
@@ -821,6 +826,9 @@ class LegalAdjudicator:
           'document_type':item.document_type,'document_title':item.document_title,'issuer':item.issuer,
           'norm_role':item.norm_role,'valid_from':item.valid_from,'valid_to':item.valid_to,
           'promulgated_date':item.promulgated_date,'consolidation_as_of':item.consolidation_as_of,'version_role':item.version_role,'text':item.text} for item in pack.evidence]}
+        if any('EXPERIMENT_APPLICABILITY_NOT_CHECKED' in item.warnings for item in pack.evidence):
+            payload['applicability_audit_status']='NOT_CHECKED_EXPERIMENT'
+            system+=' No upstream applicability audit was performed in this experimental arm. Source validation is not proof of applicability. Assess the supplied conditions, exceptions and facts yourself; do not assume unknown conditions are satisfied.'
         schema=ProviderClaims.model_json_schema()
         from .analysis import analyze,intake,plan_evidence
         analysis=None;plan=pack.evidence_plan

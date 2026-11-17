@@ -51,6 +51,12 @@ class OnlinePipeline:
             if selected:cfg.applicability.unresolved_model=selected
         self.applicability=LegalApplicabilityAuditor(cfg.applicability,self.store)
         self.adjudicator=LegalAdjudicator(cfg.adjudication)
+    def _build_evidence_pack(self,*args,**kwargs):
+        # Default production contract remains strict. A class-declared adapter
+        # hook can carry explicitly unaudited sources in an isolated experiment.
+        if callable(getattr(type(self.applicability),'build_evidence_pack',None)):
+            return self.applicability.build_evidence_pack(*args,**kwargs)
+        return build_verified_pack(*args,**kwargs)
     def close(self):
         for component in (self.researcher,self.applicability,self.adjudicator):
             if component.provider is not None: component.provider.close()
@@ -552,7 +558,7 @@ class OnlinePipeline:
                 status=Stop.PARTIAL_ALLOWED; partial=True
                 warnings.append('INDEPENDENT_TASK_RULES_ONLY')
         selected_decisions=[x for x in decisions if x.evidence_id in {item.unit_id for item in selected}]
-        pack=observed('pack',build_verified_pack,env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome,summary=lambda v:{'so_nguon':len(v.evidence),'so_ky_tu':sum(len(x.text) for x in v.evidence),'trang_thai_du_kien':status.value})
+        pack=observed('pack',self._build_evidence_pack,env.normalized_query,analysis.query_date,analysis.facts,state,selected,selected_decisions,analysis.requested_outcome,summary=lambda v:{'so_nguon':len(v.evidence),'so_ky_tu':sum(len(x.text) for x in v.evidence),'trang_thai_du_kien':status.value})
         pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'scope_exclusions':analysis.scope_exclusions,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
         if exact_only:
             scoped_ids={item.unit_id for item in lists[0]}
@@ -656,7 +662,7 @@ class OnlinePipeline:
                 preserved_gaps=[gap for gap in state.gaps if gap in {'answer_coverage','pending_facts'}]
                 selected,state=select_for_plan(selected,plan,analysis.query_date,allow_fallback,len(selected))
                 state=state.model_copy(update={'gaps':list(dict.fromkeys(state.gaps+preserved_gaps))})
-                pack=build_verified_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
+                pack=self._build_evidence_pack(env.normalized_query,analysis.query_date,analysis.facts,state,selected,
                   [x for x in decisions if x.evidence_id in {item.unit_id for item in selected}],analysis.requested_outcome)
                 pack=pack.model_copy(update={'answer_tasks':analysis.answer_tasks,'resolved_rule_requirements':plan.slot_requirements,'evidence_plan':plan,'scope_exclusions':analysis.scope_exclusions,'corpus_snapshot_as_of':snapshot,'freshness_status':'UNVERIFIED_AFTER_SNAPSHOT' if freshness_relevant else 'WITHIN_CORPUS_SNAPSHOT'})
                 if exact_only:

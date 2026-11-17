@@ -766,7 +766,10 @@ def execute(args, baseline=False):
                                 r['metrics'] = retrieval_metrics(retrieved, question['required_groups'], args.k) if args.task == 'retrieval' else qa_metrics(result, question, corpus)
                             except Exception as exc:
                                 r.update(status='ERROR', elapsed_ms=(time.perf_counter() - start) * 1000, error=safe_error(exc))
-                                if capacity_error(exc):
+                                permanent=getattr(exc,'safe_code',None) in {
+                                    prefix+'_HTTP_'+str(status) for prefix in ('OLLAMA','HTTP_JSON')
+                                    for status in (400,401,403,404)}
+                                if capacity_error(exc) or permanent:
                                     paused = 'UPSTREAM_CAPACITY_OR_CONFIGURATION'
                         r['resources'] = resources.report()
                     records.append(r); done.add(key(r)); write_rows(path, records)

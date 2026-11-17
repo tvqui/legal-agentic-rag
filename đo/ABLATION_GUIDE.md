@@ -78,3 +78,16 @@ Gold vẫn DRAFT; AI judge không phải phê duyệt pháp lý. Đọc số câ
 - Giới hạn vòng được lưu qua lần chạy lại cell; không tự đặt lại số vòng hoặc đổi key/model. Lỗi quota/cấu hình API hoặc lịch đang gián đoạn thì dừng, xuất checkpoint. Lỗi không có mã hạ tầng rõ ràng được giữ để kiểm tra thủ công.
 - Ollama timeout chỉ tự thử lại khi notebook sở hữu server: dừng đúng server đó, khởi động và làm nóng lại trước khi gửi câu lỗi; không tắt server bên ngoài. Nếu không xác nhận được quyền sở hữu hoặc restart lỗi, giữ checkpoint để tiếp tục sau.
 - Phải dùng cùng chính sách retry khi so các cấu hình. Kết quả sau nhiều lần thử không tương đương baseline chỉ một lần; đối chiếu cả snapshot lượt đầu và tổng chi phí. Không trộn v3 với run cũ vì mã nguồn/cấu hình đã đổi.
+
+
+## Bản contract v4: chạy lại without_auditor
+
+Run mới: `labor120_ablation_contract_v4`. Chọn `ABLATION_CONFIG='without_auditor'`, chạy `PROFILE='smoke'` trước, sau đó `PROFILE='standard'`. Giữ model backend, judge và dữ liệu giống nhau giữa các cấu hình.
+
+Bản cũ có lỗi adapter: căn cứ được giữ ở bước lựa chọn nhưng bị pack loại vì tất cả quyết định là UNRESOLVED, dẫn đến enum trích dẫn rỗng và Ollama 400. Không diễn giải các lỗi đó thành đóng góp chất lượng của Auditor.
+
+Ở v4, chỉ DisabledAuditor có hook đóng gói nguồn đã qua kiểm tra cứng, giữ nguyên quyết định UNRESOLVED/supports_claim=False và nhãn EXPERIMENT_APPLICABILITY_NOT_CHECKED. Không giả PASS, không tắt semantic reviewer hay kiểm tra trích dẫn. Full vẫn dùng builder nghiêm ngặt như trước. Khi không có căn cứ, không gọi mô hình với schema trích dẫn rỗng.
+
+Notebook in AUDITOR_ABLATION_CONTRACT_VERIFIED sau khi thực thi cả đường thí nghiệm và đường Full trên dữ liệu tổng hợp. Nếu xảy ra lỗi yêu cầu Ollama/HTTP JSON 400/401/403/404, runner giữ checkpoint và dừng sớm thay vì tốn thêm hàng chục lượt. Đây không phải lỗi transient để tự lặp.
+
+Giữ ZIP lỗi cũ để chẩn đoán, không resume nó bằng code mới. Chỉ gộp ablation theo cùng comparison_key; việc sửa hợp đồng thí nghiệm làm source fingerprint thay đổi, không sửa manifest để ép gộp.

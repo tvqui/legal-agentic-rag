@@ -42,6 +42,16 @@ class AblationNotebookTests(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('TIMEOUT_POLICY_VERIFIED',result.stdout)
 
+    def test_auditor_contract_probe_executes_actual_packing_paths(self):
+        import subprocess,sys
+        source=next(''.join(c['source']) for c in cells() if c['cell_type']=='code' and 'contract_probe=' in ''.join(c['source']))
+        assignment=next(n for n in ast.walk(ast.parse(source)) if isinstance(n,ast.Assign)
+            and any(isinstance(t,ast.Name) and t.id=='contract_probe' for t in n.targets))
+        probe=ast.literal_eval(assignment.value)
+        result=subprocess.run([sys.executable,'-X','utf8','-c',probe],cwd=NB.resolve().parents[1],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('AUDITOR_ABLATION_CONTRACT_VERIFIED',result.stdout)
+
     def test_checkpoint_restore_rejects_paths_outside_output(self):
         import stat
         from unittest.mock import MagicMock
@@ -192,6 +202,21 @@ class EvaluationBatchTests(unittest.TestCase):
                 self.assertEqual(e.execute(args),0);self.assertEqual(adapter.run.call_count,2)
                 self.assertEqual(e.execute(args),0);self.assertEqual(adapter.run.call_count,2)
                 self.assertEqual(e.read(p/'run/run_manifest.json')['comparison_key'],m['comparison_key'])
+    def test_bad_ollama_request_stops_after_first_error_before_wasting_batch(self):
+        from vn_labor_online.errors import LLMProviderError
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp);self.bundle(p);e.dump(p/'settings.json',{'cache':str(p/'cache'),'embedding_identity':'FROM_BUNDLE'})
+            args=e.base_parser('fixture').parse_args(['run','--bundle',str(p/'bundle'),'--config',str(p/'settings.json'),
+                '--out',str(p/'run'),'--methods','bm25','--allow-draft'])
+            adapter=Mock();adapter.prepare.return_value={};adapter.run.side_effect=LLMProviderError(safe_code='OLLAMA_HTTP_400')
+            env={'platform':'fixture','machine':'','processor':'','cpu_count':1,'gpu':None,'hardware_id':None,'packages':{}}
+            with patch('adapters.resolved_settings',return_value={}),patch('adapters.create',return_value=adapter),patch('eval_core.environment',return_value=env),patch('eval_core.plot_table'),contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(e.execute(args),2)
+            self.assertEqual(adapter.run.call_count,1)
+            progress=e.read(p/'run/progress.json')
+            self.assertEqual(progress['saved'],1);self.assertEqual(progress['expected'],2)
+            self.assertEqual(progress['paused'],'UPSTREAM_CAPACITY_OR_CONFIGURATION')
+
     def test_judge_batch_skips_completed_scores_on_next_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp);self.bundle(p);run=p/'run';run.mkdir()
