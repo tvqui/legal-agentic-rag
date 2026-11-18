@@ -4,3 +4,6 @@ work/
 results/
 *.log
 settings.local.json
+
+result_kaggle/
+templates/

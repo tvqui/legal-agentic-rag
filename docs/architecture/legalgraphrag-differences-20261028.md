@@ -122,6 +122,6 @@ Cách trình bày đề xuất: “Pháp Điển AI kế thừa kiến trúc Hie
 - OFFLINE: `graph_builder.py`, `cases.py`, `communities.py`, `legal_structure.py`, `provision_versions.py`, `ontology_vocabulary.py`, `extract.py`, `page_quality.py`, `source_accounting.py`, `source_links.py`, `external_sources.py`.
 - ONLINE: `pipeline.py`, `models.py`, `researcher.py`, `taxonomy.py`, `tasks.py`, `conversation.py`, `retrieval.py`, `evidence.py`, `graph.py`, `audit.py`, `applicability.py`, `generation.py`, `profile_generation.py`, `answer_review.py`, `answer_quality.py`, `artifact_store.py`.
 - Vận hành: `api.py`, `runtime.py`, `demo_progress.py`, `providers.py`, `gemini_quota.py`; `frontend/package.json`; `benchmarks/evaluation_suite`; `gold_dataset/result/comparison_tables.json`.
-- Dữ liệu thực chạy: [review result_28-10](../kaggle/offline-results-review-20261028.md).
+- Dữ liệu thực chạy: [review result_28-10](../README.md).
 
 Không sửa code hay chạy benchmark/LLM trong lượt đối chiếu tài liệu này. Không đọc hoặc sao chép .env/API key. Các mô hình đang thực sự chạy phụ thuộc cấu hình và biến môi trường của phiên backend, không chỉ YAML mặc định.

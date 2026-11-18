@@ -18,7 +18,12 @@ def main():
     pd=sub.add_parser('dense'); pd.add_argument('--config',default='config/pipeline.yaml')
     ps=sub.add_parser('source-resolver')
     ps.add_argument('resolver_args', nargs=argparse.REMAINDER)
+    pp=sub.add_parser('package'); pp.add_argument('--artifact',type=Path,required=True); pp.add_argument('--output',type=Path,required=True)
     args=p.parse_args()
+    if args.cmd == 'package':
+        from .artifact_layout import package_outputs
+        print(json.dumps(package_outputs(args.artifact,args.output),ensure_ascii=False,indent=2))
+        return
     if args.cmd == 'source-resolver':
         from .source_resolver.cli import main as resolver_main
         raise SystemExit(resolver_main(args.resolver_args))

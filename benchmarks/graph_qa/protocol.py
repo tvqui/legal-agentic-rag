@@ -19,8 +19,9 @@ def sha(path):
 
 def consumed_artifact_hashes(root):
     root=Path(root)
-    paths=list((root/'06_indexes').rglob('*'))
-    paths += [root/name for name in ('05_graph/nodes.jsonl','05_graph/edges.jsonl',
+    from vn_labor_offline.artifact_layout import resolve_path
+    paths=list(resolve_path(root,'06_indexes').rglob('*'))
+    paths += [resolve_path(root,name) for name in ('05_graph/nodes.jsonl','05_graph/edges.jsonl',
         '00_manifest/source_catalog_resolved.jsonl','reports/final_outputs_validation.json',
         'reports/dense_validation.json','reports/neo4j_validation.json')]
     return {p.relative_to(root).as_posix():sha(p) for p in sorted(set(paths)) if p.is_file()}

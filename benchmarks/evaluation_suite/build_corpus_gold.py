@@ -41,14 +41,16 @@ def build(project: Path, artifact: Path, output: Path):
     from types import SimpleNamespace
     original_path = project / 'gold_dataset' / OLD
     originals, old_catalog, old_manifest = read_candidate(original_path)
+    from vn_labor_offline.artifact_layout import resolve_member
     with zipfile.ZipFile(artifact) as archive:
-        raw_units = archive.read('artifacts/06_indexes/retrieval_units.jsonl')
+        def artifact_read(name): return archive.read(resolve_member(archive.namelist(), name))
+        raw_units = artifact_read('06_indexes/retrieval_units.jsonl')
         units = [json.loads(s) for s in raw_units.decode('utf-8-sig').splitlines() if s.strip()]
-        neo = json.loads(archive.read('artifacts/reports/neo4j_validation.json'))
-        final = json.loads(archive.read('artifacts/reports/final_outputs_validation.json'))
-        dense = json.loads(archive.read('artifacts/reports/dense_validation.json'))
-        raw_nodes = archive.read('artifacts/05_graph/nodes.jsonl')
-        raw_edges = archive.read('artifacts/05_graph/edges.jsonl')
+        neo = json.loads(artifact_read('reports/neo4j_validation.json'))
+        final = json.loads(artifact_read('reports/final_outputs_validation.json'))
+        dense = json.loads(artifact_read('reports/dense_validation.json'))
+        raw_nodes = artifact_read('05_graph/nodes.jsonl')
+        raw_edges = artifact_read('05_graph/edges.jsonl')
         graph = [[json.loads(s) for s in raw.decode('utf-8-sig').splitlines() if s.strip()]
                  for raw in (raw_nodes, raw_edges)]
     graph_fp = digest(json.dumps(graph, ensure_ascii=False, sort_keys=True).encode())

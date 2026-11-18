@@ -150,6 +150,10 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
         root=Path(input_root).resolve()
         required=('05_graph/nodes.jsonl','05_graph/edges.jsonl','06_indexes/retrieval_units.jsonl',
                   'reports/dense_validation.json','reports/neo4j_validation.json')
+        project=globals().get('ROOT')
+        if project is not None and (Path(project)/'src').is_dir():
+            sys.path.insert(0,str(Path(project)/'src'))
+        from vn_labor_offline.artifact_layout import runtime_name,resolve_path
         marker_name='reports/final_outputs_validation.json'
         def complete(report):
             return (isinstance(report,dict) and isinstance(report.get('stages'),dict)
@@ -158,10 +162,10 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
         def final_directory(target):
             parent=target/'artifacts' if (target/'artifacts').is_dir() else target
             try:
-                marker=parent/marker_name
+                marker=resolve_path(parent,marker_name)
                 if marker.stat().st_size>1024*1024: return False
                 report=json.loads(marker.read_text(encoding='utf-8-sig'))
-                return complete(report) and all((parent/name).is_file() for name in required)
+                return complete(report) and all(resolve_path(parent,name).is_file() for name in required)
             except (OSError,ValueError): return False
         def final_archive(target):
             # Inspect only a small report here. Pinning later verifies CRC, paths,
@@ -170,12 +174,13 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
                 with zipfile.ZipFile(target) as archive:
                     names=archive.namelist()
                     if len(names)!=len(set(names)): return False
-                    roots=[prefix for prefix in ('','artifacts/') if prefix+marker_name in names]
+                    roots=[(prefix,layout) for prefix in ('','artifacts/') for layout in (False,True) if prefix+(runtime_name(marker_name) if layout else marker_name) in names]
                     if len(roots)!=1: return False
-                    prefix=roots[0]; marker=archive.getinfo(prefix+marker_name)
+                    prefix,layout=roots[0]; physical=lambda n: runtime_name(n) if layout else n
+                    marker=archive.getinfo(prefix+physical(marker_name))
                     if marker.file_size>1024*1024: return False
                     report=json.loads(archive.read(marker).decode('utf-8-sig'))
-                    return (complete(report) and all(prefix+name in names for name in required))
+                    return (complete(report) and all(prefix+physical(name) in names for name in required))
             except (OSError,ValueError,RuntimeError,zipfile.BadZipFile): return False
         if explicit:
             target=Path(explicit).expanduser().resolve()
@@ -187,7 +192,7 @@ def make_notebook(gemini_model='gemini-3.5-flash-lite'):
         archives={p.resolve() for p in root.rglob('*')
                   if p.is_file() and p.suffix.lower()=='.zip' and final_archive(p)}
         directories=set()
-        for marker in root.rglob('reports/final_outputs_validation.json'):
+        for marker in list(root.rglob('reports/final_outputs_validation.json'))+list(root.rglob('checks/final_outputs_validation.json')):
             parent=marker.parent.parent
             if final_directory(parent):
                 directories.add(parent.resolve())

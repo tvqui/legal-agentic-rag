@@ -1,0 +1,10 @@
+runs/
+__pycache__/
+*.py[cod]
+*.log
+*.lock
+task.txt
+task_*.txt
+
+.env
+!.env.example

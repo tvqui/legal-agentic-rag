@@ -12,7 +12,7 @@ Cần điều chỉnh ba điểm trong đề xuất ban đầu:
 
 ## Phạm vi hiện được triển khai
 
-Phiên bản hiện tại `labor-subissues-v5` có 37 subissues, gồm hợp đồng, đào tạo, thời giờ làm việc, tiền lương, chấm dứt và nghỉ. Bảng dưới mô tả 21 nhánh TERMINATION/LEAVE ban đầu; các nhánh và kiểm chứng mới được ghi trong [báo cáo V4](review-v3-corrections-20261009.md). Chưa triển khai toàn bộ taxonomy pháp luật lao động hoặc các lĩnh vực liên quan như bảo hiểm xã hội.
+Phiên bản hiện tại `labor-subissues-v5` có 37 subissues, gồm hợp đồng, đào tạo, thời giờ làm việc, tiền lương, chấm dứt và nghỉ. Bảng dưới mô tả 21 nhánh TERMINATION/LEAVE ban đầu; các nhánh và kiểm chứng mới được ghi trong [báo cáo V4](../README.md). Chưa triển khai toàn bộ taxonomy pháp luật lao động hoặc các lĩnh vực liên quan như bảo hiểm xã hội.
 
 | Nhóm | Mã vấn đề | Ý nghĩa |
 | --- | --- | --- |
@@ -118,4 +118,4 @@ Hiện chưa thêm node `LegalSubIssue` vào graph OFFLINE. Nếu sau này cần
 
 ## Kiểm tra ngữ nghĩa và độ đầy đủ V5
 
-V5 bổ sung requirements về cơ chế và nguồn theo ngày trong `rule_catalog.py`, đồng thời dùng `answer_tasks` và semantic answer audit trên toàn bộ câu hỏi. Nhãn/locator chỉ lập kế hoạch; không tự chứng minh kết luận. Xem [đối chiếu và giới hạn V4 → V5](review-v4-corrections-20261010.md).
+V5 bổ sung requirements về cơ chế và nguồn theo ngày trong `rule_catalog.py`, đồng thời dùng `answer_tasks` và semantic answer audit trên toàn bộ câu hỏi. Nhãn/locator chỉ lập kế hoạch; không tự chứng minh kết luận. Xem [đối chiếu và giới hạn V4 → V5](../README.md).

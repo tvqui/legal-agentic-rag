@@ -1,4 +1,4 @@
-> Cập nhật 13/10/2026: mặc định notebook tiếp tục AI từ ZIP cuối ngày 13/10, giữ cache và kết quả đã khớp nguồn. Xem [hướng dẫn chạy tiếp AI](offline-ai-resume-20261013.md).
+> Cập nhật 13/10/2026: mặc định notebook tiếp tục AI từ ZIP cuối ngày 13/10, giữ cache và kết quả đã khớp nguồn. Xem [hướng dẫn chạy tiếp AI](../README.md).
 > Phần dưới mô tả chế độ dựng lại đầy đủ; dùng `RESUME_AI_ONLY=False`, `REFRESH_EXTRACTION_QUALITY=True` nếu cần OCR và index mới. Không tăng số provision trước khi kiểm tra báo cáo AI.
 
 # Chạy OFFLINE hoàn chỉnh trên Kaggle trong khi tiếp tục kiểm thử ONLINE

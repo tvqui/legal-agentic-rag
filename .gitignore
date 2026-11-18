@@ -28,12 +28,15 @@ pnpm-debug.log*
 # Models, tools and local runtime state
 /.cache/
 /.tools/
-/data/
+/data/*
+!/data/README.md
 /artifacts/
 /build/
 /review/inputs/
 /review/attachments/
 /review/returned/
+/tools/*
+!/tools/coding_team/
 
 # Secrets and machine-local settings
 .env
@@ -51,3 +54,23 @@ Desktop.ini
 *.tmp
 *.swp
 *.swo
+
+# Submission: local outputs and historical copies
+/đo/result_kaggle/
+/đo/templates/
+/gold_dataset/result/
+/gold_dataset/Gold_v0_2_review.xlsx
+/review/link_updates/
+/benchmarks/graph_qa/PhapDienAI_GraphQA_Code.zip*
+/tools.zip
+/PhapDienAI_Coding_Team_Stabilized.zip
+/docs/archive/
+/docs/online/architecture_audit.md
+/docs/online/completion_report.md
+/docs/online/legalgraphrag_review.md
+/docs/online/research_evaluation.md
+/docs/offline/ai_precheck_audit.md
+/docs/offline/automation_completion_report.md
+/docs/offline/review_next_steps.md
+/docs/offline/source_resolver_plan.md
+/docs/offline/source_review_return_audit.md

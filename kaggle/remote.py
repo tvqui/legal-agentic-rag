@@ -152,6 +152,19 @@ def export(archive_name='vn_labor_results.zip'):
     with archive.open('rb') as stream: digest=hashlib.file_digest(stream,'sha256').hexdigest()
     Path(str(archive)+'.sha256').write_text(f'{digest}  {archive.name}\n',encoding='ascii')
     print(f'Download: {archive}; {archive.stat().st_size / 1024**2:.1f} MiB', flush=True)
+    if archive_name == 'vn_labor_results.zip' and ready and all(validation.get('stages',{}).get(k) is True for k in ('registry','structure','graph','indexes')):
+        from vn_labor_offline.artifact_layout import package_outputs
+        import shutil, tempfile
+        release_parent = Path(tempfile.mkdtemp(prefix='offline-release-', dir=ROOT.parent))
+        try:
+            release_dir = release_parent / 'release'
+            package_outputs(OUT, release_dir)
+            for name in ('vn_labor_online.zip', 'vn_labor_offline_review.zip', 'release.json'):
+                os.replace(release_dir / name, ROOT.parent / name)
+                print('Download: ' + str(ROOT.parent / name), flush=True)
+        finally:
+            shutil.rmtree(release_parent)
+
 
 
 def main():

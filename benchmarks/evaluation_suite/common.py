@@ -25,8 +25,8 @@ def redact(value):
 
 def detect_artifact(root):
     root=Path(root)
-    archives=sorted(root.rglob('vn_labor_results.zip'))
-    directories=sorted(p.parent.parent for p in root.rglob('reports/final_outputs_validation.json'))
+    archives=sorted(list(root.rglob('vn_labor_online.zip'))+list(root.rglob('vn_labor_results.zip')))
+    directories=sorted(p.parent.parent for p in list(root.rglob('reports/final_outputs_validation.json'))+list(root.rglob('checks/final_outputs_validation.json')))
     # An archive and unpacked folder are ambiguous inputs too; never silently
     # select the older dataset just because its name sorts first.
     candidates=archives+directories

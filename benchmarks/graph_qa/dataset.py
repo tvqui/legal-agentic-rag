@@ -17,9 +17,10 @@ def read_artifact(artifact):
     artifact = Path(artifact)
     data, hashes = {}, {}
     with zipfile.ZipFile(artifact) if artifact.is_file() else _Directory(artifact) as source:
+        from vn_labor_offline.artifact_layout import resolve_member
         names = source.namelist()
         for key, suffix in FILES.items():
-            found = [n for n in names if n.replace("\\", "/").endswith(suffix)]
+            found = [resolve_member(names, suffix)]
             if len(found) != 1:
                 raise ValueError(f"Expected one {suffix}, found {len(found)}")
             raw = source.read(found[0]); hashes[key] = digest(raw)

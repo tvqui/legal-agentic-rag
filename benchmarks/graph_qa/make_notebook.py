@@ -338,7 +338,7 @@ print('Ollama đã warmup trên GPU; thời gian này không tính vào phép đ
 PREPARED=False
 if ARTIFACT=='auto':
     inputs=Path('/kaggle/input')
-    candidates=sorted(inputs.rglob('vn_labor_results.zip'))+sorted(p.parent.parent for p in inputs.rglob('reports/final_outputs_validation.json'))
+    candidates=sorted(inputs.rglob('vn_labor_online.zip'))+sorted(inputs.rglob('vn_labor_results.zip'))+sorted(p.parent.parent for p in list(inputs.rglob('reports/final_outputs_validation.json'))+list(inputs.rglob('checks/final_outputs_validation.json')))
     if len(candidates)!=1:raise RuntimeError('Cần đúng một artifact cuối; tìm thấy '+str(len(candidates))+'. Đặt ARTIFACT cụ thể nếu có nhiều input.')
     artifact=candidates[0]
 else:artifact=Path(ARTIFACT)

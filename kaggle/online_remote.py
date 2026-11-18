@@ -107,13 +107,14 @@ def wait_ready(url, token, process, timeout=180):
 def _artifact_directory_roots(input_root: Path) -> list[Path]:
     """Find Kaggle datasets after Kaggle has automatically unpacked the ZIP."""
     roots = set()
-    for marker in input_root.rglob("reports/final_outputs_validation.json"):
+    from vn_labor_offline.artifact_layout import resolve_path
+    for marker in list(input_root.rglob("reports/final_outputs_validation.json")) + list(input_root.rglob("checks/final_outputs_validation.json")):
         artifact_dir = marker.parent.parent
         required = (
-            artifact_dir / "06_indexes/retrieval_units.jsonl",
-            artifact_dir / "05_graph/nodes.jsonl",
-            artifact_dir / "reports/dense_validation.json",
-            artifact_dir / "reports/neo4j_validation.json",
+            resolve_path(artifact_dir, "06_indexes/retrieval_units.jsonl"),
+            resolve_path(artifact_dir, "05_graph/nodes.jsonl"),
+            resolve_path(artifact_dir, "reports/dense_validation.json"),
+            resolve_path(artifact_dir, "reports/neo4j_validation.json"),
         )
         if all(item.is_file() for item in required):
             roots.add(artifact_dir.parent if artifact_dir.name == "artifacts" else artifact_dir)
@@ -128,7 +129,7 @@ def detect_artifact(explicit: str | None, *, input_root: Path | None = None) -> 
         return result.resolve()
 
     input_root = input_root or Path("/kaggle/input")
-    names=('vn_labor_results.zip','vn_labor_results_20261014.zip',
+    names=('vn_labor_online.zip','vn_labor_results.zip','vn_labor_results_20261014.zip',
            'vn_labor_results_v8.1(aura).zip','vn_labor_results_v8_1_aura.zip')
     zip_matches=sorted({path.resolve() for name in names for path in input_root.rglob(name)})
     directory_matches = _artifact_directory_roots(input_root)

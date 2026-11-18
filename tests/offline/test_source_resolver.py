@@ -24,6 +24,7 @@ SEED = ROOT / "review/inputs/v8_1/source_review_return_v8_1/source_review_tracki
 
 
 class SourceResolverTests(unittest.TestCase):
+  @unittest.skipUnless(SEED.is_file(), "Optional private review snapshot is not bundled; synthetic resolver tests still run")
   def test_seed_distribution_and_real_statuses(self):
     rows = read_seed(SEED)
     assert len(rows) == 95

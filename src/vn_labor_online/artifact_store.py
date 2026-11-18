@@ -61,6 +61,9 @@ class ArtifactStore:
             self.root=target
         else: self.root=source
         self.artifacts=self.root/'artifacts' if (self.root/'artifacts').exists() else self.root
+        from vn_labor_offline.artifact_layout import validate_layout
+        try: self.layout_manifest=validate_layout(self.artifacts)
+        except ValueError as exc: raise OfflineArtifactMismatch(str(exc)) from exc
         self.units=_jsonl(self.path('06_indexes/retrieval_units.jsonl'))
         self.nodes=_jsonl(self.path('05_graph/nodes.jsonl')); self.edges=_jsonl(self.path('05_graph/edges.jsonl'))
         self.units_by_id={x['unit_id']:x for x in self.units}; self.nodes_by_id={x['id']:x for x in self.nodes}
@@ -73,7 +76,10 @@ class ArtifactStore:
         self.neo=json.loads(self.path('reports/neo4j_validation.json').read_text(encoding='utf-8-sig'))
         self.report=self._validate()
         if not self.report.compatible: raise OfflineArtifactMismatch('; '.join(self.report.issues))
-    def path(self,relative:str)->Path: return self.artifacts/relative
+    def path(self,relative:str)->Path:
+        from vn_labor_offline.artifact_layout import resolve_path
+        try: return resolve_path(self.artifacts,relative)
+        except ValueError as exc: raise OfflineArtifactMismatch(str(exc)) from exc
     def _build_diagnostic_index(self)->dict[str,list[dict]]:
         result={}
         for edge in self.edges:

@@ -63,4 +63,4 @@ lớn được tách theo claim, không âm thầm cắt nguồn.
 
 Mô hình kiểm là request riêng cùng provider hiện có, có thể vẫn hiểu sai;
 trích đúng nguồn chưa chứng minh entailment hoàn hảo. Chưa có benchmark live
-V5 hay Gold mới được duyệt. Xem [báo cáo đối chiếu](review-v4-corrections-20261010.md).
+V5 hay Gold mới được duyệt. Xem [báo cáo đối chiếu](../README.md).

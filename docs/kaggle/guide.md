@@ -69,4 +69,4 @@ build ID với graph/indexes.
 - Nếu chỉ làm human review, không cần chạy lại Kaggle.
 - Sau khi merge review, rebuild các stage phụ thuộc rồi cập nhật fingerprint ONLINE.
 
-Các bước review tiếp theo nằm tại [review_next_steps.md](../offline/review_next_steps.md).
+Các bước review tiếp theo nằm tại [review_next_steps.md](../README.md).

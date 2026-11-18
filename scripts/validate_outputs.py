@@ -185,4 +185,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     result = audit(args.neo4j, args.output, args.config)
     print(json.dumps({"ready_for_offline_v1": result["ready_for_offline_v1"], "stages": result["stages"]}, indent=2))
+    if result["ready_for_offline_v1"]:
+        from vn_labor_offline.artifact_layout import package_outputs
+        from datetime import datetime,timezone
+        from vn_labor_offline.config import resolve_paths,load_yaml
+        source=args.output or resolve_paths(load_yaml(args.config),args.config)['output_dir']
+        release=Path(source).parent/'releases'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        package_outputs(source,release)
+        print('Runtime and review packages: '+str(release),flush=True)
     sys.exit(0 if result["ready_for_offline_v1"] else 1)

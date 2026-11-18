@@ -2,3 +2,7 @@
 kaggle/ONLINE_Backend.ipynb text eol=lf
 benchmarks/evaluation_suite/Kaggle_Evaluation.ipynb text eol=lf
 benchmarks/evaluation_suite/Kaggle_Evaluation_Standard.ipynb text eol=lf
+
+# Files pinned by raw SHA-256 must retain exact bytes on Windows checkout.
+/config/labor_ontology_v3.owl -text
+/review/corrections/*.txt -text

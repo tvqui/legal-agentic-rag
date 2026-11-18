@@ -296,7 +296,7 @@ if report.exists():
     display(Markdown(report.read_text(encoding='utf-8')))
 
 outputs = []
-for name in ('vn_labor_results.zip', 'vn_labor_results_technical_checkpoint.zip',
+for name in ('vn_labor_online.zip', 'vn_labor_offline_review.zip', 'release.json', 'vn_labor_results.zip', 'vn_labor_results_technical_checkpoint.zip',
              'vn_labor_results_recovery.zip'):
     path = ROOT.parent / name
     if path.is_file():

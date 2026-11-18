@@ -1,0 +1,6 @@
+{
+  "archive": "graph_qa_v8_standard_results.zip",
+  "archive_sha256": "083dcdd066716a8fcc103aaa5f1390c364cf47bfc471376f7a5643125295b195",
+  "member": "comparison.csv",
+  "note": "Separate 24-query development experiment; not comparable to Gold120 aggregate."
+}
