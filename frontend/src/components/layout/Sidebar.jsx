@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Archive, ChevronLeft, ChevronRight, FileText, FolderOpen, MoreHorizontal, PanelLeftClose, Plus, Search, Settings } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, FolderOpen, MoreHorizontal, PanelLeftClose, Plus, Search, Settings, ShieldCheck } from 'lucide-react'
 import { AppLogo } from './AppLogo'
 import { IconButton } from '../ui/IconButton'
 
@@ -57,9 +57,6 @@ export function Sidebar({ conversations, activeId, onNavigate, onNewChat, onDele
                 <IconButton label={`Tùy chọn ${item.title}`} className="conversation-more" onClick={() => setMenu(menu === item.id ? null : item.id)}><MoreHorizontal size={16} /></IconButton>
                 {menu === item.id && 
                 <div className="context-menu">
-                  <button>Đổi tên</button>
-                  <button>Ghim cuộc trò chuyện</button>
-                  <button><Archive size={14} /> Lưu trữ</button>
                   <button className="danger" onClick={() => { onDelete(item.id); setMenu(null) }}>Xóa</button>
                 </div>}
               </div>)}
@@ -70,7 +67,7 @@ export function Sidebar({ conversations, activeId, onNavigate, onNewChat, onDele
     <nav className="sidebar-bottom" aria-label="Điều hướng phụ">
       <button className={path === '/documents' ? 'active' : ''} onClick={() => onNavigate('/documents')}><FolderOpen size={17} /><span>Tài liệu</span></button>
       <button className={path === '/settings' ? 'active' : ''} onClick={() => onNavigate('/settings')}><Settings size={17} /><span>Cài đặt</span></button>
-      <div className="profile"><span className="avatar">NA</span><span><strong>Nguyễn Anh</strong><small>Research workspace</small></span></div>
+      <div className="profile"><span className="avatar"><ShieldCheck size={15}/></span><span><strong>Pháp Điển AI</strong><small>Lịch sử trên trình duyệt</small></span></div>
     </nav>
   </aside>
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Menu, Moon, Sun } from 'lucide-react'
+import { Menu, Moon, Sun, ShieldCheck } from 'lucide-react'
 import { Sidebar } from './components/layout/Sidebar'
 import { IconButton } from './components/ui/IconButton'
 import { ChatPage } from './pages/ChatPage'
@@ -71,10 +71,10 @@ export default function App() {
     <section className="workspace">
       <header className="topbar">
         <IconButton label="Mở menu" className="topbar-menu" onClick={() => setMobileOpen(true)}><Menu size={20} /></IconButton>
-        <div className="workspace-status"><span /> AI pháp luật lao động Việt Nam</div>
+        <div className="workspace-status"><ShieldCheck size={15} aria-hidden="true" /> <span className="workspace-status-label">Không gian tra cứu pháp luật lao động</span></div>
         <div className="topbar-actions">
           <IconButton label={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</IconButton>
-          <span className="topbar-avatar">NA</span>
+          <span className="topbar-avatar" aria-label="Pháp Điển AI">PĐ</span>
         </div>
       </header>
       {path.startsWith('/settings')

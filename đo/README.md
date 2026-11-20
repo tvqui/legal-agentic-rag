@@ -222,3 +222,42 @@ Latency mean/p50/p95 tính trên lượt thành công; lỗi, missing và N/A gh
 Không cần Graph thắng ở mọi câu. Tra nguyên văn, so phiên bản, nối ngoại lệ và tìm vụ án có nhu cầu khác nhau. Đọc điểm theo nhóm, paired CI, lỗi và exposure. Nếu thêm thành phần làm tệ trên đúng nhóm nó được thiết kế hỗ trợ, ghi nhận thẳng và phân tích nguyên nhân. Một bảng trên DRAFT không đủ để chứng minh kiến trúc luôn tốt hơn.
 
 Nguồn phương pháp tham khảo: [RAGAS](https://arxiv.org/abs/2309.15217), [RAGChecker](https://arxiv.org/abs/2408.08067), [giới hạn LLM-as-a-judge](https://arxiv.org/abs/2306.05685). Nguồn baseline chính thức và commit/hash nằm trong `repository_audit.json`. Bộ công cụ này tách retrieval/generation và dùng chấm độc lập theo tinh thần các nghiên cứu trên; **không tuyên bố tái hiện metric chính thức của chúng**.
+
+## 11. Graph + reranker: chọn dẫn chiếu có giới hạn
+
+`settings.example.json` hiện bật một chính sách đề xuất cho nhánh retrieval cố định:
+
+- `graph_query_gate: "reference_intent"`: chỉ mở Graph khi có ý hỏi ngoại lệ/dẫn chiếu rõ ràng;
+  câu còn lại dùng đường Hybrid tương ứng. Đặt `"always"` để đối chứng mở Graph mọi câu.
+- `graph_reference_selection: true`: sau cross-encoder, giữ seed đầu và ưu tiên một số
+  đích `REFERENCES` đi ra từ seed, nếu các đích đã nằm trong pool được lọc nguồn/ngày.
+- `graph_reference_head_k: 10`, `graph_reference_max_promotions: null`: mặc định giới hạn
+  số đoạn được đưa lên bằng nửa head, không vượt `head_k - 1`. Không lấy thông tin Gold
+  hoặc hardcode số điều/câu hỏi để lựa chọn. Đặt selection false để đối chứng bỏ bước này.
+
+Không dùng cạnh vào, `PART_OF`, `SIMILAR_TO` hoặc đường nối xa làm bằng chứng pháp lý.
+Các đoạn giữ nguyên nội dung, nguồn, score, ngày và trạng thái kiểm chứng; chỉ đổi thứ tự.
+Pool có chỗ dành riêng cho ứng viên Graph mới, tối đa 100 đoạn, để tránh bị cắt trước khi
+rerank. Reranker nhận số ứng viên thực tế, không sửa cấu hình dùng chung giữa các request.
+`component_exposure.graph_called` lấy từ lần gọi thực tế; không ghi Graph đã chạy khi bị gate.
+
+Đây là cải tiến **fixed retrieval benchmark**, không thay cổng hiệu lực/hậu kiểm hay
+vòng Graph adaptive theo phần thiếu của ONLINE. Ý định ngầm không có từ chỉ dẫn rõ có
+thể không được gate này nhận diện; vì vậy không coi nó bao phủ mọi truy vấn luật. Dùng
+`always` hoặc pipeline adaptive để đối chứng các nhóm cần nối căn cứ nhưng diễn đạt ngầm.
+
+Lượt replay toàn bộ 108 câu × 3 danh sách đã lưu cho thấy phương án routed tăng Recall
+94,55% → 95,25%, nDCG 0,8013 → 0,8075; đủ mọi nhóm Gold từ 99 → 100 câu, không giảm
+Recall/MRR ở câu nào. Chỉ một câu tăng Recall: chưa chứng minh tổng quát hóa hoặc lợi ích
+thống kê toàn bộ corpus. Đây **không phải** chạy lại BGE/reranker, không có đo tốc độ mới.
+
+Có thể tái kiểm tra ordering trên ZIP cũ mà không cần GPU:
+
+```powershell
+python benchmarks/evaluation_suite/replay_graph_selection.py --archive "đo/result_kaggle/standard_results (1).zip" --artifact "D:/data_thô/result/result_28-10/vn_labor_results.zip" --output "đo/result_kaggle/graph_upgrade_replay_new"
+```
+
+Script kiểm graph hash, ghi predictions từ inference-only input trước khi dùng Gold để
+chấm. Dữ liệu vẫn DRAFT/development. Cần đo mới thật trên Kaggle: push code cần thiết,
+Run All để lấy code mới, đổi RUN_NAME (ví dụ `labor120_graph_reference_v2`), RESUME=False,
+smoke rồi standard. Không trộn với ZIP cũ hay diễn giải replay thành latency end-to-end.

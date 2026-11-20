@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Clipboard, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, UserRound } from 'lucide-react'
+import { AlertTriangle, Check, Clipboard, MoreHorizontal, RefreshCw, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { EvidenceIndicator } from './EvidenceIndicator'
 import { ExecutionLog } from './ExecutionLog'
@@ -101,16 +101,10 @@ export function Message({ message, onCitation, onRetry }) {
       {!isUser && <ExecutionLog steps={message.executionLog} active={message.status === 'streaming'} availability={message.executionAvailability} dropped={message.executionDropped} />}
       <div className="message-actions">
         <IconButton label={copied ? 'Đã sao chép' : 'Sao chép'} onClick={copy}>{copied ? <Check size={15} /> : <Clipboard size={15} />}</IconButton>
-        {isUser
-          ? <IconButton label="Chỉnh sửa tin nhắn"><Pencil size={15} /></IconButton>
-          : <>
-            <IconButton label="Tạo lại câu trả lời" onClick={onRetry}><RefreshCw size={15} /></IconButton>
-            <IconButton label="Hữu ích"><ThumbsUp size={15} /></IconButton>
-            <IconButton label="Chưa hữu ích"><ThumbsDown size={15} /></IconButton>
-          </>}
+        {!isUser && <IconButton label="Tạo lại câu trả lời" onClick={onRetry}><RefreshCw size={15} /></IconButton>}
         <div className="action-more" ref={menuRef}>
           <IconButton label="Thêm tùy chọn" onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={16} /></IconButton>
-          {menuOpen && <div className="context-menu message-menu"><button onClick={copy}>Sao chép</button><button>Báo cáo nội dung</button></div>}
+          {menuOpen && <div className="context-menu message-menu"><button onClick={() => { void copy(); setMenuOpen(false) }}>Sao chép</button></div>}
         </div>
       </div>
     </div>

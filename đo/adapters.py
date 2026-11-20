@@ -68,7 +68,8 @@ def config_for_bundle(settings, manifest, out):
     cfg.reranker.use_fp16 = settings['device'] != 'cpu'
     cfg.trace_dir = str(Path(out) / 'traces')
     cfg.request_timeout_seconds = settings.get('timeout_seconds', 180)
-    for key in ('graph_fusion_mode','graph_fusion_weight','graph_max_additions'):
+    for key in ('graph_fusion_mode','graph_fusion_weight','graph_max_additions','graph_query_gate',
+                'graph_reference_selection','graph_reference_head_k','graph_reference_max_promotions'):
         if key in settings:
             cfg.retrieval=type(cfg.retrieval).model_validate({**cfg.retrieval.model_dump(),key:settings[key]})
     return cfg
@@ -124,8 +125,7 @@ class RetrievalAdapter:
         values, stats = retrieve(self.method, request, self.retriever, self.graph, self.cfg)
         sync_device(self.cfg.embedding_device)
         return {'retrieved_ids': [e.unit_id for e in values], 'graph_stats': stats, 'llm_calls': 0,
-                'component_exposure': {'graph_called': self.method.startswith('hybrid_graph')
-                     and self.cfg.retrieval.graph_fusion_weight>0 and self.cfg.retrieval.graph_max_additions>0,
+                'component_exposure': {'graph_called': bool(stats.get('graph_called',False)),
                                        'reranker_enabled': self.cfg.reranker.enabled}}
 
     def close(self):

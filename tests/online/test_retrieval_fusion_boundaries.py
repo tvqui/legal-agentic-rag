@@ -80,6 +80,19 @@ class RetrievalFusionBoundaryTests(unittest.TestCase):
         r._reranker.compute_score.return_value = [.1, .9]
         self.assertEqual([x.unit_id for x in r.neural_rerank([item('z'), item('a')], 'query')], ['z', 'a'])
 
+    def test_graph_candidate_budget_is_scored_without_mutating_shared_settings(self):
+        r=retriever();r._reranker.compute_score.return_value=[.1,.2,.9]
+        result=r.neural_rerank([item('a'),item('b'),item('new-reference')],'query',candidate_limit=3)
+        self.assertEqual(result[0].unit_id,'new-reference')
+        self.assertEqual(len(r._reranker.compute_score.call_args.args[0]),3)
+        self.assertEqual(r.cfg.reranker.top_n,2)
+
+    def test_invalid_candidate_override_never_calls_model(self):
+        r=retriever()
+        for value in (0,-1,101,True,2.5):
+            with self.assertRaises(ValueError): r.neural_rerank([item('a')],'query',candidate_limit=value)
+        r._reranker.compute_score.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

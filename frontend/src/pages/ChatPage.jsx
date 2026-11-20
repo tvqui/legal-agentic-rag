@@ -1,4 +1,4 @@
-import { Menu, MoreHorizontal, PanelRightOpen } from 'lucide-react'
+import { BookOpenText, BriefcaseBusiness, CalendarDays, ChevronRight, FileText, Menu, PanelRightOpen, Scale, ShieldCheck, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChatInput } from '../components/chat/ChatInput'
 import { AgentStatus } from '../components/chat/AgentStatus'
@@ -8,6 +8,29 @@ import { IconButton } from '../components/ui/IconButton'
 import { chatService } from '../services/chatService'
 import { conversationService } from '../services/conversationService'
 import { normalizeExecutionSteps } from '../services/executionLog'
+
+const STARTER_PROMPTS = [
+  { icon: CalendarDays, title: 'Nghỉ phép năm', description: 'Số ngày nghỉ và cách tính phép', question: 'Theo pháp luật lao động Việt Nam hiện hành, người lao động được nghỉ phép năm bao nhiêu ngày và điều kiện áp dụng là gì?' },
+  { icon: BriefcaseBusiness, title: 'Chấm dứt hợp đồng', description: 'Báo trước và quyền lợi khi nghỉ việc', question: 'Người lao động muốn đơn phương chấm dứt hợp đồng lao động thì phải báo trước bao lâu theo quy định hiện hành?' },
+  { icon: Scale, title: 'Tiền lương & làm thêm', description: 'Lương tăng ca và các khoản liên quan', question: 'Theo pháp luật lao động Việt Nam, tiền lương làm thêm giờ vào ngày nghỉ hằng tuần được tính thế nào?' },
+  { icon: FileText, title: 'Hợp đồng lao động', description: 'Thời hạn, nội dung và quyền của bạn', question: 'Hợp đồng lao động cần có những nội dung chủ yếu nào theo pháp luật lao động Việt Nam hiện hành?' },
+]
+
+function WelcomePanel({ onAsk }) {
+  return <section className="welcome-panel" aria-labelledby="welcome-heading">
+    <div className="welcome-symbol" aria-hidden="true"><span className="welcome-symbol-ring"/><Scale size={31} strokeWidth={1.7}/></div>
+    <div className="welcome-kicker"><Sparkles size={13}/> HIỂU LUẬT ĐỂ BẢO VỆ QUYỀN LỢI</div>
+    <h2 id="welcome-heading">Quyền lợi của bạn,<br /><em>giải thích thật dễ hiểu.</em></h2>
+    <p className="welcome-description">Hỏi về hợp đồng, lương, nghỉ phép và những tình huống tại nơi làm việc. Pháp Điển AI giúp bạn tìm hiểu quy định liên quan cùng căn cứ để đối chiếu.</p>
+    <div className="starter-intro"><span>GỢI Ý ĐỂ BẮT ĐẦU</span><ChevronRight size={14}/></div>
+    <div className="starter-grid">
+      {STARTER_PROMPTS.map(({ icon: Icon, title, description, question }) => <button className="starter-card" type="button" key={title} onClick={() => onAsk(question)}>
+        <span className="starter-icon"><Icon size={19} strokeWidth={1.85}/></span><span className="starter-card-content"><strong>{title}</strong><small>{description}</small></span><ChevronRight className="starter-arrow" size={16}/>
+      </button>)}
+    </div>
+    <p className="welcome-footnote"><ShieldCheck size={14}/> Luôn xem căn cứ và hiệu lực văn bản trước khi sử dụng thông tin.</p>
+  </section>
+}
 
 export function ChatPage({ activeConversation, onMenu, onConversationUpdate }) {
   const [messages, setMessages] = useState(() => conversationService.loadMessages())
@@ -134,18 +157,17 @@ export function ChatPage({ activeConversation, onMenu, onConversationUpdate }) {
   return <main className={`chat-page ${source ? 'source-open' : ''}`}>
     <header className="conversation-header">
       <IconButton label="Mở menu" className="mobile-menu" onClick={onMenu}><Menu size={20} /></IconButton>
-      <div className="conversation-heading"><span className="eyebrow">LEGAL AI WORKSPACE</span><h1>{activeConversation.title}</h1></div>
+      <div className="conversation-heading"><span className="eyebrow"><BookOpenText size={12}/> TRA CỨU & GIẢI ĐÁP</span><h1>{activeConversation.title}</h1></div>
       <div className="conversation-tools">
         <span className="source-count">{citations.length} nguồn trong câu trả lời gần nhất</span>
         <IconButton label="Mở nguồn gần nhất" disabled={!citations.length} onClick={() => setSource(citations[0])}><PanelRightOpen size={18} /></IconButton>
-        <IconButton label="Tùy chọn cuộc trò chuyện"><MoreHorizontal size={19} /></IconButton>
       </div>
     </header>
     <div className="chat-scroll" ref={scrollRef}><div className="chat-content">
       {storageError && <p role="alert">Không lưu được lịch sử trên trình duyệt. Hãy kiểm tra dung lượng hoặc quyền lưu trữ trước khi đóng trang.</p>}
       <AgentStatus active={generating} stage={progress} />
       {conversationMessages.map((message) => <Message key={message.id} message={message} onCitation={setSource} onRetry={retry} />)}
-      {conversationMessages.length === 0 && <div className="conversation-empty"><span>§</span><h2>Cuộc trò chuyện mới</h2><p>Đặt câu hỏi để bắt đầu nghiên cứu trên dữ liệu pháp luật lao động Việt Nam.</p></div>}
+      {conversationMessages.length === 0 && !generating && <WelcomePanel onAsk={sendMessage} />}
     </div></div>
     <ChatInput onSend={sendMessage} onStop={stop} generating={generating} />
     {source && <SourceDrawer source={source} onClose={() => setSource(null)} />}

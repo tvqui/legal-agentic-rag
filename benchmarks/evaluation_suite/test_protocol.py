@@ -256,4 +256,27 @@ class GraphFusionBoundaryTests(unittest.TestCase):
         self.assertEqual(stats['novel_candidate_ids'],['c'])
         self.assertEqual([x.rank for x in result],[1,2,3])
 
+    def test_reference_gate_skips_graph_and_does_not_claim_exposure(self):
+        cfg,r,g,_=self.fixture();cfg.retrieval.graph_query_gate='reference_intent'
+        cfg.retrieval.graph_reference_selection=True
+        r.neural_rerank=Mock(side_effect=lambda values,query,**kw:values)
+        result,stats=labor_retrieval.retrieve('hybrid_graph_rerank',{'question':'Mức lương cơ bản là gì?','query_date':'2026-01-01'},r,g,cfg)
+        g.expand.assert_not_called()
+        self.assertFalse(stats['graph_called'])
+        self.assertEqual([x.unit_id for x in result],['a','b'])
+
+    def test_reference_policy_preserves_new_pool_capacity_and_filters_future_sources(self):
+        cfg,r,g,item=self.fixture();cfg.retrieval.graph_fusion_mode='candidate_union'
+        cfg.retrieval.fusion_top_k=2;cfg.retrieval.graph_reference_selection=True
+        cfg.retrieval.graph_reference_head_k=2
+        g.expand.return_value=([item('future','graph','2028-01-01'),item('c','graph')],{})
+        g.references_by_source={'a':{'c','future'}}
+        r.neural_rerank=Mock(side_effect=lambda values,query,**kw:values)
+        result,stats=labor_retrieval.retrieve('hybrid_graph_rerank',{'question':'Nêu các ngoại lệ được viện dẫn','query_date':'2026-01-01'},r,g,cfg)
+        self.assertEqual([x.unit_id for x in result],['a','c','b'])
+        self.assertEqual(r.neural_rerank.call_args.kwargs['candidate_limit'],3)
+        self.assertEqual(stats['retained_graph_ids'],['c'])
+        self.assertEqual(stats['reference_selection']['promoted_ids'],['c'])
+        self.assertNotIn('future',[x.unit_id for x in result])
+
 if __name__=='__main__':unittest.main()

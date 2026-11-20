@@ -105,6 +105,7 @@ def prepare(args):
 
 def retrieve(method,row,retriever,graph,cfg):
     from vn_labor_online.retrieval import temporal_filter,authority_filter
+    from vn_labor_online.reference_selection import reference_intent,post_select_references
     query=row['question'];channels=[]
     if method=='bm25' or method.startswith('hybrid'):channels.append(retriever.bm25(query))
     if method=='dense' or method.startswith('hybrid'):channels.append(retriever.dense(query))
@@ -116,9 +117,14 @@ def retrieve(method,row,retriever,graph,cfg):
     # relevance. Preserve the semantic head unless raw-channel RRF is explicitly
     # requested. Neither mode re-fuses an already fused list.
     items=filter_items(channels[0] if len(channels)==1 else retriever.fusion(channels));stats={}
-    if method.startswith('hybrid_graph') and cfg.retrieval.graph_fusion_weight>0 and cfg.retrieval.graph_max_additions>0:
+    graph_requested=method.startswith('hybrid_graph') and cfg.retrieval.graph_fusion_weight>0 and cfg.retrieval.graph_max_additions>0
+    gate=getattr(cfg.retrieval,'graph_query_gate','always')
+    gated=graph_requested and gate=='reference_intent' and not reference_intent(query)
+    reference_selection=getattr(cfg.retrieval,'graph_reference_selection',False)
+    if graph_requested and not gated:
         seeds=items[:5]
         added,stats=graph.expand(seeds,[],query)
+        stats['graph_called']=True
         stats['traversal_candidate_count']=len(added)
         added=list({item.unit_id:item for item in filter_items(added)}.values())
         stats['eligible_graph_candidate_count']=len(added)
@@ -133,16 +139,35 @@ def retrieve(method,row,retriever,graph,cfg):
         stats['fusion_protocol']='CANDIDATE_UNION_BASE_ORDER' if mode=='candidate_union' else 'SINGLE_PASS_RAW_CHANNELS'
         if added:
             if mode=='candidate_union':
+                # Keep space for novel graph sources even when the Hybrid pool
+                # is full. Every retained source will be scored, up to 100.
+                pool_limit=(min(100,cfg.retrieval.fusion_top_k+cfg.retrieval.graph_max_additions)
+                            if reference_selection else cfg.retrieval.fusion_top_k)
                 items=[item.model_copy(update={'rank':i}) for i,item in enumerate(
-                    (items+added)[:cfg.retrieval.fusion_top_k],1)]
+                    (items+added)[:pool_limit],1)]
             else:
                 weights=[1.0]*len(channels)+[cfg.retrieval.graph_fusion_weight]
                 items=filter_items(retriever.fusion(channels+[added],weights=weights))
+        stats['retained_graph_ids']=[item.unit_id for item in items if item.unit_id not in baseline_ids]
+    elif gated:
+        stats={'fusion_protocol':'GRAPH_SKIPPED_NO_REFERENCE_INTENT','graph_called':False,'new_candidate_ids':[]}
     elif method.startswith('hybrid_graph'):
-        stats={'fusion_protocol':'GRAPH_DISABLED_WEIGHT_OR_CAP_ZERO','new_candidate_ids':[]}
+        stats={'fusion_protocol':'GRAPH_DISABLED_WEIGHT_OR_CAP_ZERO','graph_called':False,'new_candidate_ids':[]}
     if method.endswith('_rerank'):
         cfg.reranker.enabled=True
-        items=retriever.neural_rerank(items,query)
+        if reference_selection and stats.get('graph_called') and items:
+            items=retriever.neural_rerank(items,query,candidate_limit=min(100,len(items)))
+            before={item.unit_id:i for i,item in enumerate(items)}
+            head_k=cfg.retrieval.graph_reference_head_k
+            seed=items[0].unit_id
+            targets=graph.references_by_source.get(seed,set())
+            items=post_select_references(items,graph.references_by_source,query,head_k,
+                cfg.retrieval.graph_reference_max_promotions)
+            stats['reference_selection']={'seed_id':seed,'head_k':head_k,'intent':reference_intent(query),
+                'promoted_ids':[item.unit_id for i,item in enumerate(items[:head_k])
+                    if item.unit_id in targets and before[item.unit_id]>i]}
+        else:
+            items=retriever.neural_rerank(items,query)
     return items,stats
 
 def summarize(output,manifest,records):
